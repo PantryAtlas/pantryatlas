@@ -1,0 +1,309 @@
+{
+  "project": "epicure-core",
+  "branchName": "feat/v0.1.0",
+  "description": "Foundation package for Epicure Suite: bge-m3 embeddings, sqlite-vec store, Gemma 4 runner, SLERP math, pantry primitives, Pi ops. Library-only, no apps.",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Verify Gemma 4 spec claims and pin GGUF",
+      "description": "Research-only task. Confirm Gemma 4's context length, language coverage, vision/audio modalities, and native system-prompt support against primary sources (Google DeepMind model card, llama.cpp release notes, HuggingFace). Unverified claims must be flagged with a fallback plan. Pin one specific GGUF URL+SHA256 for downstream tasks to consume.",
+      "acceptanceCriteria": [
+        "File `/home/craigm26/epicure-core/docs/gemma4-verified-specs.md` exists",
+        "File contains a YAML or table block with these 5 keys: `context_length`, `supported_languages`, `e4b_vision`, `audio_modalities`, `native_system_prompt`",
+        "Each of the 5 keys has either `verified: true` + a source URL, or `verified: false` + a `fallback:` line",
+        "File contains a line matching regex `chosen_gguf_url:\\s*https://\\S+\\.gguf`",
+        "File contains a line matching regex `chosen_gguf_sha256:\\s*[a-f0-9]{64}`",
+        "If `native_system_prompt` is verified false, file lists which downstream tasks (T-010, T-011, T-012) need a role-prefix shim instead",
+        "Run `grep -c 'verified:' /home/craigm26/epicure-core/docs/gemma4-verified-specs.md` - prints `5`"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-002",
+      "title": "Scaffold epicure-core Python package",
+      "description": "Create the `pyproject.toml` (PEP 621, Apache 2.0, deps pinned at floor versions), package directory layout matching the architecture sketch, LICENSE, README skeleton, CHANGELOG, .gitignore, and CI workflow stub. Establish that `pip install -e .` works.",
+      "acceptanceCriteria": [
+        "Run `ls /home/craigm26/epicure-core/pyproject.toml /home/craigm26/epicure-core/LICENSE /home/craigm26/epicure-core/README.md /home/craigm26/epicure-core/CHANGELOG.md /home/craigm26/epicure-core/.gitignore` - exits 0",
+        "Run `grep -E '^name = \"epicure-core\"' /home/craigm26/epicure-core/pyproject.toml` - exits 0",
+        "Run `grep -E '^version = \"0.1.0.dev0\"' /home/craigm26/epicure-core/pyproject.toml` - exits 0",
+        "Run `grep -E 'license.*Apache-2.0' /home/craigm26/epicure-core/pyproject.toml` - exits 0",
+        "Run `head -1 /home/craigm26/epicure-core/LICENSE | grep -i 'Apache License'` - exits 0",
+        "Run `ls -d /home/craigm26/epicure-core/epicure_core/{embeddings,store,gemma,geometry,pantry,data}` - exits 0",
+        "Run `ls /home/craigm26/epicure-core/.github/workflows/ci.yml` - exits 0",
+        "Run `grep -E 'ruff check' /home/craigm26/epicure-core/.github/workflows/ci.yml` - exits 0",
+        "Run `grep -E 'pytest' /home/craigm26/epicure-core/.github/workflows/ci.yml` - exits 0",
+        "Run `python3 -m venv /tmp/epicure-venv-t002 && /tmp/epicure-venv-t002/bin/pip install -e /home/craigm26/epicure-core` - exits 0",
+        "Run `/tmp/epicure-venv-t002/bin/python -c 'import epicure_core; print(epicure_core.__version__)'` - prints `0.1.0.dev0`"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-003",
+      "title": "Implement bge-m3 multilingual embedding service",
+      "description": "Wrap bge-m3 as int8 ONNX via onnxruntime. Single in-process API `embed(texts) -> (N, 1024) float32 unit-norm ndarray`. Plus an optional FastAPI sidecar exposing the same call over HTTP at `POST /embed` for cross-process use.",
+      "acceptanceCriteria": [
+        "File `/home/craigm26/epicure-core/epicure_core/embeddings.py` exists",
+        "Run `python -c 'from epicure_core.embeddings import embed; print(callable(embed))'` - prints `True`",
+        "Run `pytest /home/craigm26/epicure-core/tests/test_embeddings.py -q` - exits 0",
+        "Test in that file asserts `embed(['tomato', 'tomate', 'tomatillo']).shape == (3, 1024)` and dtype `float32`",
+        "Test asserts every returned vector has L2 norm in `[0.999, 1.001]`",
+        "Test asserts `cosine(embed(['eggplant'])[0], embed(['aubergine'])[0]) >= 0.85`",
+        "Test logs to stdout: `embed_throughput_per_sec=<float>` measured on 1000 short strings; assertion enforces `>= 17.0` only when env `EPICURE_PI_BENCH=1` is set, otherwise just logs",
+        "File `/home/craigm26/epicure-core/epicure_core/embeddings_server.py` exists exposing `POST /embed` via FastAPI",
+        "Run `ruff check /home/craigm26/epicure-core/epicure_core/embeddings.py /home/craigm26/epicure-core/epicure_core/embeddings_server.py` - exits 0"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-004",
+      "title": "Implement sqlite-vec storage layer (IngredientStore, RecipeStore, ModeStore)",
+      "description": "Three thin repo classes over sqlite-vec with idempotent table creation, upsert/get/query_by_vector/delete. ModeStore ships with schema reserved but no insert path (v0.2 will populate). Round-trips must survive close+reopen.",
+      "acceptanceCriteria": [
+        "Files exist: `/home/craigm26/epicure-core/epicure_core/store/ingredients.py`, `recipes.py`, `modes.py`",
+        "Each module exports a class (`IngredientStore`, `RecipeStore`, `ModeStore`) with methods `upsert`, `get`, `query_by_vector`, `delete`",
+        "Run `pytest /home/craigm26/epicure-core/tests/store/ -q` - exits 0",
+        "Test creates `IngredientStore` at temp path, upserts 5 rows with random unit-norm vectors, calls `query_by_vector(rows[0].embedding, top_k=5)`, asserts `result[0].id == rows[0].id`",
+        "Test closes the store, reopens it from the same path, queries, asserts data persisted",
+        "Test asserts inserting 1500 ingredient rows keeps file size under 500MB (`os.path.getsize(db_path) < 500 * 1024 * 1024`)",
+        "Run `python -c 'from epicure_core.store.modes import ModeStore; assert \"schema reserved for v0.2\" in ModeStore.__doc__'` - exits 0",
+        "Run `ruff check /home/craigm26/epicure-core/epicure_core/store/` - exits 0"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-005",
+      "title": "Implement SLERP utilities (standard + constrained)",
+      "description": "Pure NumPy `slerp(a, b, t)` and `constrained_slerp(a, b, t, mode_basis)`. Handle the `dot ≈ 1` short-circuit case correctly (no NaN from acos(1)). Constrained variant projects result to stay in the half-space defined by mode_basis.",
+      "acceptanceCriteria": [
+        "File `/home/craigm26/epicure-core/epicure_core/geometry/slerp.py` exists",
+        "Run `python -c 'from epicure_core.geometry.slerp import slerp, constrained_slerp'` - exits 0",
+        "Run `pytest /home/craigm26/epicure-core/tests/geometry/test_slerp.py -q` - exits 0",
+        "Test uses `hypothesis` to generate 1000 random unit-vector pairs and asserts `slerp(a, b, t)` matches a reference NumPy impl within `1e-6`",
+        "Test asserts `slerp(a, a, 0.5)` returns `a` without NaN (covers the dot≈1 edge)",
+        "Test asserts `abs(np.linalg.norm(slerp(a, b, t)) - 1.0) < 1e-6` for any unit a,b and t ∈ [0,1]",
+        "Test asserts `slerp(a, b, 0) == a` and `slerp(a, b, 1) == b` (within 1e-6)",
+        "Test asserts `constrained_slerp(a, b, t, m).dot(m) >= a.dot(m) - 1e-9` for 100 random m,a,b triples",
+        "Run `ruff check /home/craigm26/epicure-core/epicure_core/geometry/slerp.py` - exits 0"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-006",
+      "title": "Implement pantry primitives and matchers",
+      "description": "`Pantry`, `Ingredient`, `Quantity` dataclasses + `resolve(raw_text)` that runs exact → fuzzy (rapidfuzz ≥ 0.85) → semantic (bge-m3 cosine ≥ 0.78) in order. `Pantry.expiring_within(days)` filter included.",
+      "acceptanceCriteria": [
+        "Files exist: `/home/craigm26/epicure-core/epicure_core/pantry/models.py`, `matcher.py`",
+        "Run `python -c 'from epicure_core.pantry import Pantry, Ingredient, Quantity, resolve'` - exits 0",
+        "Run `pytest /home/craigm26/epicure-core/tests/pantry/ -q` - exits 0",
+        "Test asserts `resolve('garlic').canonical_name == 'garlic'` (exact path)",
+        "Test asserts `resolve('old garlic').canonical_name == 'garlic'` (fuzzy path)",
+        "Test asserts `resolve('courgette').canonical_name == 'zucchini'` (semantic path, no alias entry needed)",
+        "Test asserts `resolve('xyzzyplant') is None`",
+        "Test creates Pantry with 3 ingredients, 1 expiring in 1 day, 1 in 3 days, 1 with no expiry, asserts `len(pantry.expiring_within(days=2)) == 1`",
+        "Test asserts `Pantry.add()` then `Pantry.add()` of same canonical_name keeps only 1 entry",
+        "Run `ruff check /home/craigm26/epicure-core/epicure_core/pantry/` - exits 0"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-007",
+      "title": "Implement vocab data pull (RecipeNLG + FlavorDB raw → staging)",
+      "description": "First half of the vocab pipeline. Downloads RecipeNLG (English recipes) and FlavorDB (flavor compounds) raw artifacts to `_staging/` with documented URLs + SHA256s. No NER, no dedupe yet — that's T-008.",
+      "acceptanceCriteria": [
+        "File `/home/craigm26/epicure-core/epicure_core/data/build_vocab.py` exists with functions `pull_recipenlg()` and `pull_flavordb()`",
+        "Run `python -m epicure_core.data.build_vocab --stage pull` - exits 0",
+        "Run `ls /home/craigm26/epicure-core/epicure_core/data/_staging/recipenlg.raw.parquet /home/craigm26/epicure-core/epicure_core/data/_staging/flavordb.raw.parquet` - exits 0",
+        "Run `python -c 'import pyarrow.parquet as pq; print(pq.read_metadata(\"/home/craigm26/epicure-core/epicure_core/data/_staging/recipenlg.raw.parquet\").num_rows)'` - prints integer ≥ 500000",
+        "Run `python -c 'import pyarrow.parquet as pq; print(pq.read_metadata(\"/home/craigm26/epicure-core/epicure_core/data/_staging/flavordb.raw.parquet\").num_rows)'` - prints integer ≥ 900",
+        "File `/home/craigm26/epicure-core/epicure_core/data/_staging/SOURCES.md` exists",
+        "SOURCES.md contains `recipenlg_url:` line with a URL and `recipenlg_sha256:` line with a 64-char hex",
+        "SOURCES.md contains `flavordb_url:` line with a URL and `flavordb_sha256:` line with a 64-char hex",
+        "SOURCES.md contains a `license:` section documenting redistribution terms for each dataset",
+        "Run `ruff check /home/craigm26/epicure-core/epicure_core/data/build_vocab.py` - exits 0"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-008",
+      "title": "Implement vocab dedupe and emit final parquet",
+      "description": "Second half: read raw staging artifacts, run NER on RecipeNLG ingredient strings, dedupe by exact + rapidfuzz ≥ 0.92 + bge-m3 cosine ≥ 0.92, emit `ingredients.parquet` (≥1500 canonical English rows with `aliases: list[str]` column reserved for v0.2) and `compounds.parquet` (mirrors FlavorDB).",
+      "acceptanceCriteria": [
+        "Run `python -m epicure_core.data.build_vocab --stage emit` - exits 0",
+        "Run `ls /home/craigm26/epicure-core/epicure_core/data/ingredients.parquet /home/craigm26/epicure-core/epicure_core/data/compounds.parquet` - exits 0",
+        "Run `python -c 'import pyarrow.parquet as pq; t = pq.read_table(\"/home/craigm26/epicure-core/epicure_core/data/ingredients.parquet\"); print(t.num_rows)'` - prints integer ≥ 1500",
+        "Run `python -c 'import pyarrow.parquet as pq; print(sorted(pq.read_schema(\"/home/craigm26/epicure-core/epicure_core/data/ingredients.parquet\").names))'` - prints `['aliases', 'canonical_name', 'language', 'source']`",
+        "Run `python -c 'import pyarrow.parquet as pq; t = pq.read_table(\"/home/craigm26/epicure-core/epicure_core/data/ingredients.parquet\").to_pandas(); assert t.canonical_name.is_unique; assert t.canonical_name.notna().all(); assert t.language.notna().all(); print(\"ok\")'` - prints `ok`",
+        "Compound parquet row count is within ±5 of the staged FlavorDB row count (test asserts this)",
+        "Run `pytest /home/craigm26/epicure-core/tests/data/test_vocab_emit.py -q` - exits 0",
+        "File `/home/craigm26/epicure-core/epicure_core/data/README.md` exists and contains the line `Deferred to v0.2: XiaChuFang, Povarenok, Tarladalal, Cookpad, Recetas, Yemek, Chefkoch`",
+        "Run `ruff check /home/craigm26/epicure-core/epicure_core/data/build_vocab.py` - exits 0"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-009",
+      "title": "Write Pi bootstrap script (pi-bootstrap.sh)",
+      "description": "Single idempotent shell script that takes a fresh Pi 5 Bookworm install to 'smoke test ready': apt deps, venv, llama.cpp pinned build with ARM64+Gemma-4 flags from T-001, Gemma 4 GGUF download with SHA256 verification, editable epicure-core install.",
+      "acceptanceCriteria": [
+        "File `/home/craigm26/epicure-core/ops/pi-bootstrap.sh` exists",
+        "Run `test -x /home/craigm26/epicure-core/ops/pi-bootstrap.sh` - exits 0",
+        "Run `bash -n /home/craigm26/epicure-core/ops/pi-bootstrap.sh` (syntax check) - exits 0",
+        "Run `shellcheck /home/craigm26/epicure-core/ops/pi-bootstrap.sh` - exits 0 (warnings of severity error or warning must be zero; info/style ignored)",
+        "Script contains a line matching regex `LLAMA_CPP_COMMIT=\"?[a-f0-9]{40}\"?` (commit pinned, not 'main')",
+        "Script contains a line matching regex `GEMMA4_GGUF_SHA256=\"?[a-f0-9]{64}\"?`",
+        "Script contains a line matching regex `GEMMA4_GGUF_URL=\"?https://\\S+\\.gguf\"?` matching the URL chosen in T-001",
+        "Script contains an explicit `uname -m` check that exits non-zero with message containing `ARM64 required` when not on aarch64/arm64",
+        "Script contains idempotency sentinels (e.g., `if [ -f \"$STAMP_FILE\" ]; then echo 'already done'; exit 0; fi`) for at least 3 stages: apt-install, llama.cpp-build, gemma-download",
+        "Final line of normal-completion output matches regex `BOOTSTRAP COMPLETE`"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-010",
+      "title": "Implement Gemma 4 runner lifecycle wrapper",
+      "description": "`GemmaRunner` context manager that starts/stops the llama.cpp subprocess, auto-selects E4B if free RAM ≥ 6 GiB else E2B, exposes `is_healthy()`, and records first-start tokens/sec to `~/.epicure/baseline-tps.json`. Memory selection must be unit-testable via mocked psutil.",
+      "acceptanceCriteria": [
+        "File `/home/craigm26/epicure-core/epicure_core/gemma/runner.py` exists",
+        "Run `python -c 'from epicure_core.gemma.runner import GemmaRunner, MemoryPressureError'` - exits 0",
+        "Run `pytest /home/craigm26/epicure-core/tests/gemma/test_runner.py -q` - exits 0",
+        "Test mocks `psutil.virtual_memory()` with `available = 7 * 1024**3`, instantiates GemmaRunner, asserts `runner._selected_model == 'E4B'`",
+        "Test mocks `psutil.virtual_memory()` with `available = 4 * 1024**3`, asserts `runner._selected_model == 'E2B'`",
+        "Test mocks subprocess and HTTP health check, asserts `runner.is_healthy()` returns False when subprocess.poll() != None",
+        "Test asserts `GemmaRunner` is usable as `with GemmaRunner() as r: ...` (has `__enter__` and `__exit__`)",
+        "Test asserts that on context exit, the subprocess is terminated (no orphan PIDs)",
+        "Test asserts first-start writes a JSON file with keys `tokens_per_second`, `model`, `timestamp` (mocked benchmark)",
+        "Run `ruff check /home/craigm26/epicure-core/epicure_core/gemma/runner.py` - exits 0"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-011",
+      "title": "Implement Gemma 4 HTTP client basic generate()",
+      "description": "Plain-text path of the client. `GemmaClient.generate(system: str, user: str) -> str` posting to the local llama.cpp server. No schema, no repair loop yet — those land in T-012. Tested against a fake httpx fixture so CI does not need a live model.",
+      "acceptanceCriteria": [
+        "File `/home/craigm26/epicure-core/epicure_core/gemma/client.py` exists",
+        "Run `python -c 'from epicure_core.gemma.client import GemmaClient'` - exits 0",
+        "Run `python -c 'import inspect; from epicure_core.gemma.client import GemmaClient; sig = inspect.signature(GemmaClient.generate); print(list(sig.parameters))'` - prints a list containing `system` and `user`",
+        "Run `pytest /home/craigm26/epicure-core/tests/gemma/test_client_basic.py -q` - exits 0",
+        "Test uses a fake `httpx.MockTransport` (or equivalent) so no live llama.cpp is required",
+        "Test asserts `client.generate(system='you are a chef', user='name three spices')` returns the fake server's text",
+        "Test asserts the HTTP request body contains the system prompt in the structure dictated by T-001 (native system role if verified, else role-prefix shim — test checks whichever is current)",
+        "Run `ruff check /home/craigm26/epicure-core/epicure_core/gemma/client.py` - exits 0"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-012",
+      "title": "Add Gemma client schema + repair loop (strict opt-in)",
+      "description": "Extend `generate()` with `schema: dict | None = None, strict: bool = False`. Relaxed path (`strict=False`): prompt-instruct with schema, jsonschema validate, repair-retry up to 2 times. Strict path (`strict=True`): use llama.cpp grammar files. Docstring warns about the 6-min/batch latency observed in local-llm-ops T9.",
+      "acceptanceCriteria": [
+        "Run `python -c 'import inspect; from epicure_core.gemma.client import GemmaClient; sig = inspect.signature(GemmaClient.generate); print(list(sig.parameters))'` - prints a list containing `schema` and `strict`",
+        "Run `pytest /home/craigm26/epicure-core/tests/gemma/test_client_repair.py -q` - exits 0",
+        "Test: fake server returns invalid JSON once then valid JSON; assert client returns dict and exactly 1 repair request was made",
+        "Test: fake server returns invalid JSON 3 times; assert `RepairExhaustedError` (or named equivalent) is raised",
+        "Test: when `strict=True`, the fake server fixture asserts that a `grammar` field is present in the request body",
+        "Run `python -c 'from epicure_core.gemma.client import GemmaClient; doc = GemmaClient.generate.__doc__; assert \"strict=True\" in doc and \"6 min\" in doc; print(\"ok\")'` - prints `ok`",
+        "Run `ruff check /home/craigm26/epicure-core/epicure_core/gemma/client.py` - exits 0"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-013",
+      "title": "Implement memory-pressure monitor and systemd units",
+      "description": "Small daemon watching `psutil.virtual_memory().percent`; writes `~/.epicure/runner.blocked` when >85%. `GemmaRunner.start()` checks the flag and raises MemoryPressureError. Three systemd unit files (gemma, mem-monitor, embeddings) + an install script.",
+      "acceptanceCriteria": [
+        "File `/home/craigm26/epicure-core/epicure_core/ops/mem_monitor.py` exists",
+        "Files exist: `/home/craigm26/epicure-core/ops/systemd/epicure-gemma.service`, `epicure-mem-monitor.service`, `epicure-embeddings.service`",
+        "Run `grep -E 'Restart=on-failure' /home/craigm26/epicure-core/ops/systemd/epicure-gemma.service` - exits 0",
+        "Run `grep -E 'User=epicure' /home/craigm26/epicure-core/ops/systemd/epicure-gemma.service` - exits 0",
+        "Run `systemd-analyze verify /home/craigm26/epicure-core/ops/systemd/epicure-gemma.service` - exits 0 (or test skipped with documented reason if systemd unavailable in CI)",
+        "Run `systemd-analyze verify /home/craigm26/epicure-core/ops/systemd/epicure-mem-monitor.service` - exits 0 (or skipped same way)",
+        "Run `systemd-analyze verify /home/craigm26/epicure-core/ops/systemd/epicure-embeddings.service` - exits 0 (or skipped same way)",
+        "File `/home/craigm26/epicure-core/ops/systemd/install.sh` exists and is executable",
+        "Run `pytest /home/craigm26/epicure-core/tests/ops/test_mem_monitor.py -q` - exits 0",
+        "Test mocks `psutil.virtual_memory().percent = 90.0`, runs one monitor tick, asserts `~/.epicure/runner.blocked` exists (uses a temp HOME)",
+        "Test asserts `GemmaRunner.start()` raises `MemoryPressureError` when the block-flag exists",
+        "Run `ruff check /home/craigm26/epicure-core/epicure_core/ops/` - exits 0"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-014",
+      "title": "Write end-to-end integration smoke test (Pi-gated)",
+      "description": "Single test `tests/integration/test_end_to_end_pi.py` marked `@pytest.mark.pi_integration`. Embeds 3 strings → upserts to IngredientStore → queries nearest → starts Gemma → calls generate → tears down. Skipped by default; opt-in via `EPICURE_PI_INTEGRATION=1`.",
+      "acceptanceCriteria": [
+        "File `/home/craigm26/epicure-core/tests/integration/test_end_to_end_pi.py` exists",
+        "Run `grep -E '@pytest.mark.pi_integration' /home/craigm26/epicure-core/tests/integration/test_end_to_end_pi.py` - exits 0",
+        "Run `pytest /home/craigm26/epicure-core/tests/integration/test_end_to_end_pi.py -m 'not pi_integration' -q` - exits 0 with 0 tests run (default-skip confirmed)",
+        "Run `EPICURE_PI_INTEGRATION=1 pytest /home/craigm26/epicure-core/tests/integration/test_end_to_end_pi.py -q` - exits 0 (only required when running on a Pi 5 with bootstrap completed; CI may skip with documented reason)",
+        "Test source contains explicit calls to: `embed(...)`, `IngredientStore(...).upsert(...)`, `IngredientStore(...).query_by_vector(...)`, `GemmaRunner(...).__enter__`, `GemmaClient(...).generate(...)`",
+        "Test logs a line matching regex `pi_integration_runtime_seconds=\\d+\\.\\d+` and asserts the value is `< 180.0`",
+        "Run `ruff check /home/craigm26/epicure-core/tests/integration/test_end_to_end_pi.py` - exits 0"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-015",
+      "title": "Write documentation (README, install guide, API ref, deferred-v0.2)",
+      "description": "Four docs: README overview/quickstart, install-pi5 community-kitchen guide, api.md covering every exported public symbol, deferred-v0.2.md enumerating the 5 deferred areas with rationale.",
+      "acceptanceCriteria": [
+        "Files exist: `/home/craigm26/epicure-core/README.md`, `/home/craigm26/epicure-core/docs/install-pi5.md`, `/home/craigm26/epicure-core/docs/api.md`, `/home/craigm26/epicure-core/docs/deferred-v0.2.md`",
+        "Run `grep -E 'docs/install-pi5.md' /home/craigm26/epicure-core/README.md` - exits 0",
+        "Run `grep -E 'docs/api.md' /home/craigm26/epicure-core/README.md` - exits 0",
+        "Run `grep -E 'docs/deferred-v0.2.md' /home/craigm26/epicure-core/README.md` - exits 0",
+        "Run `grep -c '^## ' /home/craigm26/epicure-core/docs/install-pi5.md` - prints integer ≥ 5 (covers What you need + 4 steps)",
+        "Run `grep -E '^## (What you need|Step 1|Step 2|Step 3|Step 4)' /home/craigm26/epicure-core/docs/install-pi5.md | wc -l` - prints `5`",
+        "Run `python -c 'import epicure_core; import re; exported = [n for n in dir(epicure_core) if not n.startswith(\"_\")]; doc = open(\"/home/craigm26/epicure-core/docs/api.md\").read(); missing = [n for n in exported if n not in doc]; assert not missing, missing; print(\"ok\")'` - prints `ok`",
+        "Run `grep -E '^## (Mode discovery|Multilingual vocab|Audio and photo input|Federation|USDA nutritional layer)' /home/craigm26/epicure-core/docs/deferred-v0.2.md | wc -l` - prints `5`"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-016",
+      "title": "Cut v0.1.0 release (version bump, changelog, tag, v0.2 tracker)",
+      "description": "Final release. Bump pyproject version 0.1.0.dev0 → 0.1.0, write CHANGELOG entry covering T-001..T-015, tag v0.1.0, ensure CI green on the tag, open v0.2 scope tracker issue.",
+      "acceptanceCriteria": [
+        "Run `grep -E '^version = \"0.1.0\"$' /home/craigm26/epicure-core/pyproject.toml` - exits 0 (no `.dev0` suffix)",
+        "Run `grep -E '^## \\[0.1.0\\] - 20[0-9]{2}-[0-1][0-9]-[0-3][0-9]' /home/craigm26/epicure-core/CHANGELOG.md` - exits 0",
+        "Run `git -C /home/craigm26/epicure-core tag -l v0.1.0` - prints `v0.1.0`",
+        "Run `git -C /home/craigm26/epicure-core status --porcelain` - prints empty (working tree clean)",
+        "Run `gh issue list --repo epicure-suite/epicure-core --label v0.2 --json title --jq '.[].title' | grep -E 'v0.2 scope tracker'` - exits 0 (depends on repo existing under epicure-suite org)",
+        "Run `gh run list --repo epicure-suite/epicure-core --branch v0.1.0 --limit 1 --json conclusion --jq '.[0].conclusion'` - prints `success`",
+        "Run `git -C /home/craigm26/epicure-core ls-remote --tags origin v0.1.0` - exits 0 (tag pushed)"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}
