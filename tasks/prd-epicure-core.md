@@ -4,19 +4,25 @@
 
 ## 1. Introduction / Overview
 
-`epicure-core` is the shared Python package that ships the primitives the rest of the Epicure Suite is built from: a multilingual embedding service (`bge-m3`), a sqlite-vec storage layer, a Gemma 4 lifecycle wrapper (E4B with E2B fallback), SLERP rotation math, pantry types + matchers, and the Pi-side ops glue (bootstrap script, systemd units, memory-pressure gate). It targets a Raspberry Pi 5 8GB running Ubuntu 24.04 LTS or Raspberry Pi OS Bookworm.
+`epicure-core` is the shared Python package that ships the primitives the rest of the Epicure Suite is built from: a multilingual embedding service (`bge-m3`), a sqlite-vec storage layer, a Gemma 4 lifecycle wrapper (E4B with E2B fallback), SLERP rotation math, pantry types + matchers, and the on-device ops glue (bootstrap scripts, systemd units, memory-pressure gate).
 
-It is **library-only** for v0.1.0 — no user-facing app, no REST endpoints. Downstream apps consume `epicure-core` as a dependency.
+v0.1.0 ships with **two supported hardware artifacts**:
+
+1. **Raspberry Pi 5 8GB** running Ubuntu 24.04 LTS or Raspberry Pi OS Bookworm — the "$80 community-kitchen" target. Gemma 4 E4B is the default model on this artifact (~6 GiB free RAM available at idle).
+2. **Coral SL2610 Dev Board** (Synaptics Astra SL2610, GA Q2 2026, [product page](https://developers.google.com/coral/products/SL2610-dev-board)) running the stock Yocto Linux image or the Synaptics Debian BSP. Dual Cortex-A55 + Cortex-M52 + 1 TOPS RISC-V Coral NPU, 2–4 GB LPDDR4, 64 GB eMMC. Gemma 4 E2B is the default model on this artifact (the smaller RAM envelope makes E4B infeasible); the Coral NPU is the long-term target for offloading `bge-m3` inference, with a CPU/onnxruntime fallback in v0.1.0.
+
+Both artifacts ship the same Python API; the on-device differences are hidden behind a small platform-detection helper and two parallel bootstrap scripts (`ops/pi-bootstrap.sh`, `ops/coralboard-bootstrap.sh`). It is **library-only** for v0.1.0 — no user-facing app, no REST endpoints. Downstream apps consume `epicure-core` as a dependency.
 
 ## 2. Goals
 
-- Provide a single `pip install -e .` path that works on a clean Pi 5 8GB in <30 min via `pi-bootstrap.sh`.
-- Ship multilingual embeddings that let Vietnamese, Chinese, Spanish, and English ingredient strings co-locate in vector space.
-- Make Gemma 4 cheap and predictable to call from Python, with structured output that does not pay the ~6-min/batch strict-JSON tax observed in `local-llm-ops` T9.
+- Provide a single `pip install -e .` path that works on either supported artifact in <30 min via the artifact-specific bootstrap script (`pi-bootstrap.sh` or `coralboard-bootstrap.sh`).
+- Ship multilingual embeddings that let Vietnamese, Chinese, Spanish, and English ingredient strings co-locate in vector space, with an interface that is unchanged whether bge-m3 runs on CPU (Pi 5) or on the Coral NPU (Coral SL2610, v0.2 stretch).
+- Make Gemma 4 cheap and predictable to call from Python, with structured output that does not pay the ~6-min/batch strict-JSON tax observed in `local-llm-ops` T9, on both Pi 5 (E4B default) and Coral SL2610 (E2B default).
 - Ship SLERP math (standard + constrained) that exactly matches a reference NumPy implementation.
 - Give downstream repos a stable storage API (`IngredientStore`, `RecipeStore`, `ModeStore`) backed by sqlite-vec.
-- Stay within a Pi 5 8GB RAM envelope that leaves ≥2GB headroom for downstream apps.
+- Stay within a Pi 5 8GB RAM envelope that leaves ≥2GB headroom for downstream apps, and within a Coral SL2610 4GB envelope that leaves ≥500 MB headroom (E2B-only).
 - Document Gemma 4 spec claims with sources (or mark them unverified) before they become load-bearing.
+- Document the Coral NPU SDK / LiteRT delegate status with sources, and decide before tagging v0.1.0 whether NPU offload ships in v0.1 or is deferred to v0.2.
 
 ## 3. Tasks
 
@@ -40,24 +46,42 @@ It is **library-only** for v0.1.0 — no user-facing app, no REST endpoints. Dow
 - [ ] CI workflow runs `ruff check` + `pytest -q` on push (even if some tests are placeholders)
 - [ ] Quality checks pass
 
-### T-003: Pi bootstrap script
-**Description:** Write `ops/pi-bootstrap.sh` — a single idempotent script that takes a fresh Pi 5 running Bookworm and gets it to "smoke test ready": installs apt deps (build-essential, cmake, git, python3-venv, sqlite3), creates a Python venv at `~/epicure/venv`, clones + builds llama.cpp from a pinned commit with ARM64-tuned flags (`-DLLAMA_NATIVE=ON -DGGML_LLAMAFILE=ON` plus Gemma 4 hybrid-attention flags as confirmed in T-001), downloads the chosen Gemma 4 GGUF, and installs `epicure-core` in editable mode. Logs each step; re-running is a no-op.
+### T-003: Pi 5 bootstrap script
+**Description:** Write `ops/pi-bootstrap.sh` — a single idempotent script that takes a fresh Pi 5 running Bookworm and gets it to "smoke test ready": installs apt deps (build-essential, cmake, git, python3-venv, sqlite3), creates a Python venv at `~/epicure/venv`, clones + builds llama.cpp from a pinned commit with ARM64-tuned flags (`-DLLAMA_NATIVE=ON -DGGML_LLAMAFILE=ON` plus Gemma 4 hybrid-attention flags as confirmed in T-001), downloads the chosen Gemma 4 GGUF (E4B variant), and installs `epicure-core` in editable mode. Logs each step; re-running is a no-op.
 
 **Acceptance Criteria:**
 - [ ] Running `bash ops/pi-bootstrap.sh` on a clean Pi 5 Bookworm reaches "BOOTSTRAP COMPLETE" in <30 min
 - [ ] Re-running the script is idempotent (no errors, ≤1 min)
 - [ ] llama.cpp commit SHA is pinned in the script (not `main`)
 - [ ] Gemma 4 GGUF URL + SHA256 are pinned and verified post-download
+- [ ] Script asserts `/proc/device-tree/model` contains "Raspberry Pi 5" (or `--force` override flag is passed) so it cannot be accidentally run on a Coralboard
 - [ ] On a machine that is not ARM64, the script exits with a clear error message instead of producing a broken build
 - [ ] Quality checks pass
 
+### T-003b: Coralboard bootstrap script
+**Description:** Write `ops/coralboard-bootstrap.sh` — the SL2610 counterpart to `pi-bootstrap.sh`. Targets the Synaptics Debian BSP (apt-based) as the v0.1 default; a Yocto-image branch is documented as deferred to v0.2. Installs the same apt deps plus the Synaptics Torq NPU runtime (stub-allowed if SDK is not yet GA in T-001), builds llama.cpp with the same pinned commit but with flags tuned for Cortex-A55 (`-DLLAMA_NATIVE=ON -DGGML_LLAMAFILE=ON`, no NEON dotprod assumption beyond what A55 guarantees), downloads the **Gemma 4 E2B** GGUF (not E4B — RAM envelope is 2–4 GB), and installs `epicure-core` in editable mode. Logs each step; re-running is a no-op.
+
+**Acceptance Criteria:**
+- [ ] Running `bash ops/coralboard-bootstrap.sh` on a clean Coralboard Debian image reaches "BOOTSTRAP COMPLETE" in <30 min
+- [ ] Re-running the script is idempotent (no errors, ≤1 min)
+- [ ] llama.cpp commit SHA matches the pin used in `ops/pi-bootstrap.sh` (single source of truth)
+- [ ] Gemma 4 E2B GGUF URL + SHA256 are pinned and verified post-download
+- [ ] Script asserts `/proc/device-tree/model` contains "Synaptics" or "SL2610" (or `--force` override) so it cannot be accidentally run on a Pi 5
+- [ ] On a Yocto-image host (detected by absence of `apt-get`), the script prints "Yocto bootstrap deferred to v0.2 — see docs/install-coralboard.md" and exits with code 0 (informational, not error)
+- [ ] On a non-ARM64 host, the script exits with a clear error message
+- [ ] Coral NPU SDK install is gated behind an env var (`EPICURE_CORAL_NPU=1`); when unset, the script logs "NPU offload deferred to v0.2 — running bge-m3 on CPU" and continues
+- [ ] Quality checks pass
+
 ### T-004: Gemma 4 runner (llama.cpp lifecycle)
-**Description:** `epicure_core/gemma/runner.py` manages the llama.cpp server subprocess: starts it on a free port, picks the E4B model if `psutil.virtual_memory().available >= 6 GiB` else E2B, exposes `start()`, `stop()`, `is_healthy()`, and a context manager. Records baseline tokens/sec on first start to `~/.epicure/baseline-tps.json`. Frees memory between heavy jobs by tearing down the subprocess when explicitly asked.
+**Description:** `epicure_core/gemma/runner.py` manages the llama.cpp server subprocess: starts it on a free port, picks the model variant based on platform + RAM, exposes `start()`, `stop()`, `is_healthy()`, and a context manager. Records baseline tokens/sec on first start to `~/.epicure/baseline-tps.json`. Frees memory between heavy jobs by tearing down the subprocess when explicitly asked. Selection rule: if total RAM <6 GiB (the Coralboard case), always pick E2B regardless of currently-free RAM. If total RAM ≥6 GiB (the Pi 5 8GB case), pick E4B when `psutil.virtual_memory().available >= 6 GiB`, else E2B.
 
 **Acceptance Criteria:**
 - [ ] `GemmaRunner().__enter__()` brings up llama.cpp and `__exit__()` shuts it down cleanly (no orphan processes)
-- [ ] Auto-select picks E4B on an idle Pi 5 8GB, E2B if free RAM <6GiB (testable by mocking `psutil.virtual_memory`)
-- [ ] First start writes `baseline-tps.json` with `{ "tokens_per_second": float, "model": "E4B"|"E2B", "timestamp": iso8601 }`
+- [ ] Auto-select picks E4B on an idle Pi 5 8GB (mocked: `total=8GiB, available=7GiB`)
+- [ ] Auto-select picks E2B when free RAM <6 GiB on a Pi 5 (mocked: `total=8GiB, available=4GiB`)
+- [ ] Auto-select picks E2B unconditionally on a Coralboard (mocked: `total=4GiB, available=3.5GiB`) — never attempts E4B
+- [ ] `runner.platform` exposes the detected artifact (`"pi5"` | `"coralboard"` | `"unknown"`) derived from `/proc/device-tree/model` with a clean fallback
+- [ ] First start writes `baseline-tps.json` with `{ "tokens_per_second": float, "model": "E4B"|"E2B", "platform": str, "timestamp": iso8601 }`
 - [ ] `is_healthy()` returns False if the subprocess died or fails to respond within 2s
 - [ ] Quality checks pass
 
@@ -73,13 +97,15 @@ It is **library-only** for v0.1.0 — no user-facing app, no REST endpoints. Dow
 - [ ] Quality checks pass
 
 ### T-006: bge-m3 embedding service
-**Description:** `epicure_core/embeddings.py` wraps `bge-m3` int8 ONNX via `onnxruntime`. Exposes a single `embed(texts: list[str]) -> np.ndarray` returning `(len(texts), 1024)` float32 normalized vectors. Loads the model once per process. Includes a thin optional FastAPI sidecar (`epicure_core/embeddings/server.py`) that exposes the same API over HTTP for cross-process access without per-process model reload.
+**Description:** `epicure_core/embeddings.py` wraps `bge-m3` int8 ONNX via `onnxruntime`. Exposes a single `embed(texts: list[str]) -> np.ndarray` returning `(len(texts), 1024)` float32 normalized vectors. Loads the model once per process. Includes a thin optional FastAPI sidecar (`epicure_core/embeddings/server.py`) that exposes the same API over HTTP for cross-process access without per-process model reload. The implementation is **backend-pluggable**: the default backend is `onnxruntime` CPU; a `coral_npu` backend is reserved (interface stub only in v0.1) for v0.2 NPU offload via LiteRT/TFLite when the Synaptics Torq SDK matures. The public `embed()` signature does not change when the backend swaps.
 
 **Acceptance Criteria:**
 - [ ] `embed(["tomato", "tomate", "tomatillo"])` returns a `(3, 1024)` float32 ndarray with unit-norm rows
 - [ ] Cosine similarity between `"eggplant"` and `"aubergine"` ≥ 0.85 (smoke check on multilingual behavior)
 - [ ] FastAPI sidecar `POST /embed {"texts": [...]}` returns the same vectors as the in-process call
 - [ ] Embedding 1,000 short ingredient strings completes in <60s on Pi 5 (benchmark recorded)
+- [ ] Embedding 1,000 short ingredient strings completes in <120s on Coralboard CPU (benchmark recorded; relaxed target acknowledges 2x Cortex-A55 vs 4x Cortex-A76)
+- [ ] `EmbeddingBackend` enum includes `ONNX_CPU` and `CORAL_NPU`; selecting `CORAL_NPU` in v0.1 raises `NotImplementedError("v0.2 — see docs/deferred-v0.2.md")`
 - [ ] Quality checks pass
 
 ### T-007: sqlite-vec storage layer
@@ -137,24 +163,28 @@ It is **library-only** for v0.1.0 — no user-facing app, no REST endpoints. Dow
 - [ ] `ops/systemd/install.sh` copies units to `/etc/systemd/system/` and `systemctl daemon-reload`s
 - [ ] Quality checks pass
 
-### T-012: Integration smoke test on Pi
-**Description:** `tests/integration/test_end_to_end_pi.py` is a single test (marked `@pytest.mark.pi_integration`) that exercises the whole stack on a real Pi: bootstrap → embed three ingredient strings → upsert into `IngredientStore` → query nearest → start Gemma → ask it to narrate the substitution → tear down. Documented as the canary test before tagging v0.1.0.
+### T-012: Integration smoke tests on Pi 5 and Coralboard
+**Description:** Two parallel single-test files exercising the whole stack on real hardware: `tests/integration/test_end_to_end_pi.py` (marked `@pytest.mark.pi_integration`) and `tests/integration/test_end_to_end_coralboard.py` (marked `@pytest.mark.coralboard_integration`). Each follows the same shape: bootstrap → embed three ingredient strings → upsert into `IngredientStore` → query nearest → start Gemma (E4B on Pi, E2B on Coralboard) → ask it to narrate the substitution → tear down. Documented as the canary tests before tagging v0.1.0. Both share a `_shared.py` helper so the assertions stay aligned and drift between artifacts surfaces quickly.
 
 **Acceptance Criteria:**
-- [ ] Test passes on a Pi 5 8GB with the full bootstrap completed
-- [ ] Test is opt-in (skipped by default unless `EPICURE_PI_INTEGRATION=1`)
-- [ ] Total runtime <3 min on the target hardware
-- [ ] If Gemma narration step fails validation, the test fails with a clear message naming which step
+- [ ] Pi 5 test passes on a Pi 5 8GB with the full bootstrap completed (opt-in via `EPICURE_PI_INTEGRATION=1`)
+- [ ] Coralboard test passes on a Coral SL2610 Dev Board with the full bootstrap completed (opt-in via `EPICURE_CORAL_INTEGRATION=1`)
+- [ ] Pi 5 test runtime <3 min on target hardware
+- [ ] Coralboard test runtime <5 min on target hardware (relaxed for the smaller-RAM E2B + Cortex-A55 baseline)
+- [ ] Both tests share a common helper so adding a step to one without the other is a CI-detected drift
+- [ ] If the Gemma narration step fails validation, each test fails with a clear message naming which step
 - [ ] Quality checks pass
 
 ### T-013: Documentation
-**Description:** Write `README.md` (project overview, quickstart, link to suite), `docs/install-pi5.md` (the "$80 Pi" community-kitchen guide), `docs/api.md` (every public symbol with a one-line description and one example), `docs/deferred-v0.2.md` (ICA+GMM, full multilingual vocab pipeline, FastAPI auth, additional corpora). Each doc page front-matter includes "last updated" date and "verified against commit" SHA placeholder.
+**Description:** Write `README.md` (project overview, quickstart, link to suite, "Supported hardware" table covering both artifacts), `docs/install-pi5.md` (the "$80 Pi" community-kitchen guide), `docs/install-coralboard.md` (the SL2610 counterpart, calling out the smaller RAM envelope and the NPU-deferred-to-v0.2 status), `docs/api.md` (every public symbol with a one-line description and one example), `docs/deferred-v0.2.md` (ICA+GMM, full multilingual vocab pipeline, FastAPI auth, additional corpora, **Coral NPU embedding offload**, **Coralboard Yocto bootstrap**). Each doc page front-matter includes "last updated" date and "verified against commit" SHA placeholder.
 
 **Acceptance Criteria:**
-- [ ] All four docs exist and are linked from `README.md`
+- [ ] All five docs exist and are linked from `README.md`
+- [ ] `README.md` contains a "Supported hardware" section with a two-row table (Pi 5 8GB, Coral SL2610) listing OS, RAM, default Gemma 4 variant, and embedding backend per row
 - [ ] `docs/install-pi5.md` is followable by someone with shell experience but no Python background (one-screen-per-step, no jargon without expansion)
+- [ ] `docs/install-coralboard.md` mirrors the structure of `install-pi5.md` and explicitly calls out: (a) E2B is the only supported Gemma variant on this artifact in v0.1, (b) NPU offload is deferred to v0.2 with bge-m3 running on Cortex-A55 CPU, (c) Yocto-image install is documented in prose but not scripted in v0.1
 - [ ] `docs/api.md` covers every symbol exported from `epicure_core/__init__.py`
-- [ ] `docs/deferred-v0.2.md` enumerates the 5 deferred items (mode discovery, vocab pipeline expansion, audio/photo, federation, USDA layer) with a one-paragraph rationale each
+- [ ] `docs/deferred-v0.2.md` enumerates the 7 deferred items (mode discovery, vocab pipeline expansion, audio/photo, federation, USDA layer, Coral NPU embedding offload, Coralboard Yocto bootstrap) with a one-paragraph rationale each
 - [ ] Quality checks pass
 
 ### T-014: v0.1.0 release
@@ -170,18 +200,20 @@ It is **library-only** for v0.1.0 — no user-facing app, no REST endpoints. Dow
 
 ## 4. Functional Requirements
 
-- **FR-1:** The package must install on a Pi 5 8GB running Raspberry Pi OS Bookworm via a single bootstrap script in <30 min.
-- **FR-2:** `epicure_core.embed(texts)` must return a `(len(texts), 1024)` float32 ndarray with unit-norm rows for any list of multilingual text strings.
-- **FR-3:** The Gemma 4 runner must auto-select the E4B model when ≥6 GiB of RAM is free, otherwise the E2B model.
+- **FR-1:** The package must install on either (a) a Pi 5 8GB running Raspberry Pi OS Bookworm via `ops/pi-bootstrap.sh` or (b) a Coral SL2610 Dev Board running the Synaptics Debian BSP via `ops/coralboard-bootstrap.sh`, each in <30 min.
+- **FR-2:** `epicure_core.embed(texts)` must return a `(len(texts), 1024)` float32 ndarray with unit-norm rows for any list of multilingual text strings, regardless of which supported artifact it is running on.
+- **FR-3:** The Gemma 4 runner must auto-select model variant by (total RAM, currently-free RAM): pick E4B only when total RAM ≥ 6 GiB and currently-free RAM ≥ 6 GiB; otherwise pick E2B. This means Coralboard always lands on E2B; Pi 5 lands on E4B when idle and E2B under memory pressure.
 - **FR-4:** The Gemma 4 client must default to a relaxed-JSON + repair-loop pattern for structured output; strict grammar-constrained output must be opt-in.
 - **FR-5:** `IngredientStore`, `RecipeStore`, and `ModeStore` must persist across process restart via sqlite-vec.
 - **FR-6:** `slerp(a, b, t)` must match a reference NumPy implementation to within 1e-6 for unit-norm inputs, including the `dot ≈ 1` short-circuit case.
 - **FR-7:** `constrained_slerp(a, b, t, mode_basis)` must produce a result whose projection onto `mode_basis` is ≥ that of `a`.
 - **FR-8:** `Pantry.resolve(raw_text)` must apply exact → fuzzy → semantic matching in that order and return either a canonical `Ingredient` or `None`.
 - **FR-9:** The vocab loader must emit `ingredients.parquet` with a `list[str]` `aliases` column even when most rows have `[]` (forward-compatible with v0.2 multilingual expansion).
-- **FR-10:** The memory-pressure monitor must prevent the Gemma runner from starting when RAM pressure exceeds 85%.
+- **FR-10:** The memory-pressure monitor must prevent the Gemma runner from starting when RAM pressure exceeds 85% on either supported artifact.
 - **FR-11:** All public symbols exported from `epicure_core/__init__.py` must appear in `docs/api.md` with an example.
 - **FR-12:** All Gemma 4 spec claims used in design decisions must be either verified-with-source or marked unverified in `docs/gemma4-verified-specs.md`.
+- **FR-13:** A `epicure_core.platform.detect_artifact()` helper must return `"pi5"`, `"coralboard"`, or `"unknown"` based on `/proc/device-tree/model`, with `"unknown"` triggering a non-fatal warning rather than an error so the library remains usable on developer laptops.
+- **FR-14:** The embedding backend must be selectable via `EmbeddingBackend.ONNX_CPU` (default) or `EmbeddingBackend.CORAL_NPU` (raises `NotImplementedError` in v0.1, reserved for v0.2). The public `embed()` signature must not change between backends.
 
 ## 5. Non-Goals (Out of Scope for v0.1.0)
 
@@ -195,30 +227,53 @@ It is **library-only** for v0.1.0 — no user-facing app, no REST endpoints. Dow
 - **No photo or audio ingestion.** Gemma 4 vision/audio modalities are deferred regardless of whether T-001 confirms they exist.
 - **No nutritional layer (USDA FoodData Central).** Deferred.
 - **No federation across multiple Pis.** Deferred.
+- **No Coral NPU offload for bge-m3 in v0.1.** The backend enum is reserved and the interface stable, but `CORAL_NPU` raises `NotImplementedError`. Reasoning: the Synaptics Torq SDK / LiteRT delegate maturity is uncertain at v0.1 cut and we will not block the release on it. Deferred to v0.2.
+- **No Coralboard Yocto-image bootstrap script in v0.1.** `coralboard-bootstrap.sh` targets the Debian BSP only; Yocto is prose-documented and deferred. Deferred to v0.2.
+- **No Gemma 4 E4B on Coralboard.** The 2–4 GB RAM envelope makes the ~3 GB E4B model infeasible alongside the rest of the stack. E2B is the only supported variant on this artifact.
 
 ## 6. Technical Considerations
 
-- **Pi 5 8GB RAM budget:** Gemma 4 E4B Q4_K_M (~3 GB) + bge-m3 int8 ONNX (~600 MB) + sqlite-vec corpus (<500 MB) + Python/FastAPI/OS (~1 GB) ≈ 5.1 GB used, leaving ~2.9 GB for downstream apps. E2B fallback (~1.5 GB) recovers another 1.5 GB when needed.
-- **llama.cpp build flags:** ARM64-tuned; Gemma 4 hybrid-attention flag set must be confirmed in T-001 before T-003 pins them.
-- **Structured-JSON latency (per `local-llm-ops` T9):** `json_schema strict:true` on Pi CPU was measured at ~6 min/batch. The relaxed + repair path in T-005 is the design response; strict mode is preserved but opt-in only.
+### Supported hardware artifacts
+
+| Artifact | CPU | NPU | RAM | Storage | OS (v0.1 default) | Default Gemma 4 | Embedding backend |
+|---|---|---|---|---|---|---|---|
+| Raspberry Pi 5 8GB | 4× Cortex-A76 @ 2.4 GHz | none | 8 GB LPDDR4X | microSD/USB SSD | Raspberry Pi OS Bookworm | E4B (Q4_K_M, ~3 GB) | onnxruntime CPU |
+| Coral SL2610 Dev Board | 2× Cortex-A55 + Cortex-M52 | 1 TOPS RISC-V Coral NPU (Synaptics Torq) | 2–4 GB LPDDR4 | 64 GB eMMC + optional SD | Synaptics Debian BSP | E2B (Q4_K_M, ~1.5 GB) | onnxruntime CPU (NPU offload deferred to v0.2) |
+
+### RAM budgets
+
+- **Pi 5 8GB:** Gemma 4 E4B Q4_K_M (~3 GB) + bge-m3 int8 ONNX (~600 MB) + sqlite-vec corpus (<500 MB) + Python/FastAPI/OS (~1 GB) ≈ 5.1 GB used, leaving ~2.9 GB for downstream apps. E2B fallback (~1.5 GB) recovers another 1.5 GB when needed.
+- **Coral SL2610 (4 GB SKU):** Gemma 4 E2B Q4_K_M (~1.5 GB) + bge-m3 int8 ONNX (~600 MB) + sqlite-vec corpus (<500 MB) + Python/Debian OS (~700 MB) ≈ 3.3 GB used, leaving ~700 MB headroom. The 2 GB SKU is **not** supported in v0.1 — even E2B is too tight.
+
+### Build + runtime notes
+
+- **llama.cpp build flags:** ARM64-tuned for both artifacts. The Pi 5 build leans on Cortex-A76 features; the Coralboard build targets Cortex-A55 (no fancy dotprod assumptions beyond the A55 baseline). Gemma 4 hybrid-attention flag set must be confirmed in T-001 before either bootstrap pins them.
+- **Coral NPU SDK status:** The Synaptics Torq NPU runtime / LiteRT delegate for the Coral NPU is in flux at v0.1 cut (Q2 2026 GA window). v0.1 ships the interface (`EmbeddingBackend.CORAL_NPU`) but raises `NotImplementedError` so downstream code can be written against the final API without depending on SDK availability.
+- **Structured-JSON latency (per `local-llm-ops` T9):** `json_schema strict:true` on Pi CPU was measured at ~6 min/batch. The relaxed + repair path in T-005 is the design response; strict mode is preserved but opt-in only. Coralboard A55 baseline is expected to be slower than Pi 5 A76; the same opt-in stance applies.
 - **Multilingual coverage in v0.1:** Comes from bge-m3 at the embedding layer, not from the vocab. A Spanish ingredient string will embed near its English canonical equivalent even without an alias entry. v0.2 will add explicit aliases.
-- **sqlite-vec choice:** Zero-daemon, single-file, survives Pi power loss cleanly. Validated for the use case in the cross-cutting-decisions section of the prose plan.
-- **License:** Apache 2.0 throughout to match Gemma 4 and signal NGO/government compatibility.
+- **sqlite-vec choice:** Zero-daemon, single-file, survives power loss cleanly on both artifacts (Pi 5 microSD/SSD and Coralboard eMMC). Validated for the use case in the cross-cutting-decisions section of the prose plan.
+- **License:** Apache 2.0 throughout to match Gemma 4 and signal NGO/government compatibility. The Coral NPU itself is open-source (RISC-V ML core) which simplifies the downstream story.
 
 ## 7. Success Metrics
 
 - A fresh Pi 5 8GB reaches a working `epicure-core` install in <30 min following only `docs/install-pi5.md`.
-- The integration smoke test (T-012) passes end-to-end in <3 min on the target hardware.
+- A fresh Coral SL2610 Dev Board (4 GB SKU, Debian BSP) reaches a working `epicure-core` install in <30 min following only `docs/install-coralboard.md`.
+- The Pi 5 integration smoke test (T-012) passes end-to-end in <3 min on the target hardware.
+- The Coralboard integration smoke test (T-012) passes end-to-end in <5 min on the target hardware.
 - `embed()` throughput ≥17 ingredient strings/sec on Pi 5 (i.e. 1,000 strings in <60s).
+- `embed()` throughput ≥9 ingredient strings/sec on Coralboard CPU (i.e. 1,000 strings in <120s).
 - Gemma 4 E4B `generate()` returns 256 tokens in <30s on Pi 5.
-- Total `epicure-core` install + model footprint ≤6 GB on disk, ≤5.5 GB resident at runtime.
-- Downstream repos (`pantry-navigator`, etc.) can import and use every primitive listed in FR-1 through FR-10 without reimplementing it.
+- Gemma 4 E2B `generate()` returns 256 tokens in <45s on Coralboard.
+- Total `epicure-core` install + model footprint ≤6 GB on disk on Pi 5 (E4B build), ≤4 GB on disk on Coralboard (E2B build); ≤5.5 GB resident at runtime on Pi 5, ≤3.5 GB resident at runtime on Coralboard.
+- Downstream repos (`pantry-navigator`, etc.) can import and use every primitive listed in FR-1 through FR-14 without reimplementing it, and the same import path works on either artifact.
 
 ## 8. Open Questions
 
 - **OQ-1:** Does Gemma 4 actually expose a native system-prompt role, or is it the same chat-template trick as Gemma 3? Resolved in T-001.
 - **OQ-2:** Is the 256K context claim a property of the architecture or only enabled with specific GGUF builds / runtime flags? Resolved in T-001.
 - **OQ-3:** Which exact RecipeNLG license terms apply to redistributing the derived `ingredients.parquet`? T-010 must check before shipping the artifact in the package.
-- **OQ-4:** Should the bge-m3 ONNX file ship inside the package or be downloaded by `pi-bootstrap.sh`? Default position: download in bootstrap (keep wheel small), but revisit if it breaks offline-install scenarios.
-- **OQ-5:** Self-hosted ARM64 GitHub Actions runner vs. emulated `linux/arm64` in `qemu` for CI — T-002 makes a call and documents it.
+- **OQ-4:** Should the bge-m3 ONNX file ship inside the package or be downloaded by the bootstrap scripts? Default position: download in bootstrap (keep wheel small), but revisit if it breaks offline-install scenarios. Applies to both Pi 5 and Coralboard.
+- **OQ-5:** Self-hosted ARM64 GitHub Actions runner vs. emulated `linux/arm64` in `qemu` for CI — T-002 makes a call and documents it. Coverage must reach both Cortex-A76 (Pi 5) and Cortex-A55 (Coralboard) for meaningful perf signal; emulation alone won't catch perf regressions.
 - **OQ-6:** Where do we draw the line on `Quantity` parsing? v0.1 minimum is "store the raw string"; the question is whether to attempt unit normalization at all. Default position: defer to `pantry-navigator`.
+- **OQ-7:** Is the Synaptics Torq NPU SDK / LiteRT delegate for Coral NPU mature enough at v0.1 cut to ship a working `EmbeddingBackend.CORAL_NPU`? Default position: **no** — reserve the enum, raise `NotImplementedError`, defer to v0.2. T-001 records the SDK status as of the cut date with a citation.
+- **OQ-8:** Does the Coralboard's 2 GB SKU exist in the wild, and do we owe it any support story (degraded mode, refuse-to-install, etc.)? Default position: refuse-to-install with a clear message; only the 4 GB SKU is supported in v0.1. Revisit if community demand surfaces.
