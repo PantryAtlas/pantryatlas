@@ -1,0 +1,187 @@
+"""Recipe store backed by sqlite-vec."""
+
+from __future__ import annotations
+
+import json
+import sqlite3
+from dataclasses import dataclass, field
+from pathlib import Path
+
+import numpy as np
+import sqlite_vec
+
+_DIM = 1024
+
+_DDL = """
+CREATE TABLE IF NOT EXISTS recipes_meta (
+    id                TEXT PRIMARY KEY,
+    title             TEXT NOT NULL,
+    language          TEXT NOT NULL,
+    ingredients_json  TEXT,
+    instructions      TEXT
+);
+CREATE VIRTUAL TABLE IF NOT EXISTS recipes_vec USING vec0(
+    id        TEXT PRIMARY KEY,
+    embedding float[1024]
+);
+"""
+
+
+@dataclass
+class Recipe:
+    """One recipe with its 1024-d embedding."""
+
+    id: str
+    title: str
+    language: str
+    embedding: np.ndarray  # shape (1024,) float32
+    ingredients_json: list[str] | None = field(default=None)
+    instructions: str | None = field(default=None)
+
+
+class RecipeStore:
+    """Persistent recipe store backed by sqlite-vec.
+
+    Stores recipe metadata and 1024-d float32 embeddings across two coupled
+    tables: ``recipes_meta`` (regular) and ``recipes_vec`` (vec0 virtual
+    table). Tables are created idempotently on open.
+    """
+
+    def __init__(self, db_path: str | Path) -> None:
+        self._path = str(db_path)
+        self._conn = self._open()
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _open(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(self._path)
+        conn.enable_load_extension(True)
+        sqlite_vec.load(conn)
+        conn.enable_load_extension(False)
+        for stmt in _DDL.strip().split(";"):
+            stmt = stmt.strip()
+            if stmt:
+                conn.execute(stmt)
+        conn.commit()
+        return conn
+
+    @staticmethod
+    def _to_blob(arr: np.ndarray) -> bytes:
+        return arr.astype(np.float32).tobytes()
+
+    @staticmethod
+    def _from_row(row: tuple) -> Recipe:
+        rid, title, language, ingredients_json, instructions, blob = row
+        embedding = np.frombuffer(blob, dtype=np.float32).copy()
+        ingredients = json.loads(ingredients_json) if ingredients_json else None
+        return Recipe(
+            id=rid,
+            title=title,
+            language=language,
+            embedding=embedding,
+            ingredients_json=ingredients,
+            instructions=instructions,
+        )
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def upsert(self, rows: list[Recipe]) -> None:
+        """Insert or replace a list of recipes."""
+        for row in rows:
+            self._conn.execute(
+                """
+                INSERT INTO recipes_meta (id, title, language, ingredients_json, instructions)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    title            = excluded.title,
+                    language         = excluded.language,
+                    ingredients_json = excluded.ingredients_json,
+                    instructions     = excluded.instructions
+                """,
+                (
+                    row.id,
+                    row.title,
+                    row.language,
+                    json.dumps(row.ingredients_json) if row.ingredients_json is not None else None,
+                    row.instructions,
+                ),
+            )
+            # vec0 virtual tables do not support ON CONFLICT / UPSERT syntax;
+            # use DELETE + INSERT instead.
+            self._conn.execute("DELETE FROM recipes_vec WHERE id = ?", (row.id,))
+            self._conn.execute(
+                "INSERT INTO recipes_vec (id, embedding) VALUES (?, ?)",
+                (row.id, self._to_blob(row.embedding)),
+            )
+        self._conn.commit()
+
+    def get(self, id: str) -> Recipe | None:
+        """Retrieve a single recipe by id, or None if not found."""
+        row = self._conn.execute(
+            """
+            SELECT m.id, m.title, m.language, m.ingredients_json, m.instructions, v.embedding
+            FROM recipes_meta m
+            JOIN recipes_vec v ON v.id = m.id
+            WHERE m.id = ?
+            """,
+            (id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return self._from_row(row)
+
+    def query_by_vector(
+        self,
+        vec: np.ndarray,
+        top_k: int = 5,
+        filters: dict | None = None,
+    ) -> list[Recipe]:
+        """Return the top_k nearest recipes by L2 distance.
+
+        Args:
+            vec: Query embedding, shape (1024,) float32.
+            top_k: Number of results to return.
+            filters: Optional dict of metadata filters (currently unused placeholder).
+
+        Returns:
+            List of Recipe objects sorted by ascending distance.
+        """
+        blob = self._to_blob(vec)
+        rows = self._conn.execute(
+            """
+            WITH knn AS (
+                SELECT id, distance
+                FROM recipes_vec
+                WHERE embedding MATCH ?
+                ORDER BY distance
+                LIMIT ?
+            )
+            SELECT m.id, m.title, m.language, m.ingredients_json, m.instructions, v.embedding
+            FROM knn
+            JOIN recipes_meta m ON m.id = knn.id
+            JOIN recipes_vec v ON v.id = knn.id
+            ORDER BY knn.distance
+            """,
+            (blob, top_k),
+        ).fetchall()
+        return [self._from_row(r) for r in rows]
+
+    def delete(self, id: str) -> None:
+        """Delete a recipe by id from both tables."""
+        self._conn.execute("DELETE FROM recipes_meta WHERE id = ?", (id,))
+        self._conn.execute("DELETE FROM recipes_vec WHERE id = ?", (id,))
+        self._conn.commit()
+
+    def close(self) -> None:
+        """Close the underlying database connection."""
+        self._conn.close()
+
+    def __enter__(self) -> RecipeStore:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        self.close()
