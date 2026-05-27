@@ -1,0 +1,110 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "epicure-core"
+version = "0.1.0.dev0"
+description = "Foundation package for the Epicure Suite: bge-m3 embeddings, sqlite-vec store, Gemma 4 runner, SLERP math, pantry primitives, Pi ops"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "Apache-2.0"}
+authors = [
+    {name = "Craig Merry", email = "craigm26@gmail.com"}
+]
+keywords = [
+    "embeddings",
+    "multilingual",
+    "vector-storage",
+    "sqlite",
+    "recipe",
+    "ingredient",
+    "Gemma",
+    "LLM",
+    "Raspberry Pi"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Internet :: WWW/HTTP",
+]
+
+dependencies = [
+    "numpy>=2.0",
+    "onnxruntime>=1.20",
+    "sqlite-vec>=0.1.6",
+    "rapidfuzz>=3.10",
+    "pyarrow>=18.0",
+    "jsonschema>=4.23",
+    "psutil>=6.0",
+    "httpx>=0.27",
+    "fastapi>=0.115",
+    "uvicorn>=0.32",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "hypothesis>=6.115",
+    "ruff>=0.7",
+    "pytest-asyncio>=0.24",
+]
+
+[project.urls]
+Homepage = "https://github.com/epicure-suite/epicure-core"
+Documentation = "https://github.com/epicure-suite/epicure-core/blob/main/README.md"
+Repository = "https://github.com/epicure-suite/epicure-core.git"
+Issues = "https://github.com/epicure-suite/epicure-core/issues"
+
+[tool.setuptools]
+packages = ["epicure_core"]
+
+[tool.setuptools.package-data]
+epicure_core = ["py.typed"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # Pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "UP",   # pyupgrade
+]
+ignore = []
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+markers = [
+    "pi_integration: marks tests as Pi integration tests (deselect with '-m \"not pi_integration\"')",
+]
+
+[tool.coverage.run]
+source = ["epicure_core"]
+omit = ["*/tests/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
