@@ -1,20 +1,52 @@
 {
   "project": "epicure-core",
   "branchName": "feat/v0.1.0",
-  "description": "Foundation package for Epicure Suite: bge-m3 embeddings, sqlite-vec store, Gemma 4 runner, SLERP math, pantry primitives, Pi ops. Library-only, no apps.",
+  "description": "Foundation package for Epicure Suite: bge-m3 embeddings, sqlite-vec store, Gemma 4 runner, SLERP math, pantry primitives, on-device ops. Library-only, no apps. Supports two hardware artifacts in v0.1: Raspberry Pi 5 8GB (Gemma 4 E4B default, onnxruntime CPU embeddings) and Coral SL2610 Dev Board (Synaptics Astra, dual Cortex-A55 + 1 TOPS RISC-V Coral NPU, 2-4GB LPDDR4; Gemma 4 E2B default, onnxruntime CPU embeddings with NPU-offload interface reserved for v0.2). Reference: https://developers.google.com/coral/products/SL2610-dev-board",
+  "supportedArtifacts": [
+    {
+      "id": "pi5-8gb",
+      "name": "Raspberry Pi 5 8GB",
+      "os": "Raspberry Pi OS Bookworm or Ubuntu 24.04 LTS",
+      "cpu": "4x Cortex-A76 @ 2.4 GHz",
+      "ram": "8 GB LPDDR4X",
+      "defaultGemmaVariant": "E4B",
+      "embeddingBackend": "onnxruntime CPU",
+      "bootstrapScript": "ops/pi-bootstrap.sh",
+      "installDoc": "docs/install-pi5.md"
+    },
+    {
+      "id": "coralboard-sl2610",
+      "name": "Coral SL2610 Dev Board (Synaptics Astra SL2610)",
+      "os": "Synaptics Debian BSP (Yocto deferred to v0.2)",
+      "cpu": "2x Cortex-A55 + Cortex-M52",
+      "npu": "1 TOPS RISC-V Coral NPU (Synaptics Torq)",
+      "ram": "4 GB LPDDR4 (2 GB SKU not supported in v0.1)",
+      "storage": "64 GB eMMC + optional SD",
+      "defaultGemmaVariant": "E2B",
+      "embeddingBackend": "onnxruntime CPU (CORAL_NPU enum reserved, raises NotImplementedError in v0.1)",
+      "bootstrapScript": "ops/coralboard-bootstrap.sh",
+      "installDoc": "docs/install-coralboard.md",
+      "productPage": "https://developers.google.com/coral/products/SL2610-dev-board"
+    }
+  ],
   "tasks": [
     {
       "id": "T-001",
-      "title": "Verify Gemma 4 spec claims and pin GGUF",
-      "description": "Research-only task. Confirm Gemma 4's context length, language coverage, vision/audio modalities, and native system-prompt support against primary sources (Google DeepMind model card, llama.cpp release notes, HuggingFace). Unverified claims must be flagged with a fallback plan. Pin one specific GGUF URL+SHA256 for downstream tasks to consume.",
+      "title": "Verify Gemma 4 spec claims, pin both GGUFs, record Coral NPU SDK status",
+      "description": "Research-only task. Confirm Gemma 4's context length, language coverage, vision/audio modalities, and native system-prompt support against primary sources (Google DeepMind model card, llama.cpp release notes, HuggingFace). Unverified claims must be flagged with a fallback plan. Pin two specific GGUF URL+SHA256s: the E4B variant (Pi 5 default) and the E2B variant (Coralboard default). Also record the current state of the Synaptics Torq NPU SDK / LiteRT Coral NPU delegate so T-018 can make an informed ship/defer call.",
       "acceptanceCriteria": [
         "File `/home/craigm26/epicure-core/docs/gemma4-verified-specs.md` exists",
         "File contains a YAML or table block with these 5 keys: `context_length`, `supported_languages`, `e4b_vision`, `audio_modalities`, `native_system_prompt`",
         "Each of the 5 keys has either `verified: true` + a source URL, or `verified: false` + a `fallback:` line",
-        "File contains a line matching regex `chosen_gguf_url:\\s*https://\\S+\\.gguf`",
-        "File contains a line matching regex `chosen_gguf_sha256:\\s*[a-f0-9]{64}`",
+        "File contains a line matching regex `chosen_e4b_gguf_url:\\s*https://\\S+\\.gguf` (Pi 5 default)",
+        "File contains a line matching regex `chosen_e4b_gguf_sha256:\\s*[a-f0-9]{64}`",
+        "File contains a line matching regex `chosen_e2b_gguf_url:\\s*https://\\S+\\.gguf` (Coralboard default)",
+        "File contains a line matching regex `chosen_e2b_gguf_sha256:\\s*[a-f0-9]{64}`",
         "If `native_system_prompt` is verified false, file lists which downstream tasks (T-010, T-011, T-012) need a role-prefix shim instead",
-        "Run `grep -c 'verified:' /home/craigm26/epicure-core/docs/gemma4-verified-specs.md` - prints `5`"
+        "Run `grep -c 'verified:' /home/craigm26/epicure-core/docs/gemma4-verified-specs.md` - prints `5`",
+        "File `/home/craigm26/epicure-core/docs/coral-npu-sdk-status.md` exists",
+        "coral-npu-sdk-status.md records: (a) Synaptics Torq SDK availability date with source URL, (b) LiteRT Coral NPU delegate status (in-tree / out-of-tree / not-yet-released) with source URL, (c) recommended v0.1 stance with a single line `npu_offload_ships_in_v0_1: yes|no` and a `rationale:` line",
+        "Run `grep -E '^npu_offload_ships_in_v0_1:\\s*(yes|no)$' /home/craigm26/epicure-core/docs/coral-npu-sdk-status.md` - exits 0"
       ],
       "priority": 1,
       "passes": false,
@@ -22,20 +54,24 @@
     },
     {
       "id": "T-002",
-      "title": "Scaffold epicure-core Python package",
-      "description": "Create the `pyproject.toml` (PEP 621, Apache 2.0, deps pinned at floor versions), package directory layout matching the architecture sketch, LICENSE, README skeleton, CHANGELOG, .gitignore, and CI workflow stub. Establish that `pip install -e .` works.",
+      "title": "Scaffold epicure-core Python package (incl. platform-detection helper)",
+      "description": "Create the `pyproject.toml` (PEP 621, Apache 2.0, deps pinned at floor versions), package directory layout matching the architecture sketch, LICENSE, README skeleton, CHANGELOG, .gitignore, and CI workflow stub. Establish that `pip install -e .` works. Ship `epicure_core.platform.detect_artifact()` returning `\"pi5\"` | `\"coralboard\"` | `\"unknown\"` from `/proc/device-tree/model` (case-insensitive, with a try/except fallback for non-Linux dev laptops).",
       "acceptanceCriteria": [
         "Run `ls /home/craigm26/epicure-core/pyproject.toml /home/craigm26/epicure-core/LICENSE /home/craigm26/epicure-core/README.md /home/craigm26/epicure-core/CHANGELOG.md /home/craigm26/epicure-core/.gitignore` - exits 0",
         "Run `grep -E '^name = \"epicure-core\"' /home/craigm26/epicure-core/pyproject.toml` - exits 0",
         "Run `grep -E '^version = \"0.1.0.dev0\"' /home/craigm26/epicure-core/pyproject.toml` - exits 0",
         "Run `grep -E 'license.*Apache-2.0' /home/craigm26/epicure-core/pyproject.toml` - exits 0",
         "Run `head -1 /home/craigm26/epicure-core/LICENSE | grep -i 'Apache License'` - exits 0",
-        "Run `ls -d /home/craigm26/epicure-core/epicure_core/{embeddings,store,gemma,geometry,pantry,data}` - exits 0",
+        "Run `ls -d /home/craigm26/epicure-core/epicure_core/{embeddings,store,gemma,geometry,pantry,data,platform}` - exits 0",
         "Run `ls /home/craigm26/epicure-core/.github/workflows/ci.yml` - exits 0",
         "Run `grep -E 'ruff check' /home/craigm26/epicure-core/.github/workflows/ci.yml` - exits 0",
         "Run `grep -E 'pytest' /home/craigm26/epicure-core/.github/workflows/ci.yml` - exits 0",
         "Run `python3 -m venv /tmp/epicure-venv-t002 && /tmp/epicure-venv-t002/bin/pip install -e /home/craigm26/epicure-core` - exits 0",
-        "Run `/tmp/epicure-venv-t002/bin/python -c 'import epicure_core; print(epicure_core.__version__)'` - prints `0.1.0.dev0`"
+        "Run `/tmp/epicure-venv-t002/bin/python -c 'import epicure_core; print(epicure_core.__version__)'` - prints `0.1.0.dev0`",
+        "Run `/tmp/epicure-venv-t002/bin/python -c 'from epicure_core.platform import detect_artifact; assert detect_artifact() in (\"pi5\", \"coralboard\", \"unknown\"); print(\"ok\")'` - prints `ok`",
+        "Test `tests/platform/test_detect_artifact.py` monkeypatches `/proc/device-tree/model` reader to return \"Raspberry Pi 5 Model B Rev 1.0\" and asserts `detect_artifact() == \"pi5\"`",
+        "Test monkeypatches reader to return \"Synaptics SL2610 Coralboard\" and asserts `detect_artifact() == \"coralboard\"`",
+        "Test asserts the helper emits a non-fatal warning (via `warnings.warn`) when detection falls through to `\"unknown\"` rather than raising"
       ],
       "priority": 2,
       "passes": false,
@@ -43,16 +79,18 @@
     },
     {
       "id": "T-003",
-      "title": "Implement bge-m3 multilingual embedding service",
-      "description": "Wrap bge-m3 as int8 ONNX via onnxruntime. Single in-process API `embed(texts) -> (N, 1024) float32 unit-norm ndarray`. Plus an optional FastAPI sidecar exposing the same call over HTTP at `POST /embed` for cross-process use.",
+      "title": "Implement bge-m3 multilingual embedding service (backend-pluggable)",
+      "description": "Wrap bge-m3 as int8 ONNX via onnxruntime. Single in-process API `embed(texts) -> (N, 1024) float32 unit-norm ndarray`. The implementation is backend-pluggable via an `EmbeddingBackend` enum: `ONNX_CPU` is the v0.1 default and works on both Pi 5 and Coralboard; `CORAL_NPU` is reserved for the Synaptics Torq / LiteRT delegate and raises `NotImplementedError` in v0.1. Public `embed()` signature stays identical across backends. Plus an optional FastAPI sidecar exposing the same call over HTTP at `POST /embed` for cross-process use.",
       "acceptanceCriteria": [
         "File `/home/craigm26/epicure-core/epicure_core/embeddings.py` exists",
         "Run `python -c 'from epicure_core.embeddings import embed; print(callable(embed))'` - prints `True`",
+        "Run `python -c 'from epicure_core.embeddings import EmbeddingBackend; print(sorted(b.name for b in EmbeddingBackend))'` - prints `['CORAL_NPU', 'ONNX_CPU']`",
+        "Run `python -c 'from epicure_core.embeddings import embed, EmbeddingBackend\\ntry:\\n    embed([\"x\"], backend=EmbeddingBackend.CORAL_NPU)\\nexcept NotImplementedError as e:\\n    assert \"v0.2\" in str(e); print(\"ok\")'` - prints `ok`",
         "Run `pytest /home/craigm26/epicure-core/tests/test_embeddings.py -q` - exits 0",
         "Test in that file asserts `embed(['tomato', 'tomate', 'tomatillo']).shape == (3, 1024)` and dtype `float32`",
         "Test asserts every returned vector has L2 norm in `[0.999, 1.001]`",
         "Test asserts `cosine(embed(['eggplant'])[0], embed(['aubergine'])[0]) >= 0.85`",
-        "Test logs to stdout: `embed_throughput_per_sec=<float>` measured on 1000 short strings; assertion enforces `>= 17.0` only when env `EPICURE_PI_BENCH=1` is set, otherwise just logs",
+        "Test logs to stdout: `embed_throughput_per_sec=<float>` measured on 1000 short strings; assertion enforces `>= 17.0` only when env `EPICURE_PI_BENCH=1` is set, `>= 9.0` only when env `EPICURE_CORAL_BENCH=1` is set, otherwise just logs",
         "File `/home/craigm26/epicure-core/epicure_core/embeddings_server.py` exists exposing `POST /embed` via FastAPI",
         "Run `ruff check /home/craigm26/epicure-core/epicure_core/embeddings.py /home/craigm26/epicure-core/epicure_core/embeddings_server.py` - exits 0"
       ],
@@ -158,17 +196,18 @@
     },
     {
       "id": "T-009",
-      "title": "Write Pi bootstrap script (pi-bootstrap.sh)",
-      "description": "Single idempotent shell script that takes a fresh Pi 5 Bookworm install to 'smoke test ready': apt deps, venv, llama.cpp pinned build with ARM64+Gemma-4 flags from T-001, Gemma 4 GGUF download with SHA256 verification, editable epicure-core install.",
+      "title": "Write Pi 5 bootstrap script (pi-bootstrap.sh)",
+      "description": "Single idempotent shell script that takes a fresh Pi 5 Bookworm install to 'smoke test ready': apt deps, venv, llama.cpp pinned build with ARM64+Gemma-4 flags from T-001 tuned for Cortex-A76, Gemma 4 E4B GGUF download with SHA256 verification, editable epicure-core install. Refuses to run on a Coralboard so it cannot be confused with T-017's `coralboard-bootstrap.sh`.",
       "acceptanceCriteria": [
         "File `/home/craigm26/epicure-core/ops/pi-bootstrap.sh` exists",
         "Run `test -x /home/craigm26/epicure-core/ops/pi-bootstrap.sh` - exits 0",
         "Run `bash -n /home/craigm26/epicure-core/ops/pi-bootstrap.sh` (syntax check) - exits 0",
         "Run `shellcheck /home/craigm26/epicure-core/ops/pi-bootstrap.sh` - exits 0 (warnings of severity error or warning must be zero; info/style ignored)",
         "Script contains a line matching regex `LLAMA_CPP_COMMIT=\"?[a-f0-9]{40}\"?` (commit pinned, not 'main')",
-        "Script contains a line matching regex `GEMMA4_GGUF_SHA256=\"?[a-f0-9]{64}\"?`",
-        "Script contains a line matching regex `GEMMA4_GGUF_URL=\"?https://\\S+\\.gguf\"?` matching the URL chosen in T-001",
+        "Script contains a line matching regex `GEMMA4_E4B_GGUF_SHA256=\"?[a-f0-9]{64}\"?`",
+        "Script contains a line matching regex `GEMMA4_E4B_GGUF_URL=\"?https://\\S+\\.gguf\"?` matching the E4B URL chosen in T-001",
         "Script contains an explicit `uname -m` check that exits non-zero with message containing `ARM64 required` when not on aarch64/arm64",
+        "Script contains a check that `/proc/device-tree/model` (when present) contains the string `Raspberry Pi 5`; exits non-zero with message containing `Use coralboard-bootstrap.sh instead` when it detects a Coralboard, unless `--force` is passed",
         "Script contains idempotency sentinels (e.g., `if [ -f \"$STAMP_FILE\" ]; then echo 'already done'; exit 0; fi`) for at least 3 stages: apt-install, llama.cpp-build, gemma-download",
         "Final line of normal-completion output matches regex `BOOTSTRAP COMPLETE`"
       ],
@@ -178,18 +217,20 @@
     },
     {
       "id": "T-010",
-      "title": "Implement Gemma 4 runner lifecycle wrapper",
-      "description": "`GemmaRunner` context manager that starts/stops the llama.cpp subprocess, auto-selects E4B if free RAM ≥ 6 GiB else E2B, exposes `is_healthy()`, and records first-start tokens/sec to `~/.epicure/baseline-tps.json`. Memory selection must be unit-testable via mocked psutil.",
+      "title": "Implement Gemma 4 runner lifecycle wrapper (platform-aware)",
+      "description": "`GemmaRunner` context manager that starts/stops the llama.cpp subprocess, auto-selects model variant by (total RAM, free RAM, detected platform), exposes `is_healthy()`, and records first-start tokens/sec to `~/.epicure/baseline-tps.json`. Selection rule: E4B only when total RAM >= 6 GiB AND free RAM >= 6 GiB; otherwise E2B. This means a Coralboard (total RAM 2-4 GiB) always lands on E2B; a Pi 5 8GB lands on E4B at idle and E2B under memory pressure. Memory selection must be unit-testable via mocked psutil. Runner records the detected platform alongside the chosen model so downstream observability has the context.",
       "acceptanceCriteria": [
         "File `/home/craigm26/epicure-core/epicure_core/gemma/runner.py` exists",
         "Run `python -c 'from epicure_core.gemma.runner import GemmaRunner, MemoryPressureError'` - exits 0",
         "Run `pytest /home/craigm26/epicure-core/tests/gemma/test_runner.py -q` - exits 0",
-        "Test mocks `psutil.virtual_memory()` with `available = 7 * 1024**3`, instantiates GemmaRunner, asserts `runner._selected_model == 'E4B'`",
-        "Test mocks `psutil.virtual_memory()` with `available = 4 * 1024**3`, asserts `runner._selected_model == 'E2B'`",
+        "Test mocks `psutil.virtual_memory()` with `total = 8 * 1024**3, available = 7 * 1024**3` and `detect_artifact() == 'pi5'`, instantiates GemmaRunner, asserts `runner._selected_model == 'E4B'`",
+        "Test mocks `psutil.virtual_memory()` with `total = 8 * 1024**3, available = 4 * 1024**3` and `detect_artifact() == 'pi5'`, asserts `runner._selected_model == 'E2B'`",
+        "Test mocks `psutil.virtual_memory()` with `total = 4 * 1024**3, available = 3.5 * 1024**3` and `detect_artifact() == 'coralboard'`, asserts `runner._selected_model == 'E2B'` (Coralboard never picks E4B regardless of how much RAM appears free)",
+        "Test asserts `runner.platform` returns the value from `detect_artifact()` (one of `pi5`, `coralboard`, `unknown`)",
         "Test mocks subprocess and HTTP health check, asserts `runner.is_healthy()` returns False when subprocess.poll() != None",
         "Test asserts `GemmaRunner` is usable as `with GemmaRunner() as r: ...` (has `__enter__` and `__exit__`)",
         "Test asserts that on context exit, the subprocess is terminated (no orphan PIDs)",
-        "Test asserts first-start writes a JSON file with keys `tokens_per_second`, `model`, `timestamp` (mocked benchmark)",
+        "Test asserts first-start writes a JSON file with keys `tokens_per_second`, `model`, `platform`, `timestamp` (mocked benchmark)",
         "Run `ruff check /home/craigm26/epicure-core/epicure_core/gemma/runner.py` - exits 0"
       ],
       "priority": 10,
@@ -255,16 +296,22 @@
     },
     {
       "id": "T-014",
-      "title": "Write end-to-end integration smoke test (Pi-gated)",
-      "description": "Single test `tests/integration/test_end_to_end_pi.py` marked `@pytest.mark.pi_integration`. Embeds 3 strings → upserts to IngredientStore → queries nearest → starts Gemma → calls generate → tears down. Skipped by default; opt-in via `EPICURE_PI_INTEGRATION=1`.",
+      "title": "Write end-to-end integration smoke tests (Pi 5 + Coralboard, both opt-in)",
+      "description": "Two parallel tests sharing a `_shared.py` helper so the assertions stay aligned: `tests/integration/test_end_to_end_pi.py` (marked `@pytest.mark.pi_integration`) and `tests/integration/test_end_to_end_coralboard.py` (marked `@pytest.mark.coralboard_integration`). Each: embeds 3 strings → upserts to IngredientStore → queries nearest → starts Gemma (E4B on Pi 5, E2B on Coralboard) → calls generate → tears down. Skipped by default; opt-in via `EPICURE_PI_INTEGRATION=1` or `EPICURE_CORAL_INTEGRATION=1` respectively.",
       "acceptanceCriteria": [
         "File `/home/craigm26/epicure-core/tests/integration/test_end_to_end_pi.py` exists",
+        "File `/home/craigm26/epicure-core/tests/integration/test_end_to_end_coralboard.py` exists",
+        "File `/home/craigm26/epicure-core/tests/integration/_shared.py` exists and is imported by both test files",
         "Run `grep -E '@pytest.mark.pi_integration' /home/craigm26/epicure-core/tests/integration/test_end_to_end_pi.py` - exits 0",
-        "Run `pytest /home/craigm26/epicure-core/tests/integration/test_end_to_end_pi.py -m 'not pi_integration' -q` - exits 0 with 0 tests run (default-skip confirmed)",
+        "Run `grep -E '@pytest.mark.coralboard_integration' /home/craigm26/epicure-core/tests/integration/test_end_to_end_coralboard.py` - exits 0",
+        "Run `pytest /home/craigm26/epicure-core/tests/integration/ -m 'not pi_integration and not coralboard_integration' -q` - exits 0 with 0 tests run (default-skip confirmed)",
         "Run `EPICURE_PI_INTEGRATION=1 pytest /home/craigm26/epicure-core/tests/integration/test_end_to_end_pi.py -q` - exits 0 (only required when running on a Pi 5 with bootstrap completed; CI may skip with documented reason)",
-        "Test source contains explicit calls to: `embed(...)`, `IngredientStore(...).upsert(...)`, `IngredientStore(...).query_by_vector(...)`, `GemmaRunner(...).__enter__`, `GemmaClient(...).generate(...)`",
-        "Test logs a line matching regex `pi_integration_runtime_seconds=\\d+\\.\\d+` and asserts the value is `< 180.0`",
-        "Run `ruff check /home/craigm26/epicure-core/tests/integration/test_end_to_end_pi.py` - exits 0"
+        "Run `EPICURE_CORAL_INTEGRATION=1 pytest /home/craigm26/epicure-core/tests/integration/test_end_to_end_coralboard.py -q` - exits 0 (only required when running on a Coralboard with bootstrap completed; CI may skip with documented reason)",
+        "Both test sources contain explicit calls to: `embed(...)`, `IngredientStore(...).upsert(...)`, `IngredientStore(...).query_by_vector(...)`, `GemmaRunner(...).__enter__`, `GemmaClient(...).generate(...)`",
+        "Pi test logs a line matching regex `pi_integration_runtime_seconds=\\d+\\.\\d+` and asserts the value is `< 180.0`",
+        "Coralboard test logs a line matching regex `coralboard_integration_runtime_seconds=\\d+\\.\\d+` and asserts the value is `< 300.0`",
+        "Coralboard test asserts the GemmaRunner picked `E2B`, not `E4B`",
+        "Run `ruff check /home/craigm26/epicure-core/tests/integration/` - exits 0"
       ],
       "priority": 14,
       "passes": false,
@@ -272,17 +319,22 @@
     },
     {
       "id": "T-015",
-      "title": "Write documentation (README, install guide, API ref, deferred-v0.2)",
-      "description": "Four docs: README overview/quickstart, install-pi5 community-kitchen guide, api.md covering every exported public symbol, deferred-v0.2.md enumerating the 5 deferred areas with rationale.",
+      "title": "Write documentation (README, install guides for both artifacts, API ref, deferred-v0.2)",
+      "description": "Five docs: README overview/quickstart with a 'Supported hardware' table, install-pi5 community-kitchen guide, install-coralboard guide mirroring install-pi5 but covering E2B-only / NPU-deferred specifics, api.md covering every exported public symbol, deferred-v0.2.md enumerating the 7 deferred areas (including Coral NPU offload and Coralboard Yocto bootstrap) with rationale.",
       "acceptanceCriteria": [
-        "Files exist: `/home/craigm26/epicure-core/README.md`, `/home/craigm26/epicure-core/docs/install-pi5.md`, `/home/craigm26/epicure-core/docs/api.md`, `/home/craigm26/epicure-core/docs/deferred-v0.2.md`",
+        "Files exist: `/home/craigm26/epicure-core/README.md`, `/home/craigm26/epicure-core/docs/install-pi5.md`, `/home/craigm26/epicure-core/docs/install-coralboard.md`, `/home/craigm26/epicure-core/docs/api.md`, `/home/craigm26/epicure-core/docs/deferred-v0.2.md`",
         "Run `grep -E 'docs/install-pi5.md' /home/craigm26/epicure-core/README.md` - exits 0",
+        "Run `grep -E 'docs/install-coralboard.md' /home/craigm26/epicure-core/README.md` - exits 0",
         "Run `grep -E 'docs/api.md' /home/craigm26/epicure-core/README.md` - exits 0",
         "Run `grep -E 'docs/deferred-v0.2.md' /home/craigm26/epicure-core/README.md` - exits 0",
+        "README contains a section with header matching `^## Supported hardware` and a markdown table mentioning both `Raspberry Pi 5` and `Coral SL2610`",
         "Run `grep -c '^## ' /home/craigm26/epicure-core/docs/install-pi5.md` - prints integer ≥ 5 (covers What you need + 4 steps)",
         "Run `grep -E '^## (What you need|Step 1|Step 2|Step 3|Step 4)' /home/craigm26/epicure-core/docs/install-pi5.md | wc -l` - prints `5`",
+        "Run `grep -c '^## ' /home/craigm26/epicure-core/docs/install-coralboard.md` - prints integer ≥ 5 (covers What you need + 4 steps)",
+        "Run `grep -E '^## (What you need|Step 1|Step 2|Step 3|Step 4)' /home/craigm26/epicure-core/docs/install-coralboard.md | wc -l` - prints `5`",
+        "`docs/install-coralboard.md` contains the strings `E2B`, `NPU offload deferred to v0.2`, and `Yocto bootstrap deferred to v0.2`",
         "Run `python -c 'import epicure_core; import re; exported = [n for n in dir(epicure_core) if not n.startswith(\"_\")]; doc = open(\"/home/craigm26/epicure-core/docs/api.md\").read(); missing = [n for n in exported if n not in doc]; assert not missing, missing; print(\"ok\")'` - prints `ok`",
-        "Run `grep -E '^## (Mode discovery|Multilingual vocab|Audio and photo input|Federation|USDA nutritional layer)' /home/craigm26/epicure-core/docs/deferred-v0.2.md | wc -l` - prints `5`"
+        "Run `grep -E '^## (Mode discovery|Multilingual vocab|Audio and photo input|Federation|USDA nutritional layer|Coral NPU embedding offload|Coralboard Yocto bootstrap)' /home/craigm26/epicure-core/docs/deferred-v0.2.md | wc -l` - prints `7`"
       ],
       "priority": 15,
       "passes": false,
@@ -291,19 +343,63 @@
     {
       "id": "T-016",
       "title": "Cut v0.1.0 release (version bump, changelog, tag, v0.2 tracker)",
-      "description": "Final release. Bump pyproject version 0.1.0.dev0 → 0.1.0, write CHANGELOG entry covering T-001..T-015, tag v0.1.0, ensure CI green on the tag, open v0.2 scope tracker issue.",
+      "description": "Final release. Bump pyproject version 0.1.0.dev0 → 0.1.0, write CHANGELOG entry covering T-001..T-018 (incl. both supported artifacts), tag v0.1.0, ensure CI green on the tag, open v0.2 scope tracker issue listing the deferred items including Coral NPU offload and Coralboard Yocto bootstrap.",
       "acceptanceCriteria": [
         "Run `grep -E '^version = \"0.1.0\"$' /home/craigm26/epicure-core/pyproject.toml` - exits 0 (no `.dev0` suffix)",
         "Run `grep -E '^## \\[0.1.0\\] - 20[0-9]{2}-[0-1][0-9]-[0-3][0-9]' /home/craigm26/epicure-core/CHANGELOG.md` - exits 0",
+        "CHANGELOG entry contains both `Raspberry Pi 5` and `Coral SL2610` in the v0.1.0 section",
+        "Both `ops/pi-bootstrap.sh` and `ops/coralboard-bootstrap.sh` are present and pass their shellcheck gates at the tagged commit",
         "Run `git -C /home/craigm26/epicure-core tag -l v0.1.0` - prints `v0.1.0`",
         "Run `git -C /home/craigm26/epicure-core status --porcelain` - prints empty (working tree clean)",
         "Run `gh issue list --repo epicure-suite/epicure-core --label v0.2 --json title --jq '.[].title' | grep -E 'v0.2 scope tracker'` - exits 0 (depends on repo existing under epicure-suite org)",
+        "v0.2 scope tracker issue body lists at least: Coral NPU embedding offload, Coralboard Yocto bootstrap, mode discovery, multilingual vocab expansion, audio/photo, federation, USDA nutritional layer",
         "Run `gh run list --repo epicure-suite/epicure-core --branch v0.1.0 --limit 1 --json conclusion --jq '.[0].conclusion'` - prints `success`",
         "Run `git -C /home/craigm26/epicure-core ls-remote --tags origin v0.1.0` - exits 0 (tag pushed)"
       ],
       "priority": 16,
       "passes": false,
       "notes": ""
+    },
+    {
+      "id": "T-017",
+      "title": "Write Coralboard bootstrap script (coralboard-bootstrap.sh)",
+      "description": "Sibling of T-009 targeting the Coral SL2610 Dev Board running the Synaptics Debian BSP. Same shape: apt deps, venv, llama.cpp pinned at the same commit but built with Cortex-A55-safe flags, Gemma 4 E2B GGUF download with SHA256 verification, editable epicure-core install. Yocto-image path is documented but not scripted in v0.1 (deferred to v0.2). Coral NPU SDK install is gated behind an env var so it can be tested as it matures without blocking v0.1.",
+      "acceptanceCriteria": [
+        "File `/home/craigm26/epicure-core/ops/coralboard-bootstrap.sh` exists",
+        "Run `test -x /home/craigm26/epicure-core/ops/coralboard-bootstrap.sh` - exits 0",
+        "Run `bash -n /home/craigm26/epicure-core/ops/coralboard-bootstrap.sh` (syntax check) - exits 0",
+        "Run `shellcheck /home/craigm26/epicure-core/ops/coralboard-bootstrap.sh` - exits 0 (error/warning severities must be zero; info/style ignored)",
+        "Script contains a line matching regex `LLAMA_CPP_COMMIT=\"?[a-f0-9]{40}\"?` and the value matches the pin used in `ops/pi-bootstrap.sh` (single source of truth check: `diff <(grep '^LLAMA_CPP_COMMIT' ops/pi-bootstrap.sh) <(grep '^LLAMA_CPP_COMMIT' ops/coralboard-bootstrap.sh)` exits 0)",
+        "Script contains a line matching regex `GEMMA4_E2B_GGUF_SHA256=\"?[a-f0-9]{64}\"?`",
+        "Script contains a line matching regex `GEMMA4_E2B_GGUF_URL=\"?https://\\S+\\.gguf\"?` matching the E2B URL chosen in T-001",
+        "Script contains an explicit `uname -m` check that exits non-zero with message containing `ARM64 required` when not on aarch64/arm64",
+        "Script contains a check that `/proc/device-tree/model` contains `Synaptics` or `SL2610`; on a Pi 5 it exits non-zero with message containing `Use pi-bootstrap.sh instead`, unless `--force` is passed",
+        "When `apt-get` is not on PATH (Yocto host), script prints a message containing `Yocto bootstrap deferred to v0.2` and exits 0",
+        "Coral NPU SDK install is gated: when `EPICURE_CORAL_NPU` env var is unset, script logs a line containing `NPU offload deferred to v0.2` and continues; when set to 1, script invokes the NPU SDK install stage",
+        "Script contains idempotency sentinels for at least 3 stages: apt-install, llama.cpp-build, gemma-e2b-download",
+        "Final line of normal-completion output matches regex `BOOTSTRAP COMPLETE`"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": "Mirrors T-009 (Pi 5 bootstrap). New addition for v0.1 multi-artifact support."
+    },
+    {
+      "id": "T-018",
+      "title": "Reserve EmbeddingBackend.CORAL_NPU interface (research + stub)",
+      "description": "Land the public interface for Coral NPU embedding offload without shipping a working implementation. Goal: downstream code can be written against the v0.1 API and the v0.2 swap will be a no-op at the call site. Includes a research note in `docs/coral-npu-sdk-status.md` (produced in T-001) and a stub class that raises a clear `NotImplementedError` mentioning v0.2 and the deferred-v0.2 doc.",
+      "acceptanceCriteria": [
+        "Run `python -c 'from epicure_core.embeddings import EmbeddingBackend; assert hasattr(EmbeddingBackend, \"CORAL_NPU\") and hasattr(EmbeddingBackend, \"ONNX_CPU\"); print(\"ok\")'` - prints `ok`",
+        "Run `python -c 'from epicure_core.embeddings import _backends; b = _backends.CoralNpuBackend(); assert b.__doc__ and \"v0.2\" in b.__doc__'` - exits 0",
+        "Calling `embed(texts, backend=EmbeddingBackend.CORAL_NPU)` raises `NotImplementedError` whose message contains `v0.2` and `docs/deferred-v0.2.md`",
+        "Default backend (no `backend=` arg) remains `EmbeddingBackend.ONNX_CPU` — confirmed by `python -c 'from epicure_core.embeddings import _resolve_default_backend, EmbeddingBackend; assert _resolve_default_backend() == EmbeddingBackend.ONNX_CPU; print(\"ok\")'` printing `ok`",
+        "Run `pytest /home/craigm26/epicure-core/tests/test_embeddings_backends.py -q` - exits 0",
+        "Test asserts that on a Coralboard (detect_artifact mocked to `coralboard`) the default backend is still `ONNX_CPU` in v0.1 even though the NPU is physically present, with a comment in the test pointing to docs/deferred-v0.2.md and docs/coral-npu-sdk-status.md",
+        "File `/home/craigm26/epicure-core/docs/coral-npu-sdk-status.md` exists (produced in T-001) and contains the `npu_offload_ships_in_v0_1:` decision line",
+        "Run `ruff check /home/craigm26/epicure-core/epicure_core/embeddings.py` - exits 0"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": "Companion to T-017. Locks the public interface now so v0.2 NPU offload is a backend swap, not an API change."
     }
   ]
 }
