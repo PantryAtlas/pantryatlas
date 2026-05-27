@@ -132,3 +132,37 @@ dmypy.json
 *.swo
 *~
 .DS_Store
+
+# Frontend (web/) — Node + Vite build outputs
+web/node_modules/
+web/dist/
+web/.vite/
+web/coverage/
+
+# Stitch / Antigravity design pipeline outputs that may contain auth-bearing or
+# session-scoped artifacts. Keep web/design/ itself committed but exclude logs,
+# reference HTML, and any stray MCP config that an `agy` invocation might write.
+web/design/stitch-orchestration.log
+web/design/screens/*.html
+
+# Secrets / credentials / MCP configs — defensive, should never appear in this
+# repo but belt-and-suspenders. Antigravity's mcp_config.json lives under
+# ~/.gemini/config/ and must never be copied into this tree.
+mcp_config.json
+**/mcp_config.json
+.gemini/
+.anthropic/
+.env.local
+.env.*.local
+*.key
+*.pem
+credentials.json
+client_secret*.json
+service-account*.json
+secrets.json
+secrets.yaml
+secrets.yml
+
+# Operator scratch — keep ad-hoc dev scratchpads out
+scratch/
+notes/private/
