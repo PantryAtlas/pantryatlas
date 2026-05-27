@@ -5,7 +5,10 @@ chosen_gguf_url: https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main
 chosen_gguf_sha256: 519b9793ed6ce0ff530f1b7c96e848e08e49e7af4d57bb97f76215963a54146d
 chosen_gguf_size_gb: 4.98
 chosen_gguf_quantization: Q4_K_M
-ground_truth_source: google_primary + local_llm_ops_install
+context_length_max_tokens: 131072
+ground_truth_sources:
+  - google_primary
+  - local_llm_ops_install
 ---
 
 # Gemma 4 Verified Specs
@@ -28,6 +31,7 @@ context_length:
   asserted_by_epicure_prose: 256K
   actual_for_E4B: 128K
   verified: false
+  verified_actual: true
   source: https://ai.google.dev/gemma/docs/core/model_card_4
   notes: >
     256K context exists on the 26B A4B and 31B Dense variants only.
@@ -35,9 +39,8 @@ context_length:
     This is a hard constraint — 26B/31B would require ~16-24 GB VRAM/RAM for Q4.
   fallback: >
     Cap all context window assumptions in T-010/T-011/T-012 to 128K max.
-    Any chunking or RAG window sizing (T-003/T-004) that was planned against 256K
-    must be reduced to 128K for the Pi target. If 256K is required, the project
-    must switch to a non-Pi host or accept that this model cannot fulfill the spec.
+    If 256K is required, the project must switch to a non-Pi host or accept
+    that this model cannot fulfill the spec.
 ```
 
 ---
@@ -150,7 +153,7 @@ sha256sum gemma-4-E4B-it-Q4_K_M.gguf
 
 | Claim | Asserted | Verified | Action Required |
 |---|---|---|---|
-| context_length | 256K | FALSE — E4B is 128K | T-010/T-011/T-012: cap at 128K; T-003/T-004: resize RAG windows |
+| context_length | 256K | FALSE — E4B is 128K | T-010/T-011/T-012: cap at 128K |
 | supported_languages | 140+ | TRUE | No change needed |
 | e4b_vision | true | TRUE | No change needed |
 | audio_modalities | E2B/E4B | TRUE | No change needed |

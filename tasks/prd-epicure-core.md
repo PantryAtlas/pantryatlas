@@ -1,3 +1,8 @@
+> **⚠️ Task numbering was reorganized for execution.**
+> This prose PRD numbers tasks T-001..T-014 in spec order.
+> For execution, see `/home/craigm26/epicure-core/tasks/prd.json` which renumbers them T-001..T-016 in dependency-respecting order (and splits two tasks).
+> **`prd.json` is authoritative for all task references in code, commits, and docs.**
+
 # PRD: `epicure-core` v0.1.0
 
 > Foundation package for the Epicure Suite. Every downstream repo (`pantry-navigator`, `slerp-chef`, `mode-atlas`, `epicure-mcp`) depends on this.
