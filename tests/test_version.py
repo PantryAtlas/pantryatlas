@@ -11,7 +11,7 @@ import epicure_core.store
 
 def test_version():
     """Test that version is correctly set."""
-    assert epicure_core.__version__ == "0.1.0.dev0"
+    assert epicure_core.__version__ == "0.1.0"
 
 
 def test_imports():
