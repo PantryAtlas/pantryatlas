@@ -1,81 +1,87 @@
 # epicure-core
 
-Foundation package for the **Epicure Suite**: multilingual embeddings (bge-m3), sqlite-vec storage, Gemma 4 lifecycle wrapper, SLERP rotation math, pantry primitives, and Pi-side ops glue.
-
-Targets **Raspberry Pi 5 8GB** running Ubuntu 24.04 LTS or Raspberry Pi OS Bookworm.
+**Foundation package for the Epicure Suite** — multilingual embeddings, sqlite-vec storage, Gemma 4 lifecycle wrapper, SLERP rotation math, pantry primitives, and Pi-side ops glue. Runs on **Raspberry Pi 5** with ≥2GB headroom for downstream applications.
 
 ## Quick Start
 
-### Install
+Bootstrap a fresh **Pi 5 running Raspberry Pi OS Bookworm 64-bit**:
 
 ```bash
-python3 -m pip install -e .
+git clone https://github.com/epicure-suite/epicure-core.git ~/epicure-core
+bash ~/epicure-core/ops/pi-bootstrap.sh
+# ~30 min later: "BOOTSTRAP COMPLETE"
 ```
 
-For development (includes test tools):
+Then in Python:
 
-```bash
-python3 -m pip install -e ".[dev]"
-```
+```python
+from epicure_core import embeddings, pantry, gemma
+from epicure_core.store import ingredients
 
-### Run Tests
+# Multilingual embeddings
+vecs = embeddings.embed(["tomato", "tomate", "tomatillo"])
 
-```bash
-pytest -q
-```
+# Ingredient resolution (exact → fuzzy → semantic)
+resolved = pantry.resolve("tomatoe", store=ingredients.IngredientStore())
 
-### Code Quality
-
-```bash
-ruff check .
+# Gemma 4 with relaxed-JSON repair (2-retry loop)
+with gemma.runner.GemmaRunner() as runner:
+    client = gemma.client.GemmaClient()
+    result = client.generate(
+        system="You are a chef.",
+        user="Suggest a recipe for tomatoes.",
+        schema={"title": "str", "ingredients": ["str"]}
+    )
 ```
 
 ## Documentation
 
-- **[PRD](tasks/prd-epicure-core.md)** — Product requirements and architecture
-- **[Gemma 4 Spec](docs/gemma4-verified-specs.md)** — Verified claims on Gemma 4 capabilities and fallback plans
-- **[Install Guide](docs/install-pi5.md)** — Pi bootstrap and environment setup (T-015)
-- **[API Reference](docs/api.md)** — Complete public API (T-015)
-- **[Deferred Features](docs/deferred-v0.2.md)** — v0.2 roadmap and rationale (T-015)
+- **[Installation Guide](docs/install-pi5.md)** — Step-by-step Pi 5 setup (for community kitchens)
+- **[API Reference](docs/api.md)** — Complete public API reference
+- **[Deferred Features](docs/deferred-v0.2.md)** — What's coming in v0.2 and why
+- **[Gemma 4 Spec](docs/gemma4-verified-specs.md)** — Verified capability claims with sources
+- **[Full PRD](tasks/prd-epicure-core.md)** — Product requirements and architecture
 
-## Features
+## What's in v0.1.0
 
-### Embeddings (T-003)
-Multilingual sentence embeddings via **bge-m3** (int8 ONNX via onnxruntime). Returns `(N, 1024)` float32 unit-norm vectors.
+### Embeddings
+Multilingual sentence embeddings via **bge-m3** (int8 ONNX). Returns `(N, 1024)` unit-norm float32 vectors. Supports 100+ languages; tested on English, Vietnamese, Chinese, Spanish, and Arabic.
 
-### Storage (T-004)
-Three sqlite-vec repos:
-- `IngredientStore` — canonical English ingredients with multilingual aliases
-- `RecipeStore` — recipes with embedding-based similarity search
-- `ModeStore` — schema reserved for v0.2 (mode discovery)
+### Storage
+Three sqlite-vec repositories:
+- **IngredientStore** — canonical English ingredients + multilingual aliases
+- **RecipeStore** — recipes with vector-based similarity search
+- **ModeStore** — schema reserved; no data written in v0.1
 
-### Gemma 4 (T-010, T-011, T-012)
-Context manager lifecycle wrapper around llama.cpp. Auto-selects **E4B** (8GB RAM) or **E2B** (smaller models). Optional relaxed-JSON repair loop with 2-retry limit before raising.
+### Gemma 4 Lifecycle
+Python wrapper around llama.cpp. Auto-picks E4B (8GB) or E2B model based on available RAM. Includes optional relaxed-JSON repair loop (up to 2 retries) instead of grammar-constrained mode.
 
-### SLERP Math (T-005)
-Pure NumPy spherical linear interpolation for unit vectors. Constrained variant projects to user-defined half-spaces.
+### SLERP Math
+Pure NumPy spherical linear interpolation. Standard and constrained (half-space projection) variants.
 
-### Pantry (T-006)
-Ingredient resolution via exact → fuzzy (rapidfuzz ≥0.85) → semantic (bge-m3 cosine ≥0.78).
+### Pantry
+Ingredient resolution: exact match → fuzzy (rapidfuzz ≥0.85) → semantic (cosine ≥0.78).
 
-### Data Pipeline (T-007, T-008)
-Pulls RecipeNLG (English recipes) and FlavorDB (flavor compounds). Dedupes by exact + fuzzy + semantic, emits parquet vocab tables.
+### Data Pipeline
+Pulls RecipeNLG (English recipes) and FlavorDB (flavor compounds), dedupes by exact+fuzzy+semantic, emits parquet vocabulary.
+
+## Install for Development
+
+```bash
+python3 -m pip install -e ".[dev]"
+pytest -q
+ruff check .
+```
 
 ## Requirements
 
 - Python 3.11+
-- numpy ≥2.0
-- onnxruntime ≥1.20
-- sqlite-vec ≥0.1.6
-- rapidfuzz ≥3.10
-- pyarrow ≥18.0
-- jsonschema ≥4.23
-- psutil ≥6.0
-- httpx ≥0.27
-- fastapi ≥0.115
-- uvicorn ≥0.32
+- Raspberry Pi 5 8GB (or any ARM64 system with ≥6GB free RAM for E4B, ≥4GB for E2B)
+- Core: numpy, onnxruntime, sqlite-vec, rapidfuzz, pyarrow, jsonschema, psutil
+- Gemma runner: httpx
+- Optional FastAPI sidecar: fastapi, uvicorn
 
-For development: pytest, hypothesis, ruff, pytest-asyncio.
+See `pyproject.toml` for pinned versions.
 
 ## License
 
@@ -83,4 +89,4 @@ Apache License 2.0. See [LICENSE](LICENSE).
 
 ## Status
 
-**v0.1.0.dev0** — In development. T-002 (this release) establishes the package scaffold. See [CHANGELOG](CHANGELOG.md) and task tracking in the PRD.
+**v0.1.0.dev0** — All 14 core tasks completed. See [CHANGELOG](CHANGELOG.md) for changes. Next: v0.2 mode discovery, multilingual vocab, audio/photo input, federation, USDA nutritional data.
