@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Install epicure-core systemd units to /etc/systemd/system/ and enable them.
+# Run as root (or with sudo).
+set -euo pipefail
+
+UNITS=(
+    epicure-mem-monitor.service
+    epicure-embeddings.service
+    epicure-gemma.service
+)
+
+UNIT_DIR="$(cd "$(dirname "$0")" && pwd)"
+DEST=/etc/systemd/system
+
+if [[ "$EUID" -ne 0 ]]; then
+    echo "ERROR: must run as root (sudo)" >&2
+    exit 1
+fi
+
+for unit in "${UNITS[@]}"; do
+    install -m 644 "$UNIT_DIR/$unit" "$DEST/$unit"
+    echo "installed: $DEST/$unit"
+done
+
+systemctl daemon-reload
+for unit in "${UNITS[@]}"; do
+    systemctl enable "$unit"
+done
+
+echo "INSTALL COMPLETE — run: sudo systemctl start epicure-mem-monitor epicure-embeddings epicure-gemma"

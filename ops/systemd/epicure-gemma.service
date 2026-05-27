@@ -1,0 +1,20 @@
+[Unit]
+Description=Epicure-core Gemma 4 server (llama.cpp)
+After=network.target epicure-mem-monitor.service
+Wants=epicure-mem-monitor.service
+
+[Service]
+Type=simple
+User=epicure
+Group=epicure
+WorkingDirectory=/home/epicure/epicure
+Environment="EPICURE_HOME=/home/epicure/.epicure"
+ExecStart=/home/epicure/epicure/venv/bin/python -m epicure_core.gemma.runner --serve
+Restart=on-failure
+RestartSec=10
+LimitMEMLOCK=infinity
+# Don't kill on memory pressure — the mem-monitor flag is the signal
+OOMScoreAdjust=-100
+
+[Install]
+WantedBy=multi-user.target

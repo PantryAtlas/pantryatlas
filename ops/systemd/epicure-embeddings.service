@@ -1,0 +1,17 @@
+[Unit]
+Description=Epicure-core bge-m3 embeddings sidecar (FastAPI)
+After=network.target
+
+[Service]
+Type=simple
+User=epicure
+Group=epicure
+WorkingDirectory=/home/epicure/epicure
+Environment="EPICURE_HOME=/home/epicure/.epicure"
+ExecStart=/home/epicure/epicure/venv/bin/uvicorn epicure_core.embeddings_server:app --host 127.0.0.1 --port 8089
+Restart=on-failure
+RestartSec=10
+LimitMEMLOCK=infinity
+
+[Install]
+WantedBy=multi-user.target

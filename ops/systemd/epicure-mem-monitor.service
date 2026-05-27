@@ -1,0 +1,15 @@
+[Unit]
+Description=Epicure-core memory-pressure monitor
+After=network.target
+
+[Service]
+Type=simple
+User=epicure
+Group=epicure
+WorkingDirectory=/home/epicure/epicure
+ExecStart=/home/epicure/epicure/venv/bin/python -m epicure_core.ops.mem_monitor --interval-s 5
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
