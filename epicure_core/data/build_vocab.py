@@ -566,15 +566,16 @@ def emit_ingredients(
     n_exact = len(exact_candidates)
     log.info("Step 3: %d unique strings after exact dedupe", n_exact)
 
-    # Step 3b: Cap candidates for O(N²) steps; keep tail separate
+    # Step 3b: Cap to top_n_candidates for O(N²) fuzzy+semantic steps.
+    # Strings beyond rank top_n_candidates are low-frequency noise and are
+    # excluded from the final output (the pipeline contract is fully deduped
+    # canonicals; half-processed tail entries violate that).
     top_candidates = exact_candidates[:top_n_candidates]
-    tail_candidates = exact_candidates[top_n_candidates:]
     names_list = [n for n, _ in top_candidates]
     freqs_list = [f for _, f in top_candidates]
-    tail_names_exact = [n for n, _ in tail_candidates]
     log.info(
-        "Step 3b: Capped to top %d for fuzzy+semantic dedupe; %d in tail",
-        len(names_list), len(tail_names_exact),
+        "Step 3b: Capped to top %d for fuzzy+semantic dedupe (%d excluded below cutoff)",
+        len(names_list), n_exact - len(names_list),
     )
     elapsed_exact = time.monotonic() - t0
 
@@ -670,10 +671,8 @@ def emit_ingredients(
     )
     elapsed_sem = time.monotonic() - t0
 
-    # Final canonical list = semantic-deduped top-N + sem tail + exact tail
-    final_names_raw = (
-        [sem_names[i] for i in sem_canonical_indices] + tail_names + tail_names_exact
-    )
+    # Final canonical list = semantic-deduped top-N + sem tail (fully processed)
+    final_names_raw = [sem_names[i] for i in sem_canonical_indices] + tail_names
 
     # Safety dedupe: guarantee AC-5 uniqueness (normalize form)
     seen: set[str] = set()
