@@ -21,6 +21,7 @@ as AC-8 requires.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import pathlib
 import threading
@@ -92,6 +93,20 @@ def _get_model() -> tuple[ort.InferenceSession, Tokenizer, str]:
                 local_dir=str(_CACHE_DIR),
                 local_dir_use_symlinks=False,
             )
+
+        # --- verify ONNX SHA256 on fresh downloads ---
+        # Use marker file to avoid re-hashing 543MB on every import
+        sha_marker = onnx_local.with_suffix(onnx_local.suffix + ".sha256-ok")
+        if not sha_marker.exists():
+            _actual_sha = hashlib.sha256(onnx_local.read_bytes()).hexdigest()
+            if _actual_sha != _ONNX_SHA256:
+                raise RuntimeError(
+                    f"bge-m3 ONNX SHA256 mismatch at {onnx_local}: "
+                    f"expected {_ONNX_SHA256}, got {_actual_sha}. "
+                    f"Delete the cache file and retry, or update _ONNX_SHA256 if upstream changed."
+                )
+            sha_marker.write_text(_ONNX_SHA256)
+
         onnx_path = str(onnx_local)
 
         # --- load tokenizer ---

@@ -64,8 +64,9 @@ Documentation = "https://github.com/epicure-suite/epicure-core/blob/main/README.
 Repository = "https://github.com/epicure-suite/epicure-core.git"
 Issues = "https://github.com/epicure-suite/epicure-core/issues"
 
-[tool.setuptools]
-packages = ["epicure_core"]
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["epicure_core*"]
 
 [tool.setuptools.package-data]
 epicure_core = ["py.typed"]
