@@ -1,16 +1,16 @@
-"""End-to-end integration smoke test for epicure-core v0.1.0.
+"""End-to-end integration smoke test for pantryatlas v0.1.0.
 
-Marked pi_integration — only runs when EPICURE_PI_INTEGRATION=1 and a
+Marked pi_integration — only runs when PANTRYATLAS_PI_INTEGRATION=1 and a
 bootstrapped Pi 5 is available (Gemma 4 GGUF + llama-server built).
 """
 import time
 
 import pytest
 
-from epicure_core.embeddings import embed
-from epicure_core.gemma.client import GemmaClient
-from epicure_core.gemma.runner import GemmaRunner
-from epicure_core.store.ingredients import Ingredient, IngredientStore
+from pantryatlas.embeddings import embed
+from pantryatlas.gemma.client import GemmaClient
+from pantryatlas.gemma.runner import GemmaRunner
+from pantryatlas.store.ingredients import Ingredient, IngredientStore
 
 
 @pytest.mark.pi_integration

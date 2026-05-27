@@ -1,0 +1,15 @@
+[Unit]
+Description=PantryAtlas memory-pressure monitor
+After=network.target
+
+[Service]
+Type=simple
+User=pantryatlas
+Group=pantryatlas
+WorkingDirectory=/home/pantryatlas/pantryatlas
+ExecStart=/home/pantryatlas/pantryatlas/venv/bin/python -m pantryatlas.ops.mem_monitor --interval-s 5
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

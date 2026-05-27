@@ -5,7 +5,7 @@ HIGH threshold (default 85%), writes a flag file that GemmaRunner.start()
 checks before launching llama-server. When pressure drops back below the LOW
 threshold (default 75%), removes the flag.
 
-Run as a systemd service: see ops/systemd/epicure-mem-monitor.service.
+Run as a systemd service: see ops/systemd/pantryatlas-mem-monitor.service.
 """
 
 import argparse
@@ -14,7 +14,7 @@ from pathlib import Path
 
 import psutil
 
-DEFAULT_FLAG_PATH = Path.home() / ".epicure" / "runner.blocked"
+DEFAULT_FLAG_PATH = Path.home() / ".pantryatlas" / "runner.blocked"
 DEFAULT_HIGH_PCT = 85.0
 DEFAULT_LOW_PCT = 75.0
 DEFAULT_INTERVAL_S = 5.0

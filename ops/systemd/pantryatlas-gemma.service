@@ -1,0 +1,20 @@
+[Unit]
+Description=PantryAtlas Gemma 4 server (llama.cpp)
+After=network.target pantryatlas-mem-monitor.service
+Wants=pantryatlas-mem-monitor.service
+
+[Service]
+Type=simple
+User=pantryatlas
+Group=pantryatlas
+WorkingDirectory=/home/pantryatlas/pantryatlas
+Environment="PANTRYATLAS_HOME=/home/pantryatlas/.pantryatlas"
+ExecStart=/home/pantryatlas/pantryatlas/venv/bin/python -m pantryatlas.gemma.runner --serve
+Restart=on-failure
+RestartSec=10
+LimitMEMLOCK=infinity
+# Don't kill on memory pressure — the mem-monitor flag is the signal
+OOMScoreAdjust=-100
+
+[Install]
+WantedBy=multi-user.target

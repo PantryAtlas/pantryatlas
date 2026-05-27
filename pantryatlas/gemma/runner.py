@@ -17,11 +17,11 @@ import psutil
 
 ModelTier = Literal["E4B", "E2B"]
 
-EPICURE_HOME = Path.home() / ".epicure"
-BASELINE_TPS_PATH = EPICURE_HOME / "baseline-tps.json"
-MODELS_DIR = Path.home() / "epicure" / "models"
-DEFAULT_LLAMA_SERVER = Path.home() / "epicure" / "llama.cpp" / "build" / "bin" / "llama-server"
-RUNNER_BLOCKED_FLAG = EPICURE_HOME / "runner.blocked"
+PANTRYATLAS_HOME = Path.home() / ".pantryatlas"
+BASELINE_TPS_PATH = PANTRYATLAS_HOME / "baseline-tps.json"
+MODELS_DIR = Path.home() / "pantryatlas" / "models"
+DEFAULT_LLAMA_SERVER = Path.home() / "pantryatlas" / "llama.cpp" / "build" / "bin" / "llama-server"
+RUNNER_BLOCKED_FLAG = PANTRYATLAS_HOME / "runner.blocked"
 
 E4B_GGUF_NAME = "gemma-4-E4B-it-Q4_K_M.gguf"
 E2B_GGUF_NAME = "gemma-4-E2B-it-Q4_K_M.gguf"
@@ -131,7 +131,7 @@ class GemmaRunner:
         if BASELINE_TPS_PATH.exists():
             return
         tps = self._measure_tps()
-        EPICURE_HOME.mkdir(parents=True, exist_ok=True)
+        PANTRYATLAS_HOME.mkdir(parents=True, exist_ok=True)
         BASELINE_TPS_PATH.write_text(
             json.dumps(
                 {

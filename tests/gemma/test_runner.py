@@ -1,4 +1,4 @@
-"""Tests for epicure_core.gemma.runner.GemmaRunner.
+"""Tests for pantryatlas.gemma.runner.GemmaRunner.
 
 All subprocess and httpx calls are mocked — no live llama-server or model
 is required to run this test module.
@@ -9,15 +9,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from epicure_core.gemma.runner import GemmaRunner, MemoryPressureError
-
+from pantryatlas.gemma.runner import GemmaRunner, MemoryPressureError
 
 # ---------------------------------------------------------------------------
 # AC-4: E4B selected when free RAM >= 6 GiB
 # ---------------------------------------------------------------------------
 
 
-@patch("epicure_core.gemma.runner.psutil.virtual_memory")
+@patch("pantryatlas.gemma.runner.psutil.virtual_memory")
 def test_select_e4b_when_ram_high(mock_vmem):
     mock_vmem.return_value = MagicMock(available=7 * 1024**3)
     r = GemmaRunner()
@@ -29,7 +28,7 @@ def test_select_e4b_when_ram_high(mock_vmem):
 # ---------------------------------------------------------------------------
 
 
-@patch("epicure_core.gemma.runner.psutil.virtual_memory")
+@patch("pantryatlas.gemma.runner.psutil.virtual_memory")
 def test_select_e2b_when_ram_low(mock_vmem):
     mock_vmem.return_value = MagicMock(available=4 * 1024**3)
     r = GemmaRunner()
@@ -41,7 +40,7 @@ def test_select_e2b_when_ram_low(mock_vmem):
 # ---------------------------------------------------------------------------
 
 
-@patch("epicure_core.gemma.runner.psutil.virtual_memory")
+@patch("pantryatlas.gemma.runner.psutil.virtual_memory")
 def test_is_healthy_false_when_subprocess_dead(mock_vmem):
     mock_vmem.return_value = MagicMock(available=7 * 1024**3)
     r = GemmaRunner()
@@ -55,7 +54,7 @@ def test_is_healthy_false_when_subprocess_dead(mock_vmem):
 # ---------------------------------------------------------------------------
 
 
-@patch("epicure_core.gemma.runner.psutil.virtual_memory")
+@patch("pantryatlas.gemma.runner.psutil.virtual_memory")
 def test_context_manager_shape(mock_vmem):
     mock_vmem.return_value = MagicMock(available=7 * 1024**3)
     with (
@@ -73,7 +72,7 @@ def test_context_manager_shape(mock_vmem):
 # ---------------------------------------------------------------------------
 
 
-@patch("epicure_core.gemma.runner.psutil.virtual_memory")
+@patch("pantryatlas.gemma.runner.psutil.virtual_memory")
 def test_subprocess_terminated_on_exit(mock_vmem):
     mock_vmem.return_value = MagicMock(available=7 * 1024**3)
     r = GemmaRunner()
@@ -91,12 +90,12 @@ def test_subprocess_terminated_on_exit(mock_vmem):
 # ---------------------------------------------------------------------------
 
 
-@patch("epicure_core.gemma.runner.psutil.virtual_memory")
+@patch("pantryatlas.gemma.runner.psutil.virtual_memory")
 def test_baseline_tps_written(mock_vmem, tmp_path, monkeypatch):
     mock_vmem.return_value = MagicMock(available=7 * 1024**3)
-    monkeypatch.setattr("epicure_core.gemma.runner.EPICURE_HOME", tmp_path)
+    monkeypatch.setattr("pantryatlas.gemma.runner.PANTRYATLAS_HOME", tmp_path)
     monkeypatch.setattr(
-        "epicure_core.gemma.runner.BASELINE_TPS_PATH", tmp_path / "baseline-tps.json"
+        "pantryatlas.gemma.runner.BASELINE_TPS_PATH", tmp_path / "baseline-tps.json"
     )
     r = GemmaRunner()
     with patch.object(r, "_measure_tps", return_value=12.5):
@@ -112,11 +111,11 @@ def test_baseline_tps_written(mock_vmem, tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-@patch("epicure_core.gemma.runner.psutil.virtual_memory")
+@patch("pantryatlas.gemma.runner.psutil.virtual_memory")
 def test_memory_pressure_error_when_blocked(mock_vmem, tmp_path, monkeypatch):
     mock_vmem.return_value = MagicMock(available=7 * 1024**3)
     monkeypatch.setattr(
-        "epicure_core.gemma.runner.RUNNER_BLOCKED_FLAG", tmp_path / "runner.blocked"
+        "pantryatlas.gemma.runner.RUNNER_BLOCKED_FLAG", tmp_path / "runner.blocked"
     )
     (tmp_path / "runner.blocked").write_text("blocked by mem-monitor")
     r = GemmaRunner()

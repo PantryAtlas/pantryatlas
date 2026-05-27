@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from epicure_core.store.modes import Mode, ModeStore
+from pantryatlas.store.modes import Mode, ModeStore
 
 
 def _unit_vec(seed: int = 0) -> np.ndarray:

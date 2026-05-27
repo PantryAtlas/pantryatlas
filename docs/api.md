@@ -1,11 +1,11 @@
-# epicure-core API Reference
+# pantryatlas API Reference
 
-Complete reference for all public symbols in `epicure-core` v0.1.0.
+Complete reference for all public symbols in `pantryatlas` v0.1.0.
 
 ## Module overview
 
 ```
-epicure_core/
+pantryatlas/
 ├── embeddings.py          # Multilingual embedding service (bge-m3)
 ├── store/
 │   ├── ingredients.py     # Ingredient database
@@ -24,24 +24,24 @@ epicure_core/
 
 ## Top level
 
-### `epicure_core.__version__`
+### `pantryatlas.__version__`
 
 **Type:** `str`
 
 The installed version string.
 
 ```python
-import epicure_core
-print(epicure_core.__version__)  # '0.1.0.dev0'
+import pantryatlas
+print(pantryatlas.__version__)  # '0.1.0.dev0'
 ```
 
 ---
 
-## epicure_core.embeddings
+## pantryatlas.embeddings
 
 Multilingual embedding service using bge-m3 (int8 ONNX via onnxruntime).
 
-### `epicure_core.embeddings.embed`
+### `pantryatlas.embeddings.embed`
 
 **Signature:** `embed(texts: list[str]) -> np.ndarray`
 
@@ -50,7 +50,7 @@ Multilingual embedding service using bge-m3 (int8 ONNX via onnxruntime).
 Embeds a batch of text strings into a shared vector space (100+ languages). Model is loaded once per process and cached in memory.
 
 ```python
-from epicure_core import embeddings
+from pantryatlas import embeddings
 
 vecs = embeddings.embed(["tomato", "tomate", "tomatillo"])
 # Returns shape (3, 1024)
@@ -63,11 +63,11 @@ similarity = vecs[0] @ vecs[1]  # ~0.95 (tomato vs tomate)
 
 ---
 
-## epicure_core.store.ingredients
+## pantryatlas.store.ingredients
 
 Ingredient database backed by sqlite-vec.
 
-### `epicure_core.store.ingredients.Ingredient`
+### `pantryatlas.store.ingredients.Ingredient`
 
 **Type:** `dataclass`
 
@@ -83,16 +83,16 @@ class Ingredient:
     embedding: np.ndarray   # (1024,) unit-norm vector
 ```
 
-### `epicure_core.store.ingredients.IngredientStore`
+### `pantryatlas.store.ingredients.IngredientStore`
 
 **Signature:** `IngredientStore(db_path: str | None = None) -> IngredientStore`
 
-SQLite-backed ingredient repository. Default path is `~/.epicure/ingredients.db`.
+SQLite-backed ingredient repository. Default path is `~/.pantryatlas/ingredients.db`.
 
 ```python
-from epicure_core.store.ingredients import IngredientStore
+from pantryatlas.store.ingredients import IngredientStore
 
-store = IngredientStore()  # Opens or creates ~/.epicure/ingredients.db
+store = IngredientStore()  # Opens or creates ~/.pantryatlas/ingredients.db
 
 # Upsert ingredients
 store.upsert([
@@ -118,11 +118,11 @@ store.delete("tomato_001")
 
 ---
 
-## epicure_core.store.recipes
+## pantryatlas.store.recipes
 
 Recipe database backed by sqlite-vec.
 
-### `epicure_core.store.recipes.Recipe`
+### `pantryatlas.store.recipes.Recipe`
 
 **Type:** `dataclass`
 
@@ -139,14 +139,14 @@ class Recipe:
     embedding: np.ndarray       # (1024,) vector of recipe content
 ```
 
-### `epicure_core.store.recipes.RecipeStore`
+### `pantryatlas.store.recipes.RecipeStore`
 
 **Signature:** `RecipeStore(db_path: str | None = None) -> RecipeStore`
 
-SQLite-backed recipe repository. Default path is `~/.epicure/recipes.db`.
+SQLite-backed recipe repository. Default path is `~/.pantryatlas/recipes.db`.
 
 ```python
-from epicure_core.store.recipes import RecipeStore
+from pantryatlas.store.recipes import RecipeStore
 
 store = RecipeStore()
 
@@ -163,11 +163,11 @@ store.delete("recipe_001")
 
 ---
 
-## epicure_core.store.modes
+## pantryatlas.store.modes
 
 Mode database (schema reserved for v0.2; no data written in v0.1).
 
-### `epicure_core.store.modes.Mode`
+### `pantryatlas.store.modes.Mode`
 
 **Type:** `dataclass`
 
@@ -183,14 +183,14 @@ class Mode:
     embedding: np.ndarray    # (1024,) mode vector
 ```
 
-### `epicure_core.store.modes.ModeStore`
+### `pantryatlas.store.modes.ModeStore`
 
 **Signature:** `ModeStore(db_path: str | None = None) -> ModeStore`
 
 SQLite-backed mode repository. **No insert API exposed in v0.1**; schema only.
 
 ```python
-from epicure_core.store.modes import ModeStore
+from pantryatlas.store.modes import ModeStore
 
 store = ModeStore()
 
@@ -202,11 +202,11 @@ results = store.query_by_vector(query_vector, top_k=5)
 
 ---
 
-## epicure_core.geometry.slerp
+## pantryatlas.geometry.slerp
 
 Spherical linear interpolation (SLERP) for unit vectors.
 
-### `epicure_core.geometry.slerp.slerp`
+### `pantryatlas.geometry.slerp.slerp`
 
 **Signature:** `slerp(v0: np.ndarray, v1: np.ndarray, t: float) -> np.ndarray`
 
@@ -215,7 +215,7 @@ Spherical linear interpolation (SLERP) for unit vectors.
 Standard spherical linear interpolation between two unit vectors. Interpolates the great-circle arc at parameter `t ∈ [0, 1]`.
 
 ```python
-from epicure_core.geometry.slerp import slerp
+from pantryatlas.geometry.slerp import slerp
 import numpy as np
 
 v0 = np.array([1, 0, 0], dtype=np.float32)
@@ -226,7 +226,7 @@ mid = slerp(v0, v1, 0.5)
 # Returns unit-norm vector between v0 and v1
 ```
 
-### `epicure_core.geometry.slerp.constrained_slerp`
+### `pantryatlas.geometry.slerp.constrained_slerp`
 
 **Signature:** `constrained_slerp(v0: np.ndarray, v1: np.ndarray, t: float, constraint: dict) -> np.ndarray`
 
@@ -235,7 +235,7 @@ mid = slerp(v0, v1, 0.5)
 SLERP with half-space constraint. Projects the interpolation to stay within a user-defined half-space (e.g., to enforce semantic constraints on flavor transitions).
 
 ```python
-from epicure_core.geometry.slerp import constrained_slerp
+from pantryatlas.geometry.slerp import constrained_slerp
 
 # Interpolate but stay on one side of a hyperplane
 result = constrained_slerp(
@@ -246,11 +246,11 @@ result = constrained_slerp(
 
 ---
 
-## epicure_core.pantry
+## pantryatlas.pantry
 
 Ingredient resolution and matching.
 
-### `epicure_core.pantry.Ingredient`
+### `pantryatlas.pantry.Ingredient`
 
 **Type:** `dataclass`
 
@@ -265,7 +265,7 @@ class Ingredient:
     aliases: list[str]
 ```
 
-### `epicure_core.pantry.Quantity`
+### `pantryatlas.pantry.Quantity`
 
 **Type:** `dataclass`
 
@@ -279,14 +279,14 @@ class Quantity:
     ingredient_id: str     # Reference to Ingredient.id
 ```
 
-### `epicure_core.pantry.Matcher`
+### `pantryatlas.pantry.Matcher`
 
 **Type:** `class`
 
 Fuzzy and semantic ingredient matcher.
 
 ```python
-from epicure_core.pantry import Matcher
+from pantryatlas.pantry import Matcher
 
 matcher = Matcher(
     exact_threshold=1.0,        # Exact match score
@@ -298,15 +298,15 @@ matcher = Matcher(
 best_match = matcher.match("tomatoe")  # Returns Ingredient
 ```
 
-### `epicure_core.pantry.Pantry`
+### `pantryatlas.pantry.Pantry`
 
 **Type:** `class`
 
 High-level ingredient resolver combining exact, fuzzy, and semantic matching.
 
 ```python
-from epicure_core.pantry import Pantry
-from epicure_core.store.ingredients import IngredientStore
+from pantryatlas.pantry import Pantry
+from pantryatlas.store.ingredients import IngredientStore
 
 pantry = Pantry(store=IngredientStore())
 
@@ -315,7 +315,7 @@ resolved = pantry.resolve("tomatoe")
 # Returns Ingredient (best match via exact → fuzzy → semantic pipeline)
 ```
 
-### `epicure_core.pantry.resolve`
+### `pantryatlas.pantry.resolve`
 
 **Signature:** `resolve(query: str, store: IngredientStore) -> Ingredient | None`
 
@@ -324,8 +324,8 @@ resolved = pantry.resolve("tomatoe")
 Convenience function for single-ingredient resolution.
 
 ```python
-from epicure_core.pantry import resolve
-from epicure_core.store.ingredients import IngredientStore
+from pantryatlas.pantry import resolve
+from pantryatlas.store.ingredients import IngredientStore
 
 ing = resolve("tomatoe", store=IngredientStore())
 if ing:
@@ -334,18 +334,18 @@ if ing:
 
 ---
 
-## epicure_core.gemma.runner
+## pantryatlas.gemma.runner
 
 Gemma 4 llama.cpp lifecycle management.
 
-### `epicure_core.gemma.runner.GemmaRunner`
+### `pantryatlas.gemma.runner.GemmaRunner`
 
 **Type:** `class`
 
 Context manager for llama.cpp subprocess. Auto-selects E4B (8GB) or E2B model based on available RAM.
 
 ```python
-from epicure_core.gemma.runner import GemmaRunner
+from pantryatlas.gemma.runner import GemmaRunner
 
 with GemmaRunner() as runner:
     print(runner.is_healthy())  # True if server is responsive
@@ -362,9 +362,9 @@ with GemmaRunner() as runner:
 - `is_healthy() -> bool` — Returns True if server responds within 2s
 - `stop()` — Explicitly shut down the subprocess
 
-**Baseline recording:** On first start, writes `~/.epicure/baseline-tps.json` with tokens-per-second benchmark.
+**Baseline recording:** On first start, writes `~/.pantryatlas/baseline-tps.json` with tokens-per-second benchmark.
 
-### `epicure_core.gemma.runner.MemoryPressureError`
+### `pantryatlas.gemma.runner.MemoryPressureError`
 
 **Type:** `Exception`
 
@@ -372,18 +372,18 @@ Raised when available RAM is below the minimum required for any Gemma 4 variant 
 
 ---
 
-## epicure_core.gemma.client
+## pantryatlas.gemma.client
 
 HTTP client for llama.cpp with relaxed-JSON repair loop.
 
-### `epicure_core.gemma.client.GemmaClient`
+### `pantryatlas.gemma.client.GemmaClient`
 
 **Type:** `class`
 
 Python HTTP client for structured and unstructured generation.
 
 ```python
-from epicure_core.gemma.client import GemmaClient
+from pantryatlas.gemma.client import GemmaClient
 
 client = GemmaClient(base_url="http://localhost:12345")
 
@@ -425,14 +425,14 @@ print(result)  # dict matching schema
 
 **Repair loop:** If the model's first attempt fails validation, the client retries with a repair prompt (up to 2 times) before raising `RepairExhaustedError`.
 
-### `epicure_core.gemma.client.RepairExhaustedError`
+### `pantryatlas.gemma.client.RepairExhaustedError`
 
 **Type:** `Exception`
 
 Raised when the model fails to produce valid JSON after 2 repair attempts.
 
 ```python
-from epicure_core.gemma.client import GemmaClient, RepairExhaustedError
+from pantryatlas.gemma.client import GemmaClient, RepairExhaustedError
 
 client = GemmaClient()
 
@@ -444,7 +444,7 @@ except RepairExhaustedError as e:
 
 ---
 
-## epicure_core.ops
+## pantryatlas.ops
 
 Reserved namespace for operations utilities (memory monitor, systemd integration, logging). No public exports in v0.1.
 
@@ -455,8 +455,8 @@ Reserved namespace for operations utilities (memory monitor, systemd integration
 ### Embedding + search workflow
 
 ```python
-from epicure_core import embeddings
-from epicure_core.store.ingredients import IngredientStore
+from pantryatlas import embeddings
+from pantryatlas.store.ingredients import IngredientStore
 
 # Load store
 store = IngredientStore()
@@ -474,8 +474,8 @@ for ing in results:
 ### Multi-language ingredient resolution
 
 ```python
-from epicure_core.pantry import resolve
-from epicure_core.store.ingredients import IngredientStore
+from pantryatlas.pantry import resolve
+from pantryatlas.store.ingredients import IngredientStore
 
 store = IngredientStore()
 
@@ -494,8 +494,8 @@ ing_vi = resolve("cà chua", store)
 ### Structured Gemma output
 
 ```python
-from epicure_core.gemma.runner import GemmaRunner
-from epicure_core.gemma.client import GemmaClient
+from pantryatlas.gemma.runner import GemmaRunner
+from pantryatlas.gemma.client import GemmaClient
 
 with GemmaRunner():
     client = GemmaClient()
@@ -534,4 +534,4 @@ with GemmaRunner():
 - **[Installation Guide](install-pi5.md)** — How to set up on Pi 5
 - **[Deferred Features](deferred-v0.2.md)** — What's coming in v0.2
 - **[Gemma 4 Spec](gemma4-verified-specs.md)** — Verified capability claims
-- **[GitHub](https://github.com/epicure-suite/epicure-core)** — Source code and issues
+- **[GitHub](https://github.com/pantryatlas/pantryatlas)** — Source code and issues

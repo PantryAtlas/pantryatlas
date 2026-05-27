@@ -122,8 +122,8 @@ dmypy.json
 .ruff_cache/
 
 # Data pipeline staging and outputs
-/epicure_core/data/_staging/
-/epicure_core/data/*.parquet
+/pantryatlas/data/_staging/
+/pantryatlas/data/*.parquet
 
 # IDE
 .vscode/

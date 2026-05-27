@@ -28,7 +28,7 @@ Each block has a `verified` field set to `true` (primary source confirms the ass
 
 ```yaml
 context_length:
-  asserted_by_epicure_prose: 256K
+  asserted_by_project_prose: 256K
   actual_for_E4B: 128K
   verified: false
   verified_actual: true
@@ -49,7 +49,7 @@ context_length:
 
 ```yaml
 supported_languages:
-  asserted_by_epicure_prose: "140+"
+  asserted_by_project_prose: "140+"
   verified: true
   source: https://ai.google.dev/gemma/docs/core/model_card_4
   notes: >
@@ -64,7 +64,7 @@ supported_languages:
 
 ```yaml
 e4b_vision:
-  asserted_by_epicure_prose: true
+  asserted_by_project_prose: true
   verified: true
   source: https://ai.google.dev/gemma/docs/core/model_card_4
   notes: >
@@ -81,7 +81,7 @@ e4b_vision:
 
 ```yaml
 audio_modalities:
-  asserted_by_epicure_prose: "E2B/E4B"
+  asserted_by_project_prose: "E2B/E4B"
   verified: true
   source: https://ai.google.dev/gemma/docs/core/model_card_4
   notes: >
@@ -99,7 +99,7 @@ audio_modalities:
 
 ```yaml
 native_system_prompt:
-  asserted_by_epicure_prose: true
+  asserted_by_project_prose: true
   verified: true
   source: https://huggingface.co/google/gemma-4-31B-it/blob/main/README.md
   source_2: https://ai.google.dev/gemma/docs/core/prompt-formatting-gemma4

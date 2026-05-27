@@ -23,10 +23,9 @@ import numpy as np
 import pytest
 from rapidfuzz import fuzz
 
-from epicure_core.embeddings import embed
-from epicure_core.pantry import Ingredient, Matcher, resolve
-from epicure_core.pantry._default_vocab import DEFAULT_VOCAB_NAMES
-
+from pantryatlas.embeddings import embed
+from pantryatlas.pantry import Ingredient, Matcher, resolve
+from pantryatlas.pantry._default_vocab import DEFAULT_VOCAB_NAMES
 
 # ---------------------------------------------------------------------------
 # Session-scoped fixture — amortises bge-m3 load across the whole session

@@ -2,9 +2,9 @@
 
 Usage
 -----
-    python -m epicure_core.embeddings_server
+    python -m pantryatlas.embeddings_server
     # or
-    uvicorn epicure_core.embeddings_server:app --host 0.0.0.0 --port 8000
+    uvicorn pantryatlas.embeddings_server:app --host 0.0.0.0 --port 8000
 
 Endpoints
 ---------
@@ -18,10 +18,10 @@ from __future__ import annotations
 from fastapi import FastAPI
 from pydantic import BaseModel
 
-from epicure_core.embeddings import embed
+from pantryatlas.embeddings import embed
 
 app = FastAPI(
-    title="epicure-core embedding sidecar",
+    title="pantryatlas embedding sidecar",
     description="bge-m3 int8 ONNX embedding service",
     version="0.1.0",
 )

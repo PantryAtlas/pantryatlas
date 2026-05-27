@@ -3,9 +3,9 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "epicure-core"
+name = "pantryatlas"
 version = "0.1.0"
-description = "Foundation package for the Epicure Suite: bge-m3 embeddings, sqlite-vec store, Gemma 4 runner, SLERP math, pantry primitives, Pi ops"
+description = "PantryAtlas: multilingual embeddings, sqlite-vec storage, Gemma 4 runner, SLERP math, pantry primitives, and Pi-side ops — one package, sub-products as submodules. Domain: https://pantryatlas.org"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
@@ -58,17 +58,17 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/epicure-suite/epicure-core"
-Documentation = "https://github.com/epicure-suite/epicure-core/blob/main/README.md"
-Repository = "https://github.com/epicure-suite/epicure-core.git"
-Issues = "https://github.com/epicure-suite/epicure-core/issues"
+Homepage = "https://github.com/pantryatlas/pantryatlas"
+Documentation = "https://github.com/pantryatlas/pantryatlas/blob/main/README.md"
+Repository = "https://github.com/pantryatlas/pantryatlas.git"
+Issues = "https://github.com/pantryatlas/pantryatlas/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["epicure_core*"]
+include = ["pantryatlas*"]
 
 [tool.setuptools.package-data]
-epicure_core = ["py.typed"]
+pantryatlas = ["py.typed"]
 
 [tool.ruff]
 line-length = 100
@@ -98,7 +98,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["epicure_core"]
+source = ["pantryatlas"]
 omit = ["*/tests/*"]
 
 [tool.coverage.report]

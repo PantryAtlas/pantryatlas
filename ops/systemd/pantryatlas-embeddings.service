@@ -1,0 +1,17 @@
+[Unit]
+Description=PantryAtlas bge-m3 embeddings sidecar (FastAPI)
+After=network.target
+
+[Service]
+Type=simple
+User=pantryatlas
+Group=pantryatlas
+WorkingDirectory=/home/pantryatlas/pantryatlas
+Environment="PANTRYATLAS_HOME=/home/pantryatlas/.pantryatlas"
+ExecStart=/home/pantryatlas/pantryatlas/venv/bin/uvicorn pantryatlas.embeddings_server:app --host 127.0.0.1 --port 8089
+Restart=on-failure
+RestartSec=10
+LimitMEMLOCK=infinity
+
+[Install]
+WantedBy=multi-user.target

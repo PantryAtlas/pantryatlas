@@ -14,8 +14,8 @@ Public API
   ``Matcher`` from the T-008 parquet vocab).
 """
 
-from epicure_core.pantry.matcher import Matcher, resolve
-from epicure_core.pantry.models import Ingredient, Pantry, Quantity
+from pantryatlas.pantry.matcher import Matcher, resolve
+from pantryatlas.pantry.models import Ingredient, Pantry, Quantity
 
 __all__ = [
     "Ingredient",

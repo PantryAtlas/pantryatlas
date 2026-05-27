@@ -6,9 +6,9 @@ T-008: Reads staged artifacts, runs NER heuristic on RecipeNLG ingredient string
        ingredients.parquet and compounds.parquet.
 
 Usage:
-    python -m epicure_core.data.build_vocab --stage pull
-    python -m epicure_core.data.build_vocab --stage pull --force
-    python -m epicure_core.data.build_vocab --stage emit
+    python -m pantryatlas.data.build_vocab --stage pull
+    python -m pantryatlas.data.build_vocab --stage pull --force
+    python -m pantryatlas.data.build_vocab --stage emit
 """
 
 from __future__ import annotations
@@ -54,7 +54,7 @@ _RECIPENLG_PRIMARY_URL = _RECIPENLG_SHARDS[0]  # recorded in SOURCES.md
 def _download_url(url: str, dest: Path, label: str = "") -> None:
     """Stream-download *url* to *dest*, logging progress."""
     tag = label or dest.name
-    req = urllib.request.Request(url, headers={"User-Agent": "epicure-core/0.1 T-007"})
+    req = urllib.request.Request(url, headers={"User-Agent": "pantryatlas/0.1 T-007"})
     log.info("Downloading %s → %s", tag, dest)
     t0 = time.monotonic()
     with urllib.request.urlopen(req, timeout=120) as resp, dest.open("wb") as fh:
@@ -141,7 +141,7 @@ def _fetch_flavordb_entity(entity_id: int) -> dict | None:
     url = _FLAVORDB_BASE_URL.format(id=entity_id)
     for attempt in range(_FLAVORDB_RETRIES):
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "epicure-core/0.1 T-007"})
+            req = urllib.request.Request(url, headers={"User-Agent": "pantryatlas/0.1 T-007"})
             with urllib.request.urlopen(req, timeout=30) as resp:
                 if resp.status == 200:
                     raw = resp.read()
@@ -646,7 +646,7 @@ def emit_ingredients(
         n_sem, cosine_threshold,
     )
 
-    from epicure_core.embeddings import embed
+    from pantryatlas.embeddings import embed
 
     embs = embed(sem_names)  # shape (n_sem, 1024), already L2-normalized
     log.info("  Embeddings done (%d x %d)", *embs.shape)
@@ -796,7 +796,7 @@ def main() -> None:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
         datefmt="%H:%M:%S",
     )
-    parser = argparse.ArgumentParser(description="Epicure vocab data pipeline (T-007/T-008)")
+    parser = argparse.ArgumentParser(description="PantryAtlas vocab data pipeline (T-007/T-008)")
     parser.add_argument("--stage", choices=["pull", "emit"], required=True,
                         help="pull = download raw data; emit = dedupe + emit parquets")
     parser.add_argument("--force", action="store_true",

@@ -1,41 +1,41 @@
-# Epicure-core systemd units
+# PantryAtlas systemd units
 
-Three units for running the epicure-core daemon stack as a set of long-lived
-services under a dedicated `epicure` system user.
+Three units for running the pantryatlas daemon stack as a set of long-lived
+services under a dedicated `pantryatlas` system user.
 
 ## Units
 
 | Unit | Purpose |
 |---|---|
-| `epicure-mem-monitor.service` | Memory-pressure monitor (starts first) |
-| `epicure-embeddings.service` | bge-m3 FastAPI embeddings sidecar on port 8089 |
-| `epicure-gemma.service` | Gemma 4 llama.cpp server (starts after mem-monitor) |
+| `pantryatlas-mem-monitor.service` | Memory-pressure monitor (starts first) |
+| `pantryatlas-embeddings.service` | bge-m3 FastAPI embeddings sidecar on port 8089 |
+| `pantryatlas-gemma.service` | Gemma 4 llama.cpp server (starts after mem-monitor) |
 
 ## Prerequisites
 
 These units assume the layout created by `ops/pi-bootstrap.sh` (T-009):
 
-- System user `epicure` with home `/home/epicure`
-- Python venv at `/home/epicure/epicure/venv/`
-- `epicure-core` installed in the venv
-- GGUF model files under `/home/epicure/epicure/models/`
+- System user `pantryatlas` with home `/home/pantryatlas`
+- Python venv at `/home/pantryatlas/pantryatlas/venv/`
+- `pantryatlas` installed in the venv
+- GGUF model files under `/home/pantryatlas/pantryatlas/models/`
 
 ## Install
 
 ```bash
 sudo bash ops/systemd/install.sh
-sudo systemctl start epicure-mem-monitor epicure-embeddings epicure-gemma
+sudo systemctl start pantryatlas-mem-monitor pantryatlas-embeddings pantryatlas-gemma
 ```
 
 ## `systemd-analyze verify` note
 
 `systemd-analyze verify` validates unit syntax **and** checks that `ExecStart`
 binaries exist on the local machine. On a development machine that has not run
-`pi-bootstrap.sh` (i.e. no `epicure` user, no `/home/epicure/epicure/venv/`),
+`pi-bootstrap.sh` (i.e. no `pantryatlas` user, no `/home/pantryatlas/pantryatlas/venv/`),
 the command exits non-zero with:
 
 ```
-epicure-gemma.service: Command /home/epicure/epicure/venv/bin/python is not executable: No such file or directory
+pantryatlas-gemma.service: Command /home/pantryatlas/pantryatlas/venv/bin/python is not executable: No such file or directory
 ```
 
 This is expected — the units target the production deployment layout, not the

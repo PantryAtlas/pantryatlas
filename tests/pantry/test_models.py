@@ -7,10 +7,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-import pytest
-
-from epicure_core.pantry import Ingredient, Pantry, Quantity
-
+from pantryatlas.pantry import Ingredient, Pantry, Quantity
 
 # ---------------------------------------------------------------------------
 # Helpers

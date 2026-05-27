@@ -1,22 +1,24 @@
-# epicure-core
+# PantryAtlas
 
-**Foundation package for the Epicure Suite** — multilingual embeddings, sqlite-vec storage, Gemma 4 lifecycle wrapper, SLERP rotation math, pantry primitives, and Pi-side ops glue. Runs on **Raspberry Pi 5** with ≥2GB headroom for downstream applications.
+**One package for multilingual food intelligence on the edge** — multilingual embeddings, sqlite-vec storage, Gemma 4 lifecycle wrapper, SLERP rotation math, pantry primitives, and Pi-side ops glue. Sub-products ship as submodules within this single package. Runs on **Raspberry Pi 5** with ≥2GB headroom for downstream applications.
+
+Domain: https://pantryatlas.org
 
 ## Quick Start
 
 Bootstrap a fresh **Pi 5 running Raspberry Pi OS Bookworm 64-bit**:
 
 ```bash
-git clone https://github.com/epicure-suite/epicure-core.git ~/epicure-core
-bash ~/epicure-core/ops/pi-bootstrap.sh
+git clone https://github.com/pantryatlas/pantryatlas.git ~/pantryatlas
+bash ~/pantryatlas/ops/pi-bootstrap.sh
 # ~30 min later: "BOOTSTRAP COMPLETE"
 ```
 
 Then in Python:
 
 ```python
-from epicure_core import embeddings, pantry, gemma
-from epicure_core.store import ingredients
+from pantryatlas import embeddings, pantry, gemma
+from pantryatlas.store import ingredients
 
 # Multilingual embeddings
 vecs = embeddings.embed(["tomato", "tomate", "tomatillo"])
@@ -40,7 +42,7 @@ with gemma.runner.GemmaRunner() as runner:
 - **[API Reference](docs/api.md)** — Complete public API reference
 - **[Deferred Features](docs/deferred-v0.2.md)** — What's coming in v0.2 and why
 - **[Gemma 4 Spec](docs/gemma4-verified-specs.md)** — Verified capability claims with sources
-- **[Full PRD](tasks/prd-epicure-core.md)** — Product requirements and architecture
+- **[Full PRD](tasks/prd-pantryatlas.md)** — Product requirements and architecture
 
 ## What's in v0.1.0
 

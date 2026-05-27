@@ -1,14 +1,12 @@
-"""Tests for epicure_core.geometry.slerp — AC-3 through AC-8."""
+"""Tests for pantryatlas.geometry.slerp — AC-3 through AC-8."""
 
 from __future__ import annotations
 
 import numpy as np
-import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from epicure_core.geometry.slerp import constrained_slerp, slerp
-
+from pantryatlas.geometry.slerp import constrained_slerp, slerp
 
 # ---------------------------------------------------------------------------
 # Hypothesis strategy helpers

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Bootstrap a fresh Pi 5 (Bookworm) into "epicure-core smoke-test ready" state.
+# Bootstrap a fresh Pi 5 (Bookworm) into "pantryatlas smoke-test ready" state.
 #
 # Idempotent: safe to re-run; skips completed stages.
 # Architecture-locked: refuses to run on anything but aarch64.
@@ -8,8 +8,8 @@
 #   bash ops/pi-bootstrap.sh
 #
 # Env overrides:
-#   EPICURE_HOME   — installation root (default: ~/epicure)
-#   REPO_DIR       — path to the epicure-core checkout (default: ~/epicure-core)
+#   PANTRYATLAS_HOME   — installation root (default: ~/pantryatlas)
+#   REPO_DIR           — path to the pantryatlas checkout (default: ~/pantryatlas)
 
 set -euo pipefail
 
@@ -25,12 +25,12 @@ LLAMA_CPP_COMMIT="fcc7508759c7a3fe5a0f4500592657900be8aca5"
 GEMMA4_GGUF_URL="https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q4_K_M.gguf"
 GEMMA4_GGUF_SHA256="519b9793ed6ce0ff530f1b7c96e848e08e49e7af4d57bb97f76215963a54146d"
 
-EPICURE_HOME="${EPICURE_HOME:-$HOME/epicure}"
-EPICURE_VENV="$EPICURE_HOME/venv"
-LLAMA_CPP_DIR="$EPICURE_HOME/llama.cpp"
-MODELS_DIR="$EPICURE_HOME/models"
-STAMPS_DIR="$EPICURE_HOME/.bootstrap-stamps"
-REPO_DIR="${REPO_DIR:-$HOME/epicure-core}"
+PANTRYATLAS_HOME="${PANTRYATLAS_HOME:-$HOME/pantryatlas}"
+PANTRYATLAS_VENV="$PANTRYATLAS_HOME/venv"
+LLAMA_CPP_DIR="$PANTRYATLAS_HOME/llama.cpp"
+MODELS_DIR="$PANTRYATLAS_HOME/models"
+STAMPS_DIR="$PANTRYATLAS_HOME/.bootstrap-stamps"
+REPO_DIR="${REPO_DIR:-$HOME/pantryatlas}"
 
 # ============================================================
 # Stage helpers
@@ -76,9 +76,9 @@ stage_venv() {
         log "venv: already done"
         return 0
     fi
-    log "venv: creating Python venv at $EPICURE_VENV..."
-    python3 -m venv "$EPICURE_VENV"
-    "$EPICURE_VENV/bin/pip" install --upgrade pip setuptools wheel
+    log "venv: creating Python venv at $PANTRYATLAS_VENV..."
+    python3 -m venv "$PANTRYATLAS_VENV"
+    "$PANTRYATLAS_VENV/bin/pip" install --upgrade pip setuptools wheel
     touch "$stamp"
     log "venv: done"
 }
@@ -133,21 +133,21 @@ stage_pip_install() {
         log "pip install: already done"
         return 0
     fi
-    log "pip install: installing epicure-core in editable mode..."
-    "$EPICURE_VENV/bin/pip" install -e "${REPO_DIR}[dev]"
+    log "pip install: installing pantryatlas in editable mode..."
+    "$PANTRYATLAS_VENV/bin/pip" install -e "${REPO_DIR}[dev]"
     touch "$stamp"
     log "pip install: done"
 }
 
 stage_smoke_test() {
     log "smoke test: verifying imports..."
-    "$EPICURE_VENV/bin/python" -c '
-import epicure_core
-import epicure_core.embeddings
-import epicure_core.store.ingredients
-import epicure_core.geometry.slerp
-import epicure_core.pantry
-print("epicure-core " + epicure_core.__version__ + " imports OK")
+    "$PANTRYATLAS_VENV/bin/python" -c '
+import pantryatlas
+import pantryatlas.embeddings
+import pantryatlas.store.ingredients
+import pantryatlas.geometry.slerp
+import pantryatlas.pantry
+print("pantryatlas " + pantryatlas.__version__ + " imports OK")
 '
     log "smoke test: done"
 }
@@ -157,7 +157,7 @@ print("epicure-core " + epicure_core.__version__ + " imports OK")
 # ============================================================
 main() {
     require_arm64
-    mkdir -p "$EPICURE_HOME" "$STAMPS_DIR"
+    mkdir -p "$PANTRYATLAS_HOME" "$STAMPS_DIR"
 
     stage_apt_install
     stage_venv
@@ -166,7 +166,7 @@ main() {
     stage_pip_install
     stage_smoke_test
 
-    log "Venv:           $EPICURE_VENV"
+    log "Venv:           $PANTRYATLAS_VENV"
     log "Gemma 4 GGUF:   $MODELS_DIR/gemma-4-E4B-it-Q4_K_M.gguf"
     log "llama.cpp:      $LLAMA_CPP_DIR/build"
     log "Next:           T-010 will use these via GemmaRunner"

@@ -1,7 +1,7 @@
 """Pantry dataclasses: Quantity, Ingredient, Pantry.
 
 These are pure Python dataclasses — no I/O, no embeddings.  The embedding
-and matching logic lives in ``epicure_core.pantry.matcher``.
+and matching logic lives in ``pantryatlas.pantry.matcher``.
 
 Deduplication
 -------------

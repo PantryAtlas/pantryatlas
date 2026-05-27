@@ -6,8 +6,8 @@ canonical-vocab parquet (which does not exist yet in v0.1).
 **Do not use this for production.** Downstream code (pantry-navigator and
 similar) must build its own ``Matcher`` from the full T-008 parquet vocab::
 
-    from epicure_core.pantry import Matcher
-    from epicure_core.embeddings import embed
+    from pantryatlas.pantry import Matcher
+    from pantryatlas.embeddings import embed
 
     canonical_names = load_from_parquet(...)  # T-008 output
     embeddings = embed(canonical_names)

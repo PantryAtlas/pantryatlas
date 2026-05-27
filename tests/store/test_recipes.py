@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from epicure_core.store.recipes import Recipe, RecipeStore
+from pantryatlas.store.recipes import Recipe, RecipeStore
 
 
 def _unit_vec(seed: int = 0) -> np.ndarray:

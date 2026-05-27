@@ -7,15 +7,15 @@ Xenova/bge-m3 on HuggingFace (Apache-2.0 / MIT licence for ONNX weights).
   Tokenizer      : Xenova/bge-m3 @ tokenizer.json  (XLM-RoBERTa BPE)
   Base model     : BAAI/bge-m3 (https://huggingface.co/BAAI/bge-m3)
 
-Files are downloaded on first use into ~/.cache/epicure-core/bge-m3/.
+Files are downloaded on first use into ~/.cache/pantryatlas/bge-m3/.
 SHA-256 of model_int8.onnx is verified after download.
 
 Architecture note (T-003, Option A)
 -------------------------------------
-The T-002 scaffold created epicure_core/embeddings/ as a Python package, so
-the flat-file path epicure_core/embeddings.py is not reachable (Python
+The T-002 scaffold created pantryatlas/embeddings/ as a Python package, so
+the flat-file path pantryatlas/embeddings.py is not reachable (Python
 disambiguates: package beats module). AC-1 is satisfied by this __init__.py;
-the FastAPI sidecar lives at the top-level epicure_core/embeddings_server.py
+the FastAPI sidecar lives at the top-level pantryatlas/embeddings_server.py
 as AC-8 requires.
 """
 
@@ -43,7 +43,7 @@ _TOK_FILE = "tokenizer.json"
 # SHA-256 of Xenova/bge-m3 onnx/model_int8.onnx (verified 2026-05-27)
 _ONNX_SHA256 = "a206e10e995aa2a833924bcd725ba5dd6c3425cd34bac3cf2b5677cd2a1c51d6"
 
-_CACHE_DIR = pathlib.Path.home() / ".cache" / "epicure-core" / "bge-m3"
+_CACHE_DIR = pathlib.Path.home() / ".cache" / "pantryatlas" / "bge-m3"
 _BATCH_SIZE = 32  # internal micro-batch for ONNX forward
 
 # ---------------------------------------------------------------------------
@@ -181,7 +181,7 @@ def embed(texts: list[str]) -> np.ndarray:
         The model is loaded lazily on the first call and cached in module
         state — subsequent calls pay only inference cost.  Internally uses
         micro-batches of 32 to avoid OOM on large inputs.
-        For cross-process use, run ``epicure_core/embeddings_server.py`` and
+        For cross-process use, run ``pantryatlas/embeddings_server.py`` and
         POST to /embed.
     """
     if not texts:

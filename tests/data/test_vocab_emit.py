@@ -8,7 +8,6 @@ Two tiers:
 from __future__ import annotations
 
 import json
-import tempfile
 from pathlib import Path
 
 import pyarrow as pa
@@ -19,7 +18,7 @@ import pytest
 # Paths to real artifacts (may or may not exist)
 # ---------------------------------------------------------------------------
 
-_DATA_DIR = Path(__file__).parent.parent.parent / "epicure_core" / "data"
+_DATA_DIR = Path(__file__).parent.parent.parent / "pantryatlas" / "data"
 _INGREDIENTS_PQ = _DATA_DIR / "ingredients.parquet"
 _COMPOUNDS_PQ = _DATA_DIR / "compounds.parquet"
 _STAGING_DIR = _DATA_DIR / "_staging"
@@ -107,7 +106,7 @@ class TestSyntheticPipeline:
     @pytest.fixture(scope="class")
     def emit_artifacts(self, tmp_path_factory):
         """Run emit on synthetic data; return (ingredients_path, compounds_path)."""
-        from epicure_core.data.build_vocab import emit_compounds, emit_ingredients
+        from pantryatlas.data.build_vocab import emit_compounds, emit_ingredients
 
         tmpdir = tmp_path_factory.mktemp("synthetic_emit")
         staging, out_dir = _make_fake_staging(tmpdir)
@@ -200,7 +199,8 @@ class TestSyntheticPipeline:
         staged_n = pq.read_metadata(staging / "flavordb.raw.parquet").num_rows
         emitted_n = pq.read_metadata(cmp_path).num_rows
         assert abs(emitted_n - staged_n) <= 5, (
-            f"compounds row count {emitted_n} differs from staged FlavorDB {staged_n} by more than ±5"
+            f"compounds row count {emitted_n} differs from staged "
+            f"FlavorDB {staged_n} by more than ±5"
         )
 
 
@@ -208,8 +208,10 @@ class TestSyntheticPipeline:
 # Real-data slow tests (skipped unless artifacts exist)
 # ---------------------------------------------------------------------------
 
+_skip_reason = "Real artifacts not present; run --stage emit first"
 
-@pytest.mark.skipif(not _artifacts_exist, reason="Real artifacts not present; run --stage emit first")
+
+@pytest.mark.skipif(not _artifacts_exist, reason=_skip_reason)
 class TestRealArtifacts:
     """Validate AC-3/4/5/6 invariants on the real emitted parquets."""
 
@@ -239,7 +241,8 @@ class TestRealArtifacts:
         staged_n = pq.read_metadata(_FLAVORDB_RAW).num_rows
         emitted_n = pq.read_metadata(_COMPOUNDS_PQ).num_rows
         assert abs(emitted_n - staged_n) <= 5, (
-            f"compounds row count {emitted_n} differs from staged FlavorDB {staged_n} by more than ±5"
+            f"compounds row count {emitted_n} differs from staged "
+            f"FlavorDB {staged_n} by more than ±5"
         )
 
     def test_aliases_is_list_string_type(self):

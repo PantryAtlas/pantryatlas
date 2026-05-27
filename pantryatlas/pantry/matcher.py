@@ -6,8 +6,8 @@ both the tiny v0.1 built-in test vocab and the full T-008 canonical-vocab
 parquet that downstream repos will provide::
 
     # Downstream / pantry-navigator usage (T-008 parquet):
-    from epicure_core.pantry import Matcher
-    from epicure_core.embeddings import embed
+    from pantryatlas.pantry import Matcher
+    from pantryatlas.embeddings import embed
 
     canonical_names = load_from_parquet(...)  # your T-008 output
     embeddings = embed(canonical_names)       # shape (N, 1024), L2-normalised
@@ -62,7 +62,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 from rapidfuzz import fuzz
 
-from epicure_core.pantry.models import Ingredient
+from pantryatlas.pantry.models import Ingredient
 
 if TYPE_CHECKING:
     pass
@@ -85,7 +85,7 @@ class Matcher:
             ``(len(canonical_names), 1024)``.  Must correspond 1-to-1 with
             ``canonical_names``.
         embed_fn: Callable that maps ``list[str] → np.ndarray`` (shape
-            ``(N, 1024)``).  Defaults to ``epicure_core.embeddings.embed``
+            ``(N, 1024)``).  Defaults to ``pantryatlas.embeddings.embed``
             when omitted.  Injected here to allow testing without the full
             ONNX stack.
         fuzzy_threshold: Minimum ``fuzz.ratio / 100`` to count as a fuzzy
@@ -117,7 +117,7 @@ class Matcher:
         self._fuzzy_threshold_100: float = fuzzy_threshold * 100
         self._semantic_threshold: float = semantic_threshold
         if embed_fn is None:
-            from epicure_core.embeddings import embed as _default_embed
+            from pantryatlas.embeddings import embed as _default_embed
 
             self._embed_fn: Callable[[list[str]], np.ndarray] = _default_embed
         else:
@@ -201,8 +201,8 @@ def _get_default_matcher() -> Matcher:
     with _default_lock:
         if _default_matcher is not None:
             return _default_matcher
-        from epicure_core.embeddings import embed
-        from epicure_core.pantry._default_vocab import DEFAULT_VOCAB_NAMES
+        from pantryatlas.embeddings import embed
+        from pantryatlas.pantry._default_vocab import DEFAULT_VOCAB_NAMES
 
         embeddings = embed(DEFAULT_VOCAB_NAMES)
         _default_matcher = Matcher(

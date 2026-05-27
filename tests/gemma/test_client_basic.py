@@ -4,7 +4,7 @@ import json
 import httpx
 import pytest
 
-from epicure_core.gemma.client import GemmaClient
+from pantryatlas.gemma.client import GemmaClient
 
 
 def _fake_server(expected_check=None):

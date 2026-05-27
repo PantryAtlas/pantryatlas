@@ -6,9 +6,8 @@ import os
 import time
 
 import numpy as np
-import pytest
 
-from epicure_core.embeddings import embed
+from pantryatlas.embeddings import embed
 
 
 def test_shape_and_dtype() -> None:
@@ -44,14 +43,14 @@ def test_multilingual_semantic_proximity() -> None:
 
 
 def test_throughput_benchmark() -> None:
-    """AC-7: log embed_throughput_per_sec=<float>; enforce >= 17.0 only when EPICURE_PI_BENCH=1."""
+    """AC-7: log embed_throughput_per_sec; enforce >= 17.0 only when PANTRYATLAS_PI_BENCH=1."""
     texts = [f"ingredient {i}" for i in range(1000)]
     t0 = time.perf_counter()
     embed(texts)
     elapsed = time.perf_counter() - t0
     tps = len(texts) / elapsed
     print(f"embed_throughput_per_sec={tps:.2f}")
-    if os.environ.get("EPICURE_PI_BENCH") == "1":
+    if os.environ.get("PANTRYATLAS_PI_BENCH") == "1":
         assert tps >= 17.0, f"throughput {tps:.2f}/s below 17/s floor"
 
 
@@ -59,7 +58,7 @@ def test_server_round_trip() -> None:
     """AC-8 functional: the FastAPI sidecar round-trips /embed and returns (1, 1024)."""
     from fastapi.testclient import TestClient
 
-    from epicure_core.embeddings_server import app
+    from pantryatlas.embeddings_server import app
 
     client = TestClient(app)
     r = client.post("/embed", json={"texts": ["tomato"]})

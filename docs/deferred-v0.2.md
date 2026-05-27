@@ -66,9 +66,9 @@ Without upfront field testing (real users, real kitchens, real photos), shipping
 
 ## Federation
 
-**What it is:** Allow multiple Epicure instances to share and sync recipe + ingredient data via a git-like merkle tree protocol.
+**What it is:** Allow multiple PantryAtlas instances to share and sync recipe + ingredient data via a git-like merkle tree protocol.
 
-**What v0.1 ships:** Single-instance storage (sqlite-vec at `~/.epicure/`). No sync, no sharing.
+**What v0.1 ships:** Single-instance storage (sqlite-vec at `~/.pantryatlas/`). No sync, no sharing.
 
 **Why deferred:** Federation (offline-first sync with conflict resolution) is architecturally complex:
 1. Requires a merkle-tree DAG over the store (recipe + ingredient records must track parent hash + timestamp)
@@ -105,9 +105,15 @@ The mapping is fiddly and error-prone without subject-matter expertise. v0.2 wil
 
 ---
 
+## Architectural note: single-package, not multi-repo
+
+PantryAtlas collapses the original 5-repo suite plan (pantry-navigator, slerp-chef, mode-atlas, etc.) into one `pantryatlas` package where sub-products ship as submodules. Deferred items below that were previously "future separate repos" are now "future submodules within `pantryatlas/`." This simplifies dependency management and keeps embedding model + store in one installable unit.
+
+---
+
 ## Why defer? Engineering principles applied
 
-**v0.1 ships the minimum that enables downstream apps** (pantry-navigator, slerp-chef, mode-atlas) to function with real users. Each deferred feature is marked with a schema placeholder (e.g., `ModeStore` table exists but has no insert API) so later expansion doesn't require a painful migration.
+**v0.1 ships the minimum that enables downstream apps** (pantry-navigator, slerp-chef, mode-atlas — as future submodules) to function with real users. Each deferred feature is marked with a schema placeholder (e.g., `ModeStore` table exists but has no insert API) so later expansion doesn't require a painful migration.
 
 **Deferral is not avoidance.** Each feature has a design doc, dependency list, and v0.2 milestone. As feedback from community kitchens arrives, prioritization may shift (e.g., speech input might jump ahead if field data shows it's the #1 request).
 
@@ -117,7 +123,7 @@ The mapping is fiddly and error-prone without subject-matter expertise. v0.2 wil
 
 ## Schema forward-compatibility
 
-The `IngredientStore`, `RecipeStore`, and `ModeStore` schemas are versioned in `epicure_core/store/migrations/`. Adding deferred features will use SQLite's `ALTER TABLE` migration pattern (add columns, never remove). v0.1 databases upgrade automatically to v0.2 without data loss.
+The `IngredientStore`, `RecipeStore`, and `ModeStore` schemas are versioned in `pantryatlas/store/migrations/`. Adding deferred features will use SQLite's `ALTER TABLE` migration pattern (add columns, never remove). v0.1 databases upgrade automatically to v0.2 without data loss.
 
 ```python
 # v0.2 example: adding USDA field
