@@ -45,6 +45,9 @@ class IngredientStore:
     Stores ingredient metadata and 1024-d float32 embeddings across two
     coupled tables: ``ingredients_meta`` (regular) and ``ingredients_vec``
     (vec0 virtual table). Tables are created idempotently on open.
+
+    Not thread-safe: each thread must use its own store instance
+    (sqlite3 ``check_same_thread=True``).
     """
 
     def __init__(self, db_path: str | Path) -> None:
@@ -91,33 +94,37 @@ class IngredientStore:
 
     def upsert(self, rows: list[Ingredient]) -> None:
         """Insert or replace a list of ingredients."""
-        for row in rows:
-            self._conn.execute(
-                """
-                INSERT INTO ingredients_meta (id, canonical_name, language, aliases, source)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET
-                    canonical_name = excluded.canonical_name,
-                    language       = excluded.language,
-                    aliases        = excluded.aliases,
-                    source         = excluded.source
-                """,
-                (
-                    row.id,
-                    row.canonical_name,
-                    row.language,
-                    json.dumps(row.aliases) if row.aliases is not None else None,
-                    row.source,
-                ),
-            )
-            # vec0 virtual tables do not support ON CONFLICT / UPSERT syntax;
-            # use DELETE + INSERT instead.
-            self._conn.execute("DELETE FROM ingredients_vec WHERE id = ?", (row.id,))
-            self._conn.execute(
-                "INSERT INTO ingredients_vec (id, embedding) VALUES (?, ?)",
-                (row.id, self._to_blob(row.embedding)),
-            )
-        self._conn.commit()
+        try:
+            for row in rows:
+                self._conn.execute(
+                    """
+                    INSERT INTO ingredients_meta (id, canonical_name, language, aliases, source)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(id) DO UPDATE SET
+                        canonical_name = excluded.canonical_name,
+                        language       = excluded.language,
+                        aliases        = excluded.aliases,
+                        source         = excluded.source
+                    """,
+                    (
+                        row.id,
+                        row.canonical_name,
+                        row.language,
+                        json.dumps(row.aliases) if row.aliases is not None else None,
+                        row.source,
+                    ),
+                )
+                # vec0 virtual tables do not support ON CONFLICT / UPSERT syntax;
+                # use DELETE + INSERT instead.
+                self._conn.execute("DELETE FROM ingredients_vec WHERE id = ?", (row.id,))
+                self._conn.execute(
+                    "INSERT INTO ingredients_vec (id, embedding) VALUES (?, ?)",
+                    (row.id, self._to_blob(row.embedding)),
+                )
+            self._conn.commit()
+        except Exception:
+            self._conn.rollback()
+            raise
 
     def get(self, id: str) -> Ingredient | None:
         """Retrieve a single ingredient by id, or None if not found."""
@@ -145,11 +152,14 @@ class IngredientStore:
         Args:
             vec: Query embedding, shape (1024,) float32.
             top_k: Number of results to return.
-            filters: Optional dict of metadata filters (currently unused placeholder).
+            filters: Optional dict of metadata filters (reserved for v0.2;
+                raises NotImplementedError if non-None).
 
         Returns:
             List of Ingredient objects sorted by ascending distance.
         """
+        if filters is not None:
+            raise NotImplementedError("query filters not yet supported; pass filters=None")
         blob = self._to_blob(vec)
         rows = self._conn.execute(
             """

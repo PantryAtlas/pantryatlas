@@ -45,6 +45,9 @@ class RecipeStore:
     Stores recipe metadata and 1024-d float32 embeddings across two coupled
     tables: ``recipes_meta`` (regular) and ``recipes_vec`` (vec0 virtual
     table). Tables are created idempotently on open.
+
+    Not thread-safe: each thread must use its own store instance
+    (sqlite3 ``check_same_thread=True``).
     """
 
     def __init__(self, db_path: str | Path) -> None:
@@ -91,33 +94,41 @@ class RecipeStore:
 
     def upsert(self, rows: list[Recipe]) -> None:
         """Insert or replace a list of recipes."""
-        for row in rows:
-            self._conn.execute(
-                """
-                INSERT INTO recipes_meta (id, title, language, ingredients_json, instructions)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET
-                    title            = excluded.title,
-                    language         = excluded.language,
-                    ingredients_json = excluded.ingredients_json,
-                    instructions     = excluded.instructions
-                """,
-                (
-                    row.id,
-                    row.title,
-                    row.language,
-                    json.dumps(row.ingredients_json) if row.ingredients_json is not None else None,
-                    row.instructions,
-                ),
-            )
-            # vec0 virtual tables do not support ON CONFLICT / UPSERT syntax;
-            # use DELETE + INSERT instead.
-            self._conn.execute("DELETE FROM recipes_vec WHERE id = ?", (row.id,))
-            self._conn.execute(
-                "INSERT INTO recipes_vec (id, embedding) VALUES (?, ?)",
-                (row.id, self._to_blob(row.embedding)),
-            )
-        self._conn.commit()
+        try:
+            for row in rows:
+                self._conn.execute(
+                    """
+                    INSERT INTO recipes_meta (id, title, language, ingredients_json, instructions)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(id) DO UPDATE SET
+                        title            = excluded.title,
+                        language         = excluded.language,
+                        ingredients_json = excluded.ingredients_json,
+                        instructions     = excluded.instructions
+                    """,
+                    (
+                        row.id,
+                        row.title,
+                        row.language,
+                        (
+                            json.dumps(row.ingredients_json)
+                            if row.ingredients_json is not None
+                            else None
+                        ),
+                        row.instructions,
+                    ),
+                )
+                # vec0 virtual tables do not support ON CONFLICT / UPSERT syntax;
+                # use DELETE + INSERT instead.
+                self._conn.execute("DELETE FROM recipes_vec WHERE id = ?", (row.id,))
+                self._conn.execute(
+                    "INSERT INTO recipes_vec (id, embedding) VALUES (?, ?)",
+                    (row.id, self._to_blob(row.embedding)),
+                )
+            self._conn.commit()
+        except Exception:
+            self._conn.rollback()
+            raise
 
     def get(self, id: str) -> Recipe | None:
         """Retrieve a single recipe by id, or None if not found."""
@@ -145,11 +156,14 @@ class RecipeStore:
         Args:
             vec: Query embedding, shape (1024,) float32.
             top_k: Number of results to return.
-            filters: Optional dict of metadata filters (currently unused placeholder).
+            filters: Optional dict of metadata filters (reserved for v0.2;
+                raises NotImplementedError if non-None).
 
         Returns:
             List of Recipe objects sorted by ascending distance.
         """
+        if filters is not None:
+            raise NotImplementedError("query filters not yet supported; pass filters=None")
         blob = self._to_blob(vec)
         rows = self._conn.execute(
             """
