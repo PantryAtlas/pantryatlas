@@ -59,7 +59,9 @@ class RecipeStore:
     # ------------------------------------------------------------------
 
     def _open(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._path)
+        # check_same_thread=False: allows the same connection to be used from
+        # FastAPI's thread-pool handlers.  Single-writer usage is safe here.
+        conn = sqlite3.connect(self._path, check_same_thread=False)
         conn.enable_load_extension(True)
         sqlite_vec.load(conn)
         conn.enable_load_extension(False)
@@ -189,6 +191,39 @@ class RecipeStore:
         self._conn.execute("DELETE FROM recipes_meta WHERE id = ?", (id,))
         self._conn.execute("DELETE FROM recipes_vec WHERE id = ?", (id,))
         self._conn.commit()
+
+    def count(self) -> int:
+        """Return the total number of recipes stored."""
+        row = self._conn.execute("SELECT COUNT(*) FROM recipes_meta").fetchone()
+        return row[0] if row else 0
+
+    def iter_overlapping(self, canonical_names: list[str]) -> list[dict]:
+        """Return recipe dicts whose ingredients_json overlaps any canonical name.
+
+        Scans recipes_meta.ingredients_json in Python (no vec search) — suitable
+        for the text-overlap pre-filter step in POST /navigator/recipes/from-pantry.
+        Returns list of {title, ingredients, instructions} dicts.
+        """
+        if not canonical_names:
+            return []
+        name_set = set(canonical_names)
+        rows = self._conn.execute(
+            "SELECT title, ingredients_json, instructions FROM recipes_meta"
+        ).fetchall()
+        results = []
+        for title, ingredients_json, instructions in rows:
+            if not ingredients_json:
+                continue
+            ings = json.loads(ingredients_json)
+            if any(ing in name_set for ing in ings):
+                results.append(
+                    {
+                        "title": title,
+                        "ingredients": ings,
+                        "instructions": instructions or "",
+                    }
+                )
+        return results
 
     def close(self) -> None:
         """Close the underlying database connection."""
