@@ -1,8 +1,8 @@
-"""T-001: Recipe curation + ingestion CLI scaffold.
+"""T-001 / T-002: Recipe curation + ingestion CLI.
 
 Reads RecipeNLG staged parquet, parses input text into (title, ingredients, instructions)
 tuples, applies curation rules (≥3 distinct ingredients, balanced across count buckets 3-5,
-6-8, 9+), reports a summary. No DB writes in dry-run.
+6-8, 9+), reports a summary, then embeds and upserts into RecipeStore.
 
 Usage:
     python -m pantryatlas.navigator.ingest --limit 1000 --dry-run
@@ -12,11 +12,14 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import logging
 import re
+import time
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pyarrow.parquet as pq
 
 log = logging.getLogger(__name__)
@@ -256,6 +259,103 @@ def curate(
     }
 
 
+_EMBED_BATCH = 64  # macro-batch size for embed() calls
+
+
+def _recipe_id(title: str, ingredients: list[str]) -> str:
+    """Stable content-addressable ID: SHA-1 of 'title|ing1|ing2|...'."""
+    content = title + "|" + "|".join(ingredients)
+    return hashlib.sha1(content.encode()).hexdigest()
+
+
+def _ingest_to_store(selected: list[dict[str, Any]], db_path: Path) -> None:
+    """Embed curated recipes and upsert into RecipeStore.
+
+    Steps:
+    1. Derive stable recipe IDs for all selected rows.
+    2. Query existing IDs from the store; skip already-present rows.
+    3. Embed new rows in batches of 64, time it, log throughput.
+    4. Upsert Recipe objects into the store.
+    """
+    # Import here so dry-run path never touches store/embeddings
+    from pantryatlas.embeddings import embed  # noqa: PLC0415
+    from pantryatlas.store.recipes import Recipe, RecipeStore  # noqa: PLC0415
+
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    store = RecipeStore(db_path)
+
+    try:
+        # Derive stable IDs
+        id_row_pairs: list[tuple[str, dict[str, Any]]] = []
+        for row in selected:
+            rid = _recipe_id(row["title"], row["ingredients"])
+            id_row_pairs.append((rid, row))
+
+        # Fetch all existing IDs in one query (avoids SQLite IN(?) param-count limits)
+        existing_ids: set[str] = {
+            r[0]
+            for r in store._conn.execute("SELECT id FROM recipes_meta").fetchall()  # noqa: SLF001
+        }
+
+        to_embed = [(rid, row) for rid, row in id_row_pairs if rid not in existing_ids]
+        n_skipped = len(id_row_pairs) - len(to_embed)
+
+        if n_skipped:
+            log.info("skipped: %d already present", n_skipped)
+
+        if not to_embed:
+            log.info("Nothing new to embed — all recipes already in store.")
+            return
+
+        log.info("Embedding %d new recipes in batches of %d …", len(to_embed), _EMBED_BATCH)
+
+        total_embed_time = 0.0
+        total_embedded = 0
+
+        for batch_start in range(0, len(to_embed), _EMBED_BATCH):
+            batch_pairs = to_embed[batch_start : batch_start + _EMBED_BATCH]
+            texts = [
+                row["title"] + " " + " ".join(row["ingredients"])
+                for _, row in batch_pairs
+            ]
+
+            t0 = time.perf_counter()
+            embeddings: np.ndarray = embed(texts)  # (B, 1024) float32 L2-normalised
+            total_embed_time += time.perf_counter() - t0
+            total_embedded += len(texts)
+
+            batch_recipes = [
+                Recipe(
+                    id=rid,
+                    title=row["title"],
+                    language="en",
+                    embedding=embeddings[i],
+                    ingredients_json=row["ingredients"],
+                    instructions=row.get("instructions") or None,
+                )
+                for i, (rid, row) in enumerate(batch_pairs)
+            ]
+            store.upsert(batch_recipes)
+
+            if (batch_start // _EMBED_BATCH + 1) % 5 == 0:
+                log.info(
+                    "  Upserted %d / %d recipes …",
+                    batch_start + len(batch_pairs),
+                    len(to_embed),
+                )
+
+        throughput = total_embedded / total_embed_time if total_embed_time > 0 else 0.0
+        log.info("embeddings_throughput_per_sec=%.2f", throughput)
+        log.info(
+            "Ingestion complete: %d new recipes written, %d skipped.",
+            total_embedded,
+            n_skipped,
+        )
+
+    finally:
+        store.close()
+
+
 def main() -> None:
     """CLI entry point."""
     logging.basicConfig(
@@ -320,12 +420,8 @@ def main() -> None:
         log.info("DRY RUN: no DB writes.")
         return
 
-    # T-001 scaffold: raise NotImplementedError for non-dry-run
-    msg = (
-        "T-001 scaffold only supports --dry-run. "
-        "T-002 adds embedding + DB write."
-    )
-    raise NotImplementedError(msg)
+    # Phase 5: Write path — embed + upsert (T-002)
+    _ingest_to_store(result["selected"], args.target_db)
 
 
 if __name__ == "__main__":
