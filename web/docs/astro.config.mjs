@@ -36,7 +36,25 @@ export default defineConfig({
       defaultLocale: 'en',
       locales: {
         en: { label: 'English' },
+        es: { label: 'Español', lang: 'es' },
+        fr: { label: 'Français', lang: 'fr' },
+        ar: { label: 'العربية', lang: 'ar', dir: 'rtl' },
+        'zh-cn': { label: '简体中文', lang: 'zh-CN' },
       },
+      editLink: {
+        baseUrl: 'https://github.com/PantryAtlas/pantryatlas/edit/main/web/docs/',
+      },
+      // Note: Starlight 0.39+ requires autogenerate to be nested inside items[].
+      // The old top-level { label, autogenerate } shorthand was removed in v0.39.0.
+      sidebar: [
+        { label: 'Start here', translations: { es: 'Empieza aquí', fr: 'Commencer ici', ar: 'ابدأ هنا', 'zh-CN': '从这里开始' }, items: [{ autogenerate: { directory: 'start-here' } }] },
+        { label: 'Cooking', translations: { es: 'Cocinar', fr: 'Cuisiner', ar: 'الطبخ', 'zh-CN': '烹饪' }, items: [{ autogenerate: { directory: 'cooking' } }] },
+        { label: 'Set up your device', translations: { es: 'Configura tu dispositivo', fr: 'Configurer votre appareil', ar: 'إعداد جهازك', 'zh-CN': '设置你的设备' }, items: [{ autogenerate: { directory: 'setup' } }] },
+        { label: 'Community kitchens', translations: { es: 'Cocinas comunitarias', fr: 'Cuisines communautaires', ar: 'المطابخ المجتمعية', 'zh-CN': '社区厨房' }, items: [{ autogenerate: { directory: 'community' } }] },
+        { label: 'Maintenance & troubleshooting', translations: { es: 'Mantenimiento y solución de problemas', fr: 'Maintenance et dépannage', ar: 'الصيانة واستكشاف الأخطاء', 'zh-CN': '维护与故障排除' }, items: [{ autogenerate: { directory: 'maintenance' } }] },
+        { label: 'Developers', translations: { es: 'Desarrolladores', fr: 'Développeurs', ar: 'المطورون', 'zh-CN': '开发者' }, items: [{ autogenerate: { directory: 'developers' } }] },
+        { label: 'Reference', translations: { es: 'Referencia', fr: 'Référence', ar: 'مرجع', 'zh-CN': '参考' }, items: [{ autogenerate: { directory: 'reference' } }] },
+      ],
       // Pagefind (search) is disabled by default so the site builds on the Pi 5,
       // whose 16KB memory pages crash Pagefind's jemalloc allocator. Production
       // builds on x86 / Cloudflare Pages set DOCS_SEARCH=1 to enable search.
