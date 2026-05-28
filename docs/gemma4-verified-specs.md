@@ -149,6 +149,96 @@ sha256sum gemma-4-E4B-it-Q4_K_M.gguf
 
 ---
 
+## T-014: Vision Approach — Gemma 4 E4B Multimodal via llama.cpp
+
+### Approach
+
+Gemma 4 E4B is natively multimodal (verified in `e4b_vision` block above). The vision endpoint
+(`POST /navigator/vision/parse-shelf`) uses the existing `GemmaClient.vision_generate()` method,
+which posts an OpenAI-compatible chat-completions payload with the image encoded as a base64
+`image_url` content block:
+
+```json
+{
+  "role": "user",
+  "content": [
+    {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,<...>"}},
+    {"type": "text", "text": "What ingredients do you see on this shelf? ..."}
+  ]
+}
+```
+
+This is the multimodal message format llama-server accepts when started with `--mmproj`.
+
+### mmproj Requirement
+
+llama-server requires a vision projector GGUF (`--mmproj`) in addition to the base model GGUF
+to process image inputs. Without `--mmproj`, the server returns 400/422 on vision requests, which
+`GemmaClient.vision_generate()` catches and raises as `VisionUnavailable` → HTTP 503.
+
+**Expected mmproj source:** `unsloth/gemma-4-E4B-it-GGUF` on HuggingFace typically ships
+an `mmproj-*.gguf` file alongside the main weights. Expected pattern:
+
+```
+mmproj_url_pattern: https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/mmproj-gemma-4-E4B-it-*.gguf
+mmproj_sha256: TO BE VERIFIED ON FIRST DOWNLOAD
+mmproj_size_estimate: ~1-2 GB (typical for E4B vision projectors)
+```
+
+**Alternative source:** `ggml-org/gemma-4-E4B-it-GGUF` (llama.cpp canonical quants) may also
+ship an mmproj. Check both repos and verify SHA256 after download.
+
+### llama-server Start Command with Vision
+
+Add `--mmproj` to the `GemmaRunner` start command (modify `runner.py` when live verification
+is needed):
+
+```bash
+llama-server \
+  -m ~/pantryatlas/models/gemma-4-E4B-it-Q4_K_M.gguf \
+  --mmproj ~/pantryatlas/models/mmproj-gemma-4-E4B-it-Q4_K_M.gguf \
+  --host 127.0.0.1 \
+  --port 8080 \
+  -c 8192 \
+  --threads 3
+```
+
+### Measured Pi Latency
+
+**Status: TO BE MEASURED** — live verification deferred (mmproj file not yet downloaded;
+background ingestion process using memory during T-014 development window).
+
+Expected range: 15–60 s per image on Pi 5 (8 GB) at Q4_K_M quantization based on text-only TPS
+baselines (~1–3 TPS for E4B text) and the additional vision projection overhead.
+Update this field after first successful live run via:
+
+```bash
+time curl -F image=@tests/fixtures/test-shelf.jpg http://127.0.0.1:8080/navigator/vision/parse-shelf
+```
+
+### Graceful Fallback
+
+When the mmproj is not loaded, the endpoint returns HTTP 503 `{"error":"vision_unavailable"}`.
+The frontend (`PhotoReviewSheet.tsx`) already handles 503 gracefully by showing
+"Photo recognition isn't set up on this server yet — type ingredients for now."
+This is the **production default** until the operator downloads and wires the mmproj.
+
+### Response Contract
+
+The endpoint returns both a structured form and a flat list to satisfy both consumers:
+
+```json
+{
+  "detected": [{"label": "tomato", "confidence": 0.92}, ...],
+  "items":    ["tomato", ...]
+}
+```
+
+`PhotoReviewSheet.tsx` reads `data.items` (flat list); other consumers can use `data.detected`
+for confidence-aware filtering.
+
+---
+
 ## Downstream Impact Summary
 
 | Claim | Asserted | Verified | Action Required |

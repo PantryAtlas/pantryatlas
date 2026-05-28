@@ -42,10 +42,10 @@ import json
 from collections.abc import Callable
 from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -53,6 +53,9 @@ from pydantic import BaseModel
 from pantryatlas.navigator.ranking import RankedRecipe, rank_recipes
 from pantryatlas.pantry.models import Ingredient, Pantry, Quantity
 from pantryatlas.store.recipes import RecipeStore
+
+if TYPE_CHECKING:
+    from pantryatlas.gemma.client import GemmaClient
 
 # ---------------------------------------------------------------------------
 # Pydantic wire models
@@ -185,6 +188,7 @@ def create_app(
     embed_fn: Callable[[list[str]], np.ndarray],
     pantry_path: Path,
     web_dist: Path | None = None,
+    vision_client: GemmaClient | None = None,
 ) -> FastAPI:
     """Build and return a FastAPI app wired to the given dependencies.
 
@@ -202,6 +206,10 @@ def create_app(
         web_dist: Path to the built PWA dist directory.
             When None, defaults to ``<repo>/web/dist`` if it exists; otherwise
             the static mount is skipped gracefully.
+        vision_client: Optional ``GemmaClient`` with vision capability loaded
+            (mmproj required).  When None (the default), POST /navigator/vision/parse-shelf
+            returns HTTP 503 ``{"error":"vision_unavailable"}`` — the graceful fallback
+            path the frontend already handles.
 
     Returns:
         Configured FastAPI application.
@@ -223,6 +231,8 @@ def create_app(
     app.state.resolver = resolver
     app.state.embed_fn = embed_fn
     app.state.pantry_path = pantry_path
+    # vision_client is None by default → 503 until operator loads mmproj
+    app.state.vision_client = vision_client
 
     # ------------------------------------------------------------------
     # Static PWA serving (guarded — tolerates missing web/dist)
@@ -385,6 +395,73 @@ def create_app(
             }
             for r in ranked
         ]
+
+    # ------------------------------------------------------------------
+    # Vision — shelf photo parsing
+    # ------------------------------------------------------------------
+
+    _MAX_UPLOAD_BYTES = 8 * 1024 * 1024  # 8 MiB
+
+    @app.post("/navigator/vision/parse-shelf")
+    async def post_vision_parse_shelf(
+        image: UploadFile = File(..., description="Shelf photo (JPEG or PNG, ≤8 MiB)"),  # noqa: B008
+    ) -> dict[str, Any]:
+        """Parse a shelf photo and return detected ingredients.
+
+        Accepts a multipart ``image`` field (JPEG or PNG, ≤8 MiB).
+        Returns ``{"detected":[{"label":str,"confidence":float}],
+                   "items":[str,...]}``
+        on success.
+
+        Returns HTTP 503 ``{"error":"vision_unavailable"}`` when the vision
+        model/mmproj is not loaded — the frontend handles this gracefully.
+        """
+        from pantryatlas.navigator.vision import VisionUnavailable, parse_shelf
+
+        client = app.state.vision_client
+        if client is None:
+            return JSONResponse(
+                status_code=503,
+                content={"error": "vision_unavailable"},
+            )
+
+        # Content-type check (permissive — allow unset/octet-stream from some clients)
+        content_type = (image.content_type or "").lower()
+        if content_type and content_type not in (
+            "image/jpeg",
+            "image/jpg",
+            "image/png",
+            "application/octet-stream",
+        ):
+            raise HTTPException(
+                status_code=415,
+                detail=f"Unsupported media type '{content_type}'. Use JPEG or PNG.",
+            )
+
+        raw_bytes = await image.read()
+        if len(raw_bytes) > _MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Image too large ({len(raw_bytes)} bytes). Maximum is 8 MiB.",
+            )
+        if not raw_bytes:
+            raise HTTPException(status_code=400, detail="Empty image upload.")
+
+        try:
+            detected = parse_shelf(raw_bytes, client)
+        except VisionUnavailable:
+            return JSONResponse(
+                status_code=503,
+                content={"error": "vision_unavailable"},
+            )
+
+        # Return both shapes:
+        # - "detected": [{label, confidence}, ...] — canonical structured form
+        # - "items": [str, ...]  — flat list for the PhotoReviewSheet.tsx client
+        return {
+            "detected": [{"label": d.label, "confidence": d.confidence} for d in detected],
+            "items": [d.label for d in detected],
+        }
 
     return app
 

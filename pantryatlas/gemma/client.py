@@ -1,4 +1,5 @@
 """Gemma 4 HTTP client over llama-server's OpenAI-compatible API."""
+import base64
 import json
 import re
 
@@ -113,6 +114,77 @@ class GemmaClient:
         return self._generate_relaxed(
             system, user, schema, max_tokens, temperature, max_repair_retries
         )
+
+    def vision_generate(
+        self,
+        image_bytes: bytes,
+        prompt: str,
+        system: str = "",
+        max_tokens: int = 512,
+        temperature: float = 0.2,
+        strict: bool = False,  # noqa: ARG002  (reserved for future grammar-constrained path)
+    ) -> str:
+        """Generate text from an image + text prompt using Gemma 4's multimodal capability.
+
+        Sends the image as a base64-encoded ``image_url`` content block in the
+        ``user`` message — the format llama-server accepts when started with
+        ``--mmproj <mmproj.gguf>``.
+
+        Raises:
+            VisionUnavailable: If the llama-server is unreachable, returns a
+                non-2xx status (e.g. 400 when no mmproj is loaded), or the
+                connection is refused.  The navigator route catches this and
+                returns HTTP 503 ``{"error":"vision_unavailable"}``.
+        """
+        from pantryatlas.navigator.vision import VisionUnavailable  # local import to avoid cycle
+
+        b64 = base64.b64encode(image_bytes).decode("ascii")
+        data_url = f"data:image/jpeg;base64,{b64}"
+
+        messages: list[dict] = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append(
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": data_url}},
+                    {"type": "text", "text": prompt},
+                ],
+            }
+        )
+
+        payload = {
+            "model": DEFAULT_MODEL_NAME,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        }
+
+        try:
+            r = self._client.post(f"{self._base_url}/v1/chat/completions", json=payload)
+        except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout) as exc:
+            raise VisionUnavailable(
+                f"llama-server unreachable at {self._base_url}: {exc}"
+            ) from exc
+
+        if r.status_code in (400, 404, 422, 500, 503):
+            # 400/422 most likely means --mmproj was not passed to llama-server;
+            # treat all server-side errors on this endpoint as vision unavailable.
+            raise VisionUnavailable(
+                f"llama-server returned {r.status_code} for vision request "
+                f"(mmproj not loaded?): {r.text[:200]}"
+            )
+
+        try:
+            r.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise VisionUnavailable(
+                f"llama-server error {r.status_code} on vision request"
+            ) from exc
+
+        body = r.json()
+        return body["choices"][0]["message"]["content"]
 
     def _generate_text(
         self, system: str, user: str, max_tokens: int, temperature: float
