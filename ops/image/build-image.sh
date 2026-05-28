@@ -59,6 +59,17 @@ SRC_HOME="${SRC_HOME:-$HOME}"
 export PANTRYATLAS_DATA_DIR="${PANTRYATLAS_DATA_DIR:-$SRC_HOME/.pantryatlas}"
 export PANTRYATLAS_CACHE_DIR="${PANTRYATLAS_CACHE_DIR:-$SRC_HOME/.cache/pantryatlas}"
 
+# We run as root under sudo, so anything we create (./.build, ./dist) is root-
+# owned and needs sudo to clean up later. Hand build outputs back to the invoking
+# user. No-op when not run via sudo. Best-effort (|| true): never fail the build
+# over a chown.
+give_back_ownership() {
+    [ -n "${SUDO_USER:-}" ] || return 0
+    local grp
+    grp="$(id -gn "$SUDO_USER" 2>/dev/null || echo "$SUDO_USER")"
+    chown -R "$SUDO_USER:$grp" "$@" 2>/dev/null || true
+}
+
 # --- 2. df guard: need >= 10 GB free on / ------------------------------------
 FREE_KB="$(df --output=avail -k / | tail -1 | tr -d ' ')"
 if [ "$FREE_KB" -lt $((10 * 1024 * 1024)) ]; then
@@ -101,7 +112,9 @@ if df --output=fstype "$WORK_PARENT" | tail -1 | grep -q tmpfs; then
     exit 1
 fi
 WORK="$(mktemp -d "${WORK_PARENT}/pa-image.XXXXXX")"
-trap 'echo "[build-image] cleaning up $WORK on exit"; rm -rf "$WORK"' EXIT
+# On exit (incl. failure): drop the scratch dir, then hand the work-parent back to
+# the invoking user so a partial/failed build doesn't leave root-owned leftovers.
+trap 'echo "[build-image] cleaning up $WORK on exit"; rm -rf "$WORK"; give_back_ownership "$WORK_PARENT"' EXIT
 STAGE="$(mktemp -d "${WORK}/stage.XXXXXX")"
 MANIFEST_DIR="${WORK}/manifest"
 mkdir -p "$MANIFEST_DIR"
@@ -177,6 +190,9 @@ mv "$IMG_XZ" "$OUT_DIR/"
 IMG_XZ="$OUT_DIR/$(basename "$IMG_XZ")"
 mv "$MANIFEST_DIR" "$OUT_DIR/manifest-${VERSION}"
 MANIFEST_DIR="$OUT_DIR/manifest-${VERSION}"
+
+# Hand the published outputs back to the invoking user (we ran as root).
+give_back_ownership "$OUT_DIR"
 
 # --- 12. report next step ----------------------------------------------------
 echo
