@@ -31,4 +31,4 @@ A one-click pre-built image is coming soon. For now, this is the path:
 3. Open **pantryatlas.local** in any browser on the same network. Pick Home or
    Community Kitchen on first launch. Done.
 
-Stuck? See [Troubleshooting](/en/maintenance/troubleshooting/).
+Stuck? See [Troubleshooting](/maintenance/troubleshooting/).

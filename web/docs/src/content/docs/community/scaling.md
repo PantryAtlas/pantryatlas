@@ -22,4 +22,4 @@ Anyone on the same Wi-Fi can open **pantryatlas.local** at the same time — lin
 cooks, volunteers, the coordinator. There are no accounts to manage.
 
 For backups and updates, see
-[Troubleshooting](/en/maintenance/troubleshooting/).
+[Troubleshooting](/maintenance/troubleshooting/).

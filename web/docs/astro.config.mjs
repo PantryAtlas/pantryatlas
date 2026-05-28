@@ -33,9 +33,12 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'PantryAtlas Docs',
-      defaultLocale: 'en',
+      defaultLocale: 'root',
       locales: {
-        en: { label: 'English' },
+        // English is the `root` locale so it serves at `/` (the canonical docs
+        // homepage) rather than `/en/`. `lang` is required on `root` — it is
+        // not inferred from the key like the prefixed locales below.
+        root: { label: 'English', lang: 'en' },
         es: { label: 'Español', lang: 'es' },
         fr: { label: 'Français', lang: 'fr' },
         ar: { label: 'العربية', lang: 'ar', dir: 'rtl' },
