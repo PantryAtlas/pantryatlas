@@ -31,7 +31,7 @@ web/docs/
     content/
       docs/
         en/               # canonical English content (real seed pages)
-          index.mdx
+          index.md
           start-here/overview.md
           cooking/basics.md
           setup/choose-a-pi.md
@@ -40,7 +40,7 @@ web/docs/
           developers/architecture.md
           reference/glossary.md
         es/  fr/  ar/  zh-cn/
-          index.mdx        # machine-translated landing (translationStatus: machine); rest falls back to en
+          index.md         # machine-translated landing (translationStatus: machine); rest falls back to en
       i18n/
         es.json  fr.json  ar.json  zh-cn.json   # localized UI strings (fallback notice, Pagefind labels, MT badge)
   public/
@@ -102,7 +102,7 @@ git commit -m "chore(docs): gitignore web/docs build artifacts"
 - Create: `web/docs/tsconfig.json`
 - Create: `web/docs/astro.config.mjs`
 - Create: `web/docs/src/content.config.ts`
-- Create: `web/docs/src/content/docs/en/index.mdx`
+- Create: `web/docs/src/content/docs/en/index.md`
 - Create: `web/docs/public/favicon.svg`
 
 - [ ] **Step 1: Create the project directory and package.json**
@@ -183,9 +183,9 @@ export const collections = {
 
 - [ ] **Step 6: Create the landing page**
 
-`web/docs/src/content/docs/en/index.mdx`:
+`web/docs/src/content/docs/en/index.md`:
 
-```mdx
+```md
 ---
 title: PantryAtlas Help
 description: Help and how-to guides for PantryAtlas — the free, open-source smart pantry that lives in your kitchen.
@@ -209,7 +209,7 @@ Expected: build succeeds; `dist/en/index.html` exists. Verify: `test -f dist/en/
 
 ```bash
 cd ~/pantryatlas
-git add web/docs/package.json web/docs/package-lock.json web/docs/tsconfig.json web/docs/astro.config.mjs web/docs/src/content.config.ts web/docs/src/content/docs/en/index.mdx web/docs/public/favicon.svg
+git add web/docs/package.json web/docs/package-lock.json web/docs/tsconfig.json web/docs/astro.config.mjs web/docs/src/content.config.ts web/docs/src/content/docs/en/index.md web/docs/public/favicon.svg
 git commit -m "feat(docs): scaffold minimal Astro Starlight site"
 ```
 
@@ -343,7 +343,6 @@ Replace the `starlight({ ... })` options so they read as follows (keep the exist
 ```js
     starlight({
       title: 'PantryAtlas Docs',
-      logo: { src: './public/favicon.svg', alt: 'PantryAtlas' },
       defaultLocale: 'en',
       locales: {
         en: { label: 'English' },
@@ -375,7 +374,7 @@ Expected: build succeeds. Verify the language switcher target pages and RTL attr
 test -f dist/en/start-here/overview/index.html && echo "en OK"
 grep -q 'dir="rtl"' dist/ar/index.html && echo "ar RTL OK"
 ```
-Both echoes must print. (`dist/ar/index.html` is the Arabic landing — it exists once Task 6 adds `ar/index.mdx`; until then Arabic pages fall back and the file to check is `dist/ar/start-here/overview/index.html`. Use whichever Arabic HTML file exists.)
+Both echoes must print. (`dist/ar/index.html` is the Arabic landing — it exists once Task 6 adds `ar/index.md`; until then Arabic pages fall back and the file to check is `dist/ar/start-here/overview/index.html`. Use whichever Arabic HTML file exists.)
 
 - [ ] **Step 4: Confirm fallback works — MANUAL**
 
@@ -417,7 +416,14 @@ export const collections = {
       }),
     }),
   }),
-  i18n: defineCollection({ loader: i18nLoader(), schema: i18nSchema() }),
+  i18n: defineCollection({
+    loader: i18nLoader(),
+    schema: i18nSchema({
+      // Custom UI string consumed by MtBanner (Task 6). Without this extend,
+      // i18nSchema rejects unknown keys in the locale JSON files.
+      extend: z.object({ 'mtBanner.text': z.string().optional() }),
+    }),
+  }),
 };
 ```
 
@@ -508,10 +514,10 @@ The badge appears only when the current page's frontmatter has `translationStatu
 **Files:**
 - Create: `web/docs/src/components/MtBanner.astro`
 - Modify: `web/docs/astro.config.mjs` (register the component override)
-- Create: `web/docs/src/content/docs/es/index.mdx`
-- Create: `web/docs/src/content/docs/fr/index.mdx`
-- Create: `web/docs/src/content/docs/ar/index.mdx`
-- Create: `web/docs/src/content/docs/zh-cn/index.mdx`
+- Create: `web/docs/src/content/docs/es/index.md`
+- Create: `web/docs/src/content/docs/fr/index.md`
+- Create: `web/docs/src/content/docs/ar/index.md`
+- Create: `web/docs/src/content/docs/zh-cn/index.md`
 
 - [ ] **Step 1: Create the MtBanner component**
 
@@ -567,9 +573,9 @@ Inside the `starlight({ ... })` options (sibling of `sidebar`), add:
 
 - [ ] **Step 3: Add the machine-translated landing pages**
 
-`web/docs/src/content/docs/es/index.mdx`:
+`web/docs/src/content/docs/es/index.md`:
 
-```mdx
+```md
 ---
 title: Ayuda de PantryAtlas
 description: Guías y ayuda para PantryAtlas — la despensa inteligente, libre y de código abierto, que vive en tu cocina.
@@ -580,9 +586,9 @@ Te damos la bienvenida al sitio de ayuda de PantryAtlas. Usa la barra lateral
 para encontrar tu tema, o busca en la parte superior de la página.
 ```
 
-`web/docs/src/content/docs/fr/index.mdx`:
+`web/docs/src/content/docs/fr/index.md`:
 
-```mdx
+```md
 ---
 title: Aide PantryAtlas
 description: Guides et aide pour PantryAtlas — le garde-manger intelligent, libre et open source, installé dans votre cuisine.
@@ -593,9 +599,9 @@ Bienvenue sur le site d'aide de PantryAtlas. Utilisez la barre latérale pour
 trouver votre sujet, ou faites une recherche en haut de la page.
 ```
 
-`web/docs/src/content/docs/ar/index.mdx`:
+`web/docs/src/content/docs/ar/index.md`:
 
-```mdx
+```md
 ---
 title: مساعدة PantryAtlas
 description: أدلة ومساعدة لـ PantryAtlas — مخزن المؤن الذكي المجاني والمفتوح المصدر الذي يعيش في مطبخك.
@@ -606,9 +612,9 @@ translationStatus: machine
 أو ابحث في أعلى الصفحة.
 ```
 
-`web/docs/src/content/docs/zh-cn/index.mdx`:
+`web/docs/src/content/docs/zh-cn/index.md`:
 
-```mdx
+```md
 ---
 title: PantryAtlas 帮助
 description: PantryAtlas 的帮助和操作指南 —— 一款免费、开源、运行在你厨房里的智能食品柜。
@@ -620,12 +626,15 @@ translationStatus: machine
 
 - [ ] **Step 4: Build and assert the badge renders on machine pages and not on English**
 
+Grep the **visible badge text** (locale-specific), not the CSS class — the class
+can appear in inlined critical CSS even when the banner did not render.
+
 Run:
 ```bash
 cd ~/pantryatlas/web/docs && npm run build
-grep -q "mt-banner" dist/es/index.html && echo "es badge OK"
-grep -q "mt-banner" dist/ar/index.html && echo "ar badge OK"
-grep -q "mt-banner" dist/en/index.html && echo "EN BADGE LEAKED (BUG)" || echo "en clean OK"
+grep -q "Traducción automática" dist/es/index.html && echo "es badge OK"
+grep -q "ترجمة آلية" dist/ar/index.html && echo "ar badge OK"
+grep -Eq "Traducción automática|Traduction automatique|机器翻译|ترجمة آلية|help us improve" dist/en/index.html && echo "EN BADGE LEAKED (BUG)" || echo "en clean OK"
 ```
 Expected: `es badge OK`, `ar badge OK`, `en clean OK`. If `EN BADGE LEAKED` prints, the conditional is wrong — fix before committing.
 
@@ -771,7 +780,7 @@ git commit -m "feat(docs): cool-Gemini theming with self-hosted DM Sans"
 Replace the Task-3 stubs with genuine, shippable help articles in the warm-kitchen-notebook voice (short sentences, concrete nouns, cite only what's true — match `web/marketing/DESIGN.md`). Facts are drawn from the marketing site and `ROBOT.md`/repo.
 
 **Files (all Modify — they exist as stubs from Task 3, plus the landing):**
-- `web/docs/src/content/docs/en/index.mdx`
+- `web/docs/src/content/docs/en/index.md`
 - `web/docs/src/content/docs/en/start-here/overview.md`
 - `web/docs/src/content/docs/en/cooking/basics.md`
 - `web/docs/src/content/docs/en/setup/choose-a-pi.md`
@@ -780,9 +789,9 @@ Replace the Task-3 stubs with genuine, shippable help articles in the warm-kitch
 - `web/docs/src/content/docs/en/developers/architecture.md`
 - `web/docs/src/content/docs/en/reference/glossary.md`
 
-- [ ] **Step 1: Landing page** — `en/index.mdx`:
+- [ ] **Step 1: Landing page** — `en/index.md`:
 
-```mdx
+```md
 ---
 title: PantryAtlas Help
 description: Help and how-to guides for PantryAtlas — the free, open-source smart pantry that lives in your kitchen.
@@ -1085,8 +1094,8 @@ Run:
 ```bash
 cd ~/pantryatlas/web/docs
 grep -q 'dir="rtl"' dist/ar/index.html && echo "RTL OK"
-grep -q "mt-banner" dist/fr/index.html && echo "MT badge OK"
-grep -q "mt-banner" dist/en/index.html && echo "EN LEAK BUG" || echo "EN clean OK"
+grep -q "Traduction automatique" dist/fr/index.html && echo "MT badge OK"
+grep -Eq "Traducción automática|Traduction automatique|机器翻译|ترجمة آلية|help us improve" dist/en/index.html && echo "EN LEAK BUG" || echo "EN clean OK"
 test -d dist/pagefind && echo "Pagefind index OK"
 grep -q "content-security-policy" dist/en/index.html && echo "CSP meta OK"
 grep -rho "https://[a-z0-9./-]*" dist/en/index.html | grep -Ei "googleapis|gstatic|cdn|fonts\." && echo "THIRD-PARTY BUG" || echo "no third-party OK"
