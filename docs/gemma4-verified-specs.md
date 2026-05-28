@@ -1,10 +1,13 @@
 ---
-last_updated: 2026-05-27
+last_updated: 2026-05-28
 verified_by: claude-sonnet-4-6
 chosen_gguf_url: https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q4_K_M.gguf
 chosen_gguf_sha256: 519b9793ed6ce0ff530f1b7c96e848e08e49e7af4d57bb97f76215963a54146d
 chosen_gguf_size_gb: 4.98
 chosen_gguf_quantization: Q4_K_M
+mmproj_url: https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/mmproj-F16.gguf
+mmproj_sha256: ddf46c21d7078e95338cfc22306b19b276a29a5ad089023449dd54d4b6170a51
+mmproj_size_gb: 0.99
 context_length_max_tokens: 131072
 ground_truth_sources:
   - google_primary
@@ -176,44 +179,67 @@ llama-server requires a vision projector GGUF (`--mmproj`) in addition to the ba
 to process image inputs. Without `--mmproj`, the server returns 400/422 on vision requests, which
 `GemmaClient.vision_generate()` catches and raises as `VisionUnavailable` → HTTP 503.
 
-**Expected mmproj source:** `unsloth/gemma-4-E4B-it-GGUF` on HuggingFace typically ships
-an `mmproj-*.gguf` file alongside the main weights. Expected pattern:
+**Pinned mmproj (verified 2026-05-28 against HuggingFace LFS metadata):**
+`unsloth/gemma-4-E4B-it-GGUF` ships three vision projectors. We pin **F16** — it
+matches the text-model precision needs at ~half the size of F32 and is the
+Pi-CPU choice.
 
 ```
-mmproj_url_pattern: https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/mmproj-gemma-4-E4B-it-*.gguf
-mmproj_sha256: TO BE VERIFIED ON FIRST DOWNLOAD
-mmproj_size_estimate: ~1-2 GB (typical for E4B vision projectors)
+mmproj_url:    https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/mmproj-F16.gguf
+mmproj_sha256: ddf46c21d7078e95338cfc22306b19b276a29a5ad089023449dd54d4b6170a51
+mmproj_size_gb: 0.99
 ```
 
-**Alternative source:** `ggml-org/gemma-4-E4B-it-GGUF` (llama.cpp canonical quants) may also
-ship an mmproj. Check both repos and verify SHA256 after download.
+Alternatives in the same repo (use only if F16 is unavailable; re-pin the SHA):
 
-### llama-server Start Command with Vision
+| file | size | sha256 |
+|---|---|---|
+| `mmproj-F16.gguf` (pinned) | 0.99 GB | `ddf46c21d7078e95338cfc22306b19b276a29a5ad089023449dd54d4b6170a51` |
+| `mmproj-BF16.gguf` | 0.99 GB | `ee01cba03fd9c71ea2ea722225d24a84f72e7197714367e550ef705ef8851bc6` |
+| `mmproj-F32.gguf` | 1.91 GB | `343cdea7775835ebdd1caa6c42ec3ec3e711d082835c72253d4e87c4b7e303d0` |
 
-Add `--mmproj` to the `GemmaRunner` start command (modify `runner.py` when live verification
-is needed):
+`ops/pi-bootstrap.sh` downloads `mmproj-F16.gguf` into `~/pantryatlas/models/` and
+verifies this SHA alongside the main GGUF (`stage_gemma_download`).
+
+### Enabling vision (wired 2026-05-28)
+
+`GemmaRunner(vision=True)` appends `--mmproj <models_dir>/mmproj-F16.gguf` to the
+llama-server command (see `runner.py` `_build_command`); it raises
+`FileNotFoundError` if the mmproj isn't present. The navigator server constructs
+a vision `GemmaClient` only when **`PANTRYATLAS_VISION=1`** is set (see
+`_build_vision_client`); otherwise `/navigator/vision/parse-shelf` returns 503.
+
+End-to-end enable on a bootstrapped Pi:
 
 ```bash
+# 1. Bootstrap downloads the model + mmproj-F16.gguf (verified)
+bash ops/pi-bootstrap.sh
+
+# 2. Run llama-server WITH the projector (port 8080)
 llama-server \
   -m ~/pantryatlas/models/gemma-4-E4B-it-Q4_K_M.gguf \
-  --mmproj ~/pantryatlas/models/mmproj-gemma-4-E4B-it-Q4_K_M.gguf \
-  --host 127.0.0.1 \
-  --port 8080 \
-  -c 8192 \
-  --threads 3
+  --mmproj ~/pantryatlas/models/mmproj-F16.gguf \
+  --host 127.0.0.1 --port 8080 -c 8192 --threads 3
+
+# 3. Start the navigator with vision enabled
+PANTRYATLAS_VISION=1 uvicorn pantryatlas.navigator.server:app --host 0.0.0.0 --port 8090
 ```
 
 ### Measured Pi Latency
 
-**Status: TO BE MEASURED** — live verification deferred (mmproj file not yet downloaded;
-background ingestion process using memory during T-014 development window).
+**Status: NOT YET MEASURED on hardware.** Code path is wired (runner `--mmproj`,
+env-gated vision client, bootstrap download, SHA pinned) but a live run requires
+a bootstrapped Gemma stack (llama.cpp built + the ~5 GB model + the ~1 GB mmproj)
+and a real shelf photo — the repo fixture (`tests/fixtures/test-shelf.jpg`) is a
+synthetic 4-blob image suitable only for the mock unit tests.
 
-Expected range: 15–60 s per image on Pi 5 (8 GB) at Q4_K_M quantization based on text-only TPS
-baselines (~1–3 TPS for E4B text) and the additional vision projection overhead.
-Update this field after first successful live run via:
+Expected range: 15–60 s per image on Pi 5 (8 GB) at Q4_K_M based on text-only TPS
+(~1–3 TPS for E4B) plus vision-projection overhead. Update this after the first
+live run. The endpoint is on the **navigator** server (port 8090), which calls
+the gemma llama-server (8080) internally:
 
 ```bash
-time curl -F image=@tests/fixtures/test-shelf.jpg http://127.0.0.1:8080/navigator/vision/parse-shelf
+time curl -F image=@/path/to/real-shelf.jpg http://127.0.0.1:8090/navigator/vision/parse-shelf
 ```
 
 ### Graceful Fallback

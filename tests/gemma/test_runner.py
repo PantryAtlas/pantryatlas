@@ -121,3 +121,38 @@ def test_memory_pressure_error_when_blocked(mock_vmem, tmp_path, monkeypatch):
     r = GemmaRunner()
     with pytest.raises(MemoryPressureError):
         r._check_block_flag()
+
+
+# ---------------------------------------------------------------------------
+# T-014 follow-up: vision / --mmproj wiring
+# ---------------------------------------------------------------------------
+
+
+@patch("pantryatlas.gemma.runner.psutil.virtual_memory")
+def test_build_command_omits_mmproj_by_default(mock_vmem, tmp_path):
+    mock_vmem.return_value = MagicMock(available=7 * 1024**3)
+    r = GemmaRunner(models_dir=tmp_path)
+    cmd = r._build_command(tmp_path / "model.gguf")
+    assert "--mmproj" not in cmd
+
+
+@patch("pantryatlas.gemma.runner.psutil.virtual_memory")
+def test_build_command_includes_mmproj_when_vision(mock_vmem, tmp_path):
+    mock_vmem.return_value = MagicMock(available=7 * 1024**3)
+    r = GemmaRunner(models_dir=tmp_path, vision=True)
+    cmd = r._build_command(tmp_path / "model.gguf")
+    assert "--mmproj" in cmd
+    assert str(tmp_path / "mmproj-F16.gguf") in cmd
+
+
+@patch("pantryatlas.gemma.runner.psutil.virtual_memory")
+def test_start_vision_without_mmproj_raises(mock_vmem, tmp_path, monkeypatch):
+    mock_vmem.return_value = MagicMock(available=7 * 1024**3)
+    monkeypatch.setattr(
+        "pantryatlas.gemma.runner.RUNNER_BLOCKED_FLAG", tmp_path / "runner.blocked"
+    )
+    # Text GGUF present, but no mmproj-F16.gguf → start() must refuse.
+    (tmp_path / "gemma-4-E4B-it-Q4_K_M.gguf").write_bytes(b"stub")
+    r = GemmaRunner(models_dir=tmp_path, vision=True)
+    with pytest.raises(FileNotFoundError, match="mmproj"):
+        r.start()

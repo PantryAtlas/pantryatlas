@@ -25,6 +25,9 @@ RUNNER_BLOCKED_FLAG = PANTRYATLAS_HOME / "runner.blocked"
 
 E4B_GGUF_NAME = "gemma-4-E4B-it-Q4_K_M.gguf"
 E2B_GGUF_NAME = "gemma-4-E2B-it-Q4_K_M.gguf"
+# Vision projector (mmproj) shared by both tiers. F16 is the Pi-CPU choice
+# (≈1 GB); see docs/gemma4-verified-specs.md for the pin + alternatives.
+MMPROJ_NAME = "mmproj-F16.gguf"
 E4B_MEMORY_FLOOR_GB: float = 6.0
 
 
@@ -65,6 +68,7 @@ class GemmaRunner:
         e4b_floor_gb: float = E4B_MEMORY_FLOOR_GB,
         port: int | None = None,
         startup_timeout_s: float = 60.0,
+        vision: bool = False,
     ) -> None:
         self._llama_server = llama_server_path or DEFAULT_LLAMA_SERVER
         self._models_dir = models_dir or MODELS_DIR
@@ -73,6 +77,10 @@ class GemmaRunner:
         self._selected_model: ModelTier = self._select_model(e4b_floor_gb)
         self._proc: subprocess.Popen | None = None  # type: ignore[type-arg]
         self._url = f"http://127.0.0.1:{self._port}"
+        # When True, start() loads the vision projector so the same llama-server
+        # handles both text and image (/v1/chat/completions with image_url).
+        self._vision = vision
+        self._mmproj = self._models_dir / MMPROJ_NAME
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -178,6 +186,18 @@ class GemmaRunner:
             raise FileNotFoundError(
                 f"GGUF not found at {gguf}; run ops/pi-bootstrap.sh to download it."
             )
+        if self._vision and not self._mmproj.exists():
+            raise FileNotFoundError(
+                f"Vision enabled but mmproj not found at {self._mmproj}; "
+                "run ops/pi-bootstrap.sh to download it."
+            )
+        cmd = self._build_command(gguf)
+        self._proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self._wait_for_ready()
+        self._maybe_record_baseline()
+
+    def _build_command(self, gguf: Path) -> list[str]:
+        """Build the llama-server argv (adds ``--mmproj`` when vision is on)."""
         cmd = [
             str(self._llama_server),
             "-m",
@@ -191,9 +211,9 @@ class GemmaRunner:
             "--threads",
             str(max(1, psutil.cpu_count(logical=False) - 1)),
         ]
-        self._proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        self._wait_for_ready()
-        self._maybe_record_baseline()
+        if self._vision:
+            cmd += ["--mmproj", str(self._mmproj)]
+        return cmd
 
     def stop(self) -> None:
         """Terminate the subprocess (SIGTERM → SIGKILL after 5 s)."""
