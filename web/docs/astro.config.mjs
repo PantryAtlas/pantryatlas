@@ -58,6 +58,8 @@ export default defineConfig({
       components: {
         Banner: './src/components/MtBanner.astro',
       },
+      // Fonts loaded first so brand.css can reference the DM Sans family name.
+      customCss: ['./src/styles/fonts.css', './src/styles/brand.css'],
       // Pagefind (search) is disabled by default so the site builds on the Pi 5,
       // whose 16KB memory pages crash Pagefind's jemalloc allocator. Production
       // builds on x86 / Cloudflare Pages set DOCS_SEARCH=1 to enable search.
