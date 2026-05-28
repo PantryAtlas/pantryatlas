@@ -82,11 +82,27 @@ assert_exists() {
 assert_not_exists() {
     local label="$1"
     local path="$2"
-    if [ -e "$path" ]; then
+    # -L OR -e: catch a present symlink even if its (absolute) target dangles
+    # when the image is mounted at a non-/ mountpoint.
+    if [ -L "$path" ] || [ -e "$path" ]; then
         echo "FAIL: $label unexpectedly found at $path" >&2
         exit 1
     fi
     echo "  OK  $label (absent as expected)"
+}
+
+# Assert a symlink exists WITHOUT following it. systemd enable creates absolute
+# symlinks (-> /etc/systemd/system/foo.service); when the image is loop-mounted
+# at /tmp/xxx those targets resolve against the HOST root and look dangling, so
+# `-e` (which follows) gives a false negative. `-L` tests the link itself.
+assert_symlink() {
+    local label="$1"
+    local path="$2"
+    if [ ! -L "$path" ]; then
+        echo "FAIL: $label not found (expected symlink) at $path" >&2
+        exit 1
+    fi
+    echo "  OK  $label"
 }
 
 # ---------------------------------------------------------------------------
@@ -105,9 +121,9 @@ echo
 echo "[verify-image] --- systemd unit checks ---"
 WANTS="$MNT/etc/systemd/system/multi-user.target.wants"
 
-assert_exists "pantryatlas-navigator.service enabled"   "$WANTS/pantryatlas-navigator.service"
-assert_exists "pantryatlas-embeddings.service enabled"  "$WANTS/pantryatlas-embeddings.service"
-assert_exists "pantryatlas-mem-monitor.service enabled" "$WANTS/pantryatlas-mem-monitor.service"
+assert_symlink "pantryatlas-navigator.service enabled"   "$WANTS/pantryatlas-navigator.service"
+assert_symlink "pantryatlas-embeddings.service enabled"  "$WANTS/pantryatlas-embeddings.service"
+assert_symlink "pantryatlas-mem-monitor.service enabled" "$WANTS/pantryatlas-mem-monitor.service"
 assert_not_exists "pantryatlas-gemma.service NOT enabled" "$WANTS/pantryatlas-gemma.service"
 
 # userconfig.service: masked (-> /dev/null) OR absent from multi-user.target.wants.
