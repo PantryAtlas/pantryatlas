@@ -224,3 +224,44 @@ class KitchenStore:
                 quantity=qty, expires_at=exp,
             ))
         return pantry
+
+    @staticmethod
+    def _next_state(state: str, coarse_amount: str) -> tuple[str, float]:
+        if coarse_amount == "half":
+            return ("low" if state == "present" else state, 0.5)
+        if coarse_amount in ("used_up", "discarded"):
+            return ("used_up", 0.0)
+        # 'cook' (tap-to-cook default): one notch down
+        if state == "present":
+            return ("low", 0.5)
+        return ("used_up", 0.0)
+
+    def consume_item(self, canonical_name: str, coarse_amount: str,
+                     source: str = "manual") -> dict[str, Any] | None:
+        row = self._conn.execute(
+            "SELECT state FROM pantry_items WHERE canonical_name=?", (canonical_name,)
+        ).fetchone()
+        if row is None:
+            return None
+        new_state, new_conf = self._next_state(row[0], coarse_amount)
+        self._conn.execute(
+            "UPDATE pantry_items SET state=?, confidence=?, updated_at=? WHERE canonical_name=?",
+            (new_state, new_conf, _now_iso(), canonical_name),
+        )
+        change_type = "discard" if coarse_amount == "discarded" else "consume"
+        self._log_event(canonical_name, change_type, source,
+                        {"coarse_amount": coarse_amount, "prev_state": row[0]})
+        self._conn.commit()
+        return self.get_item(canonical_name)
+
+    def restore_item(self, canonical_name: str, source: str = "manual") -> dict[str, Any] | None:
+        cur = self._conn.execute(
+            "UPDATE pantry_items SET state='present', confidence=1.0, last_observed_at=?, updated_at=? "
+            "WHERE canonical_name=?",
+            (_now_iso(), _now_iso(), canonical_name),
+        )
+        if not cur.rowcount:
+            return None
+        self._log_event(canonical_name, "observe", source)
+        self._conn.commit()
+        return self.get_item(canonical_name)
