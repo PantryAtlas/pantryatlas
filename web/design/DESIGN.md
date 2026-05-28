@@ -201,7 +201,7 @@ Two flows:
 - Bottom action row: "Retake photo" (outlined pill, left) + "Add to pantry" (filled `gradient-ember` pill, right). Tap "Add to pantry" → all checked items resolve through the same ingredient-resolution pipeline as typed input, then sheet dismisses, items appear in the pantry list with staggered `settle` motion (60ms offset per item)
 - Tap outside / drag handle down (mobile) / close (desktop) → cancels without adding
 
-**Vision dependency note:** This flow assumes the server has Gemma 4's multimodal variant available with a vision-capable endpoint (`POST /navigator/vision/parse-shelf` accepting an image, returning a list of detected ingredient strings). If the server reports vision is unavailable, the camera button shows a tooltip on tap: *"Photo recognition isn't set up on this server — type ingredients for now."* The button stays visible but disabled (50% opacity). This is the only place the UI exposes a backend capability gap.
+**Vision dependency note:** This flow depends on the Gemma 4 multimodal vision endpoint (`POST /navigator/vision/parse-shelf` accepting an image, returning a list of detected ingredient strings). The vision endpoint is a committed v0.2 task (added to `tasks/prd-navigator.json` as T-014); camera UI and endpoint ship together. During development before T-014 lands, the button can show a tooltip *"Vision is shipping in this release — try typing for now"* — but at v0.2.0 release the camera path is fully functional.
 
 ### Section C: Pantry list
 

@@ -41,10 +41,10 @@ The page is one long scroll. Six sections. No nav menu — that's a marketing-pa
 
 - Full viewport height (100dvh) on first scroll. Centered content column, max-width 720px.
 - Background: `gradient-warmth` base wash with a single large `gradient-thinking` radial blob (60vw diameter) positioned top-right, low opacity (0.4), heavily blurred (80px). On scroll, the blob parallaxes upward at half speed.
-- **Wordmark top-left** (fixed, persists through scroll): "PantryAtlas" in `title` weight, `primary` color. To its right, a `caption`-sized line: "Open source · Runs on a Raspberry Pi"
-- **Center hero illustration** (above headline): a circular vessel illustration, 240px diameter, hand-drawn — a Pi 5 in a small case sitting next to a wooden cutting board with vegetables. Soft `shadow-vessel` glow behind it.
+- **Wordmark top-left** (fixed, persists through scroll): "PantryAtlas" in `title` weight, `primary` color. To its right, a `caption`-sized line: "Free · Open source · Runs on a small computer in your kitchen"
+- **Center hero illustration** (above headline): a circular vessel illustration, 240px diameter, hand-drawn — a small computer (Pi 5 in a case) sitting next to a wooden cutting board with vegetables. Soft `shadow-vessel` glow behind it.
 - **Headline** (`display` size, 56sp on desktop, 40sp on mobile, weight 600, tracking −0.02em): *"Your kitchen's smart pantry. Lives in your kitchen."*
-- **Subhead** (`headline` size, weight 400, `on-surface-variant`, max-width 560px): *"A small computer you set up once. It helps you cook from what's actually on the shelf — at home, or for a community of hundreds. Nothing leaves your kitchen. No subscription, no account."*
+- **Subhead** (`headline` size, weight 400, `on-surface-variant`, max-width 560px): *"A small computer you set up once. It helps you cook delicious food from what's already on your shelf — whether you're feeding four people or four hundred. Free, open source, and nothing leaves your kitchen."*
 - **Two CTAs in a pill row** (centered, 16px gap):
   - Primary: filled pill, `gradient-ember`, "How to set it up" → smooth-scrolls to Section 4
   - Secondary: outlined pill, `primary` border + text, "See it on GitHub →" → external link
@@ -62,11 +62,11 @@ The page is one long scroll. Six sections. No nav menu — that's a marketing-pa
 - Single `headline` line: *"It's a computer the size of a deck of cards that you keep in your kitchen."*
 - Body paragraph (`body` size, 1.6 line-height):
 
-> Plug it into a power outlet and your Wi-Fi. From any phone or laptop on your home network, open a browser and go to **pantryatlas.local** — that's the address of the little computer. Type what's in your pantry, or snap a photo of your shelf with your phone's camera. PantryAtlas reads what you have and shows you real recipes you can cook with it, ranked by what uses the most of what you've already got.
+> Plug it into a power outlet and your Wi-Fi. From any phone or laptop on your home network, open a browser and go to **pantryatlas.local** — that's the address of the little computer. Type what's in your pantry, or snap a photo of your shelf with your phone's camera. PantryAtlas reads what you have and shows you real recipes you can cook with it, ranked by what uses the most of what you've already got. The Gemma 4 model on the device combined with the Epicure flavor-pairing research makes the matches genuinely delicious — not just *technically possible*.
 
 - A three-icon row below the paragraph (centered, 48px gap), each icon in an `outline-variant` circle (64px), label in `label` style below:
-  - 🔒 *Stays local* — *"Your pantry never leaves the Pi"*
-  - 📡 *No subscription* — *"Buy once. Yours forever."*
+  - 🆓 *Free forever* — *"Free software. You buy the small computer once."*
+  - 🔒 *Stays local* — *"Your pantry never leaves the device"*
   - 🌍 *Open source* — *"Apache 2.0 — see every line of code"*
 
 ---
@@ -77,7 +77,8 @@ The page is one long scroll. Six sections. No nav menu — that's a marketing-pa
 
 **Layout:**
 
-- Section heading, centered: *"Two kitchens, one product"* in `headline` weight
+- Section heading, centered: *"Two starting presets — and everything in between"* in `headline` weight
+- Sub-line below in `body`, `on-surface-variant`, max-width 560px, centered: *"Most kitchens land somewhere between 'family dinner' and 'feeding hundreds.' Pick the preset closest to yours; PantryAtlas adapts ranking under the hood and you can switch anytime."*
 - Two large cards side-by-side on desktop (≥720px), stacked on mobile. 16px gap. Each card 32px radius, `surface-container-high` fill, `shadow-rest`, 32px padding.
 - **Card 1: Home Kitchen**
   - Circular illustration (96px) at top: a hand-drawn family-of-four meal — bowl of stew, four spoons
@@ -89,7 +90,7 @@ The page is one long scroll. Six sections. No nav menu — that's a marketing-pa
   - Title in `title`: *"Community Kitchen"*
   - Subtitle in `label`, `on-surface-variant`: *"50 to 500 servings"*
   - Body in `body`: *"You run a soup kitchen, food pantry, or shelter meal program. A donation truck dropped off mixed produce, dry goods, and proteins. PantryAtlas ranks recipes that scale linearly, use bulk-friendly ingredients, and need minimum specialized equipment."*
-- Below the two cards: a `caption`-sized line: *"You pick once on first launch. You can switch anytime from the top bar."*
+- Below the two cards: a `caption`-sized line, centered: *"You pick once on first launch. You can switch anytime from the top bar. School cafeterias, refugee kitchens, monasteries, mutual-aid coalitions, a college house — all of these are 'in between.' Pick whichever preset feels closer."*
 
 ---
 
@@ -103,11 +104,17 @@ The page is one long scroll. Six sections. No nav menu — that's a marketing-pa
 - Sub-line below, `body`, `on-surface-variant`: *"About 30 minutes the first time. Then it just sits there working."*
 - Four numbered steps as full-width cards, stacked vertically, 32px radius, alternating `surface-container` and `surface-container-low` fill, 32px padding, 24px gap between cards:
 
-**Step 1 — Get the hardware** (`label` "STEP 1" small caps above title)
-- Title in `title`: *"Get the parts"*
-- Body in `body`: *"You need a Raspberry Pi 5 (8GB), a microSD card (32GB or larger), a USB-C power supply, and a small case. Most kits bundle all four for around $120 from Amazon, Adafruit, or CanaKit. We list the exact kit we tested below."*
-- A small product photo (illustrated or photographic) of a Pi 5 kit, 240px wide, on the right side of the card on desktop, below the body on mobile
-- A pill-link below: *"See the recommended kit →"* → external link to a known kit listing
+**Step 1 — Pick your computer** (`label` "STEP 1" small caps above title)
+- Title in `title`: *"Pick a small computer"*
+- Body in `body`: *"PantryAtlas runs on two kinds of small computer. Either is a one-time purchase of around $120–$200 — you keep the hardware forever."*
+- Two side-by-side option cards inside the step card (stacked on mobile), each 24px radius, `surface-container-low` fill, 20px padding:
+  - **Option A — Raspberry Pi 5 (8GB)** *— the default*
+    - Body: *"The friendlier choice. A Pi 5 kit from Amazon, Adafruit, or CanaKit includes everything you need: the computer, microSD card, USB-C power supply, and a small case. Around $120. Fast enough for everything PantryAtlas does — recipes, scoring, ingredient resolution, and photo recognition on small images."*
+    - Pill-link: *"See a recommended Pi 5 kit →"*
+  - **Option B — Coral Dev Board** *— for kitchens processing lots of photos*
+    - Body: *"Google's small computer with a dedicated on-board AI accelerator (the Edge TPU chip). Same setup steps; photo recognition runs noticeably faster, which matters when a community-kitchen volunteer is photographing dozens of shelves per shift. Around $130 for the board plus accessories."*
+    - Pill-link: *"See the Coral Dev Board →"*
+- Footnote in `caption` below both options: *"Both boards run the same PantryAtlas image. You can start with a Pi 5 and migrate to a Coral later if your kitchen grows — your data is just a microSD card."*
 
 **Step 2 — Flash the card**
 - Title: *"Copy PantryAtlas onto the microSD card"*
@@ -116,9 +123,9 @@ The page is one long scroll. Six sections. No nav menu — that's a marketing-pa
 - Below: a `caption`-sized expandable note: *"Already comfortable with Linux? You can also clone the repo and run our installer script — see the GitHub README."*
 
 **Step 3 — Plug it in**
-- Title: *"Plug the Pi into power and Wi-Fi"*
-- Body: *"Put the microSD card into the Pi, plug in the power supply, and either connect an ethernet cable to your router OR follow the on-first-boot Wi-Fi prompt. After about a minute, a small light on the Pi turns solid green — that means PantryAtlas is running."*
-- Illustration on the right: a circular vessel showing a Pi with a green LED, gentle radial pulse on the LED (CSS animation, 2s loop, respects reduced-motion)
+- Title: *"Plug it into power and Wi-Fi"*
+- Body: *"Put the microSD card into your Pi 5 (or Coral Dev Board), plug in the power supply, and either connect an ethernet cable to your router OR follow the on-first-boot Wi-Fi prompt. After about a minute, a small light on the board turns solid green — that means PantryAtlas is running."*
+- Illustration on the right: a circular vessel showing a small computer with a green LED, gentle radial pulse on the LED (CSS animation, 2s loop, respects reduced-motion)
 
 **Step 4 — Open it on your phone**
 - Title: *"Open pantryatlas.local in any browser"*
@@ -139,14 +146,13 @@ The page is one long scroll. Six sections. No nav menu — that's a marketing-pa
 - A three-column layout on desktop (single column on mobile), each column a soft card with a 64px circular illustration at top:
   - **Card A — Camera + typing**
     - Title: *"Snap a photo, or just type"*
-    - Body: *"PantryAtlas reads photos of your shelf using Gemma 4 — a small but capable AI model that runs entirely on your Pi. No photo ever leaves the device."*
-    - Footnote in `caption`: *"Photo recognition is in active development — typing works today."* (Remove this footnote once vision endpoint ships.)
-  - **Card B — Ranked by what you have**
-    - Title: *"Recipes ranked by your shelf"*
-    - Body: *"Every recipe shows a coverage ring — 8/10 means you have 8 of the 10 ingredients. The recipes you can fully cook tonight surface first. Expiring ingredients get a boost."*
+    - Body: *"Type ingredients one by one, or point your phone's camera at your shelf and let Gemma 4 read it. Gemma is a small but capable AI model from Google that runs entirely on your kitchen computer — no photo ever leaves the device."*
+  - **Card B — Ranked by what you have, paired by what tastes good**
+    - Title: *"Delicious matches, not just possible ones"*
+    - Body: *"Every recipe shows a coverage ring — 8/10 means you have 8 of the 10 ingredients. PantryAtlas combines coverage with the Epicure flavor-pairing research so the matches taste good, not just technically work. Expiring ingredients get a small boost so nothing goes to waste."*
   - **Card C — Scales with you**
-    - Title: *"Home or community scale"*
-    - Body: *"In Community Kitchen mode, PantryAtlas favors recipes that scale linearly to hundreds of servings, use bulk-friendly ingredients, and need minimum specialized equipment."*
+    - Title: *"From a family of four to four hundred"*
+    - Body: *"In Community Kitchen mode, PantryAtlas favors recipes that scale linearly to hundreds of servings, use bulk-friendly ingredients, and need minimum specialized equipment. School cafeterias, refugee kitchens, mutual-aid coalitions — everyone in between is welcome."*
 - Below the three cards: a screenshot of the actual app (the merged single-screen) at 720px wide, with a soft `shadow-active` and `gradient-vessel` halo behind it. On mobile, the screenshot scales to 90vw.
 
 ---
@@ -160,7 +166,7 @@ The page is one long scroll. Six sections. No nav menu — that's a marketing-pa
 - Section heading: *"Yours, not ours"* in `headline`, centered
 - Body paragraph, max-width 640px, centered, `body` size:
 
-> PantryAtlas runs entirely on the Pi sitting in your kitchen. There is no cloud account. We don't see your pantry. We don't track what you cook. We don't sell anything to anyone. The code is Apache 2.0 — read it, fork it, audit it, run it. Recipe data comes from the public RecipeNLG corpus (CC-BY-NC-4.0) curated by Bień et al. Ingredient and flavor data comes from FlavorDB (CC-BY-NC-3.0) curated by Garg et al.
+> PantryAtlas is free software. It runs entirely on the small computer sitting in your kitchen. There is no cloud account. We don't see your pantry. We don't track what you cook. We don't sell anything to anyone. The code is Apache 2.0 — read it, fork it, audit it, run it. Recipe data comes from the public RecipeNLG corpus (CC-BY-NC-4.0) curated by Bień et al. Ingredient and flavor data comes from FlavorDB (CC-BY-NC-3.0) curated by Garg et al. Built for kitchens everywhere, by people who think food access is a human concern, not a market.
 
 - A four-pill row of trust signals (centered, 12px gap), each a chip with `outline-variant` border:
   - "Apache 2.0" · "RecipeNLG CC-BY-NC-4.0" · "FlavorDB CC-BY-NC-3.0" · "No telemetry"
@@ -174,15 +180,16 @@ The page is one long scroll. Six sections. No nav menu — that's a marketing-pa
 **Layout:**
 
 - Section heading: *"Ready to set up your kitchen?"* in `headline`, centered
-- Three options as side-by-side cards on desktop, stacked on mobile, each 32px radius, 32px padding, `surface-container-high`:
-  - **Card 1 — Easiest** (`tertiary-container` accent bar at top)
-    - *"Buy a pre-flashed microSD"* — *"We're partnering with a vendor to ship a microSD card with PantryAtlas pre-installed, plus the recommended Pi 5 kit. Sign up for launch notifications."*
-    - Email-capture pill input + filled "Notify me" pill button
-  - **Card 2 — DIY** (`primary-container` accent bar)
-    - *"Build it yourself"* — *"Buy the Pi 5 kit from Amazon / Adafruit / CanaKit, download our image, follow the four steps above. About 30 minutes."*
-    - Two pill-links: *"Download image"* + *"Setup guide"*
-  - **Card 3 — Developer** (`secondary-container` accent bar)
-    - *"Clone the repo"* — *"Comfortable with Linux and git? Clone the repo, run the installer script, or contribute. Apache 2.0."*
+- Two options side-by-side on desktop, stacked on mobile, each 32px radius, 32px padding, `surface-container-high`, with `gradient-vessel` halo behind the leading icon:
+  - **Card 1 — Most people start here** (`primary-container` accent bar at top)
+    - Leading 64px circular vessel icon (a hand-drawn microSD card)
+    - Title: *"DIY in about 30 minutes"*
+    - Body: *"Buy a Pi 5 kit (or Coral Dev Board), download our pre-built image from GitHub, flash the microSD card with the free Raspberry Pi Imager, plug it in. The four steps above walk you through every part. You don't need to know Linux or use a terminal — just a web browser."*
+    - Two pill-links: *"Download image"* (filled `gradient-ember`) + *"Setup guide ↑"* (outlined, smooth-scrolls to Section 4)
+  - **Card 2 — For developers** (`secondary-container` accent bar)
+    - Leading 64px circular vessel icon (a hand-drawn terminal window)
+    - Title: *"Clone the repo"*
+    - Body: *"Comfortable with Linux and git? Clone the repo, run the installer script, or contribute. Apache 2.0. Pull requests welcome. The project is small, the codebase is reasonable, the issues are friendly."*
     - One pill-link: *"GitHub →"* external
 
 ---
@@ -228,8 +235,9 @@ For Stitch and downstream implementers — the deliberate-exclusion list:
 
 - **No video demo** — keeps page weight low and works without JS for browsers with autoplay disabled. The screenshot in Section 5 is the demo.
 - **No testimonials / quotes** — we don't have real users yet. Don't fabricate. Add this section after launch when we have one.
-- **No pricing table** — there's no pricing. The hardware costs what it costs; the software is free.
+- **No pricing table** — there's no pricing for the software (it's free). The hardware costs what your vendor charges; we don't take a cut.
 - **No comparison-to-other-products table** — there are no equivalent products. We're not competing with grocery apps.
+- **No pre-flashed-microSD waitlist** — we don't have a hardware vendor partner. If you're a vendor interested in shipping pre-flashed cards, open a GitHub issue.
 - **No analytics / tracking pixels** — site loads zero third-party scripts. The whole point of PantryAtlas is no surveillance; the marketing page lives that.
 - **No cookie banner** — see above.
 - **No nav menu** — the page is short enough that a smooth-scroll CTA in the hero covers any nav need.
