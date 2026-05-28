@@ -327,3 +327,32 @@ class KitchenStore:
             "SELECT * FROM cook_events ORDER BY id DESC LIMIT ?", (limit,)
         )
         return [self._cook_row_to_dict(r) for r in rows]
+
+    def mark_expired(self, canonical_name: str, source: str = "manual") -> dict[str, Any] | None:
+        cur = self._conn.execute(
+            "UPDATE pantry_items SET state='used_up', confidence=0.0, updated_at=? "
+            "WHERE canonical_name=?",
+            (_now_iso(), canonical_name),
+        )
+        if not cur.rowcount:
+            return None
+        self._log_event(canonical_name, "expire", source)
+        self._conn.commit()
+        return self.get_item(canonical_name)
+
+    def waste_tally(self, window_days: int = 30) -> dict[str, Any]:
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=window_days)).isoformat()
+        rows = self._conn.execute(
+            "SELECT canonical_name, change_type FROM inventory_events "
+            "WHERE change_type IN ('discard','expire') AND ts >= ?",
+            (cutoff,),
+        ).fetchall()
+        discarded = sum(1 for r in rows if r[1] == "discard")
+        expired = sum(1 for r in rows if r[1] == "expire")
+        return {
+            "window_days": window_days,
+            "discarded": discarded,
+            "expired": expired,
+            "total": discarded + expired,
+            "items": [r[0] for r in rows],
+        }

@@ -185,3 +185,21 @@ def test_list_meals_newest_first(tmp_path):
     store.add_cook_event(dish_name="Second", consumed=[])
     meals = store.list_meals(limit=10)
     assert [m["dish_name"] for m in meals] == ["Second", "First"]
+
+
+# ---------------------------------------------------------------------------
+# Task 5: waste tally
+# ---------------------------------------------------------------------------
+
+def test_waste_tally_counts_discards_and_expires(tmp_path):
+    store = KitchenStore(tmp_path / "kitchen.db")
+    for n in ("milk", "bread", "eggs"):
+        store.add_item(Ing(canonical_name=n, raw_text=n))
+    store.consume_item("milk", "discarded")      # discard
+    store.consume_item("bread", "used_up")        # consume — NOT waste
+    store.mark_expired("eggs")                     # expire
+    tally = store.waste_tally(window_days=30)
+    assert tally["discarded"] == 1
+    assert tally["expired"] == 1
+    assert tally["total"] == 2
+    assert set(tally["items"]) == {"milk", "eggs"}
