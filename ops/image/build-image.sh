@@ -46,6 +46,8 @@ BASE_SHA256="62d025b9bc7ca0e1facfec74ae56ac13978b6745c58177f081d39fbb8041ed45"
 PLUGIN="$REPO_ROOT/ops/image/sdm-plugin-pantryatlas"
 COMMIT="$(git rev-parse HEAD)"
 BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+# Public remote the plugin clones from inside the image; must contain $COMMIT.
+PA_REMOTE="https://github.com/PantryAtlas/pantryatlas.git"
 
 # --- 2. df guard: need >= 10 GB free on / ------------------------------------
 FREE_KB="$(df --output=avail -k / | tail -1 | tr -d ' ')"
@@ -66,6 +68,17 @@ for t in nft losetup xz python3 git npm curl sha256sum; do
         exit 1
     fi
 done
+
+# The plugin clones github.com/PantryAtlas/pantryatlas and checks out $COMMIT
+# inside the nspawn container. Fail fast on the HOST if the pinned commit is not
+# yet reachable on the remote — otherwise the build dies deep in phase 1 (after
+# apt + venv + pip have already run, ~20 min wasted).
+if ! git ls-remote --exit-code "$PA_REMOTE" "$COMMIT" >/dev/null 2>&1 \
+   && ! git fetch -q "$PA_REMOTE" "$COMMIT" 2>/dev/null; then
+    echo "ERROR: commit $COMMIT is not reachable on $PA_REMOTE." >&2
+    echo "       Push branch feat/sd-image (or merge to main) before building." >&2
+    exit 1
+fi
 
 # Working dir for the image + intermediate artifacts.
 WORK="$(mktemp -d /tmp/pa-image.XXXXXX)"
