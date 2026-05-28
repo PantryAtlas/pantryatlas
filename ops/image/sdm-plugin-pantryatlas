@@ -1,0 +1,219 @@
+#!/bin/bash
+# No `set -e`: sdm's sourced readparams aren't errexit-safe. Critical steps use explicit `|| exit 1`.
+# sdm custom plugin — PantryAtlas lean SD image provisioning.
+#
+# Modeled on sdm's Example-Plugin (Docs/Example-Plugin.md) and the plugin API in
+# Docs/Programming-Plugins-and-Custom-Phase-Scripts.md (sdm V15.5, commit 5072c97).
+#
+# Phase model (per sdm docs):
+#   phase "0"            runs on the HOST with the image mounted; image paths are
+#                        prefixed with $SDMPT. systemctl/apt here would hit the
+#                        host, so we only COPY files into the image in phase 0.
+#   phase "1"            runs INSIDE the image via systemd-nspawn ($SDMPT == "");
+#                        has network. apt-get / useradd / git / pip / systemctl
+#                        all operate on the image natively here.
+#   phase "post-install" same container context as phase 1.
+#
+# Plugin args (see build-image.sh for the invocation):
+#   stagedir=<host path>   dir produced by ops/image/stage-payload.sh, holding
+#                          recipes.db, bge-m3/, web-dist/ (optional), nftables.conf
+#   commit=<sha>           pantryatlas git commit to pin (required in practice;
+#                          defaults to origin/HEAD with a loud warning if omitted)
+#
+# plugin_getargs turns "stagedir=..|commit=.." into the bash vars $stagedir / $commit.
+#
+# Invoked by sdm as (note: NO leading '@' — '@' is reserved for plugin-LIST files):
+#   --plugin /abs/path/sdm-plugin-pantryatlas:"stagedir=...|commit=..."
+
+function loadparams() {
+    source "$SDMPT/etc/sdm/sdm-readparams"
+}
+
+phase=$1
+pfx="$(basename "$0")"
+args="$2"
+vldargs="|stagedir|commit|"
+
+# In-image scratch dir where phase 0 drops the staged payload for phase 1 to read.
+INSTAGE="/var/lib/pantryatlas-stage"
+
+# Repo + install layout inside the image.
+PA_USER="pantryatlas"
+PA_HOME="/home/${PA_USER}"
+PA_REPO="${PA_HOME}/pantryatlas"
+PA_VENV="${PA_REPO}/venv"
+PA_DATA="${PA_HOME}/.pantryatlas"
+PA_CACHE="${PA_HOME}/.cache/pantryatlas"
+PA_REPO_URL="https://github.com/PantryAtlas/pantryatlas.git"
+
+# Only the lean service set is installed and enabled — mirrors UNITS_TO_ENABLE in
+# pantryatlas/ops/image_build.py. pantryatlas-gemma is NOT installed or enabled in
+# the lean image — full pi-bootstrap installs it.
+PA_UNITS_ENABLE=( pantryatlas-mem-monitor pantryatlas-embeddings pantryatlas-navigator )
+PA_UNITS_ALL=( pantryatlas-mem-monitor pantryatlas-embeddings pantryatlas-navigator )
+
+loadparams
+
+if [ "$phase" == "0" ]
+then
+    #
+    # Phase 0 — host context, image mounted at $SDMPT. Copy staged files in only.
+    #
+    logtoboth "* Plugin $pfx: Start Phase 0"
+    plugin_getargs "$pfx" "$args" "$vldargs"
+    plugin_printkeys
+
+    if [ -z "$stagedir" ]; then
+        logtoboth "? Plugin $pfx: 'stagedir=' argument is required"
+        exit 1
+    fi
+    if [ ! -d "$stagedir" ]; then
+        logtoboth "? Plugin $pfx: stagedir '$stagedir' not found on host"
+        exit 1
+    fi
+
+    logtoboth "> Plugin $pfx: Stage payload into image at $INSTAGE"
+    mkdir -p "$SDMPT$INSTAGE"
+
+    if [ ! -f "$stagedir/recipes.db" ]; then
+        logtoboth "? Plugin $pfx: missing $stagedir/recipes.db"
+        exit 1
+    fi
+    cp -a "$stagedir/recipes.db" "$SDMPT$INSTAGE/recipes.db"
+
+    if [ ! -d "$stagedir/bge-m3" ]; then
+        logtoboth "? Plugin $pfx: missing $stagedir/bge-m3"
+        exit 1
+    fi
+    cp -a "$stagedir/bge-m3" "$SDMPT$INSTAGE/bge-m3"
+
+    if [ -d "$stagedir/web-dist" ]; then
+        cp -a "$stagedir/web-dist" "$SDMPT$INSTAGE/web-dist"
+    else
+        logtoboth "> Plugin $pfx: no web-dist in stagedir — web UI will be absent"
+    fi
+
+    if [ ! -f "$stagedir/nftables.conf" ]; then
+        logtoboth "? Plugin $pfx: missing $stagedir/nftables.conf (generate it in build-image.sh)"
+        exit 1
+    fi
+    cp -a "$stagedir/nftables.conf" "$SDMPT$INSTAGE/nftables.conf"
+
+    logtoboth "> Plugin $pfx: Install systemd unit files into image"
+    # The repo's units live at ops/systemd/*.service. They are pulled from the
+    # cloned repo in phase 1 (where the clone happens), so nothing to copy here.
+
+    logtoboth "> Plugin $pfx: Set hostname + hosts"
+    echo "pantryatlas" > "$SDMPT/etc/hostname"
+    if [ -f "$SDMPT/etc/hosts" ] && grep -qE '^[[:space:]]*127\.0\.1\.1' "$SDMPT/etc/hosts"; then
+        sed -i 's/^[[:space:]]*127\.0\.1\.1.*/127.0.1.1\tpantryatlas/' "$SDMPT/etc/hosts"
+    else
+        printf '127.0.1.1\tpantryatlas\n' >> "$SDMPT/etc/hosts"
+    fi
+
+    logtoboth "* Plugin $pfx: Complete Phase 0"
+
+elif [ "$phase" == "1" ]
+then
+    #
+    # Phase 1 — inside the image (nspawn). $SDMPT == "". Network available.
+    # All apt / user / git / pip / systemctl work happens here.
+    #
+    logtoboth "* Plugin $pfx: Start Phase 1"
+    plugin_getargs "$pfx" "$args" "$vldargs"
+
+    logtoboth "> Plugin $pfx: apt install runtime deps"
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update || exit 1
+    # Runtime only — NO build-essential/cmake/llama.cpp/nodejs. git + ca-certificates
+    # + python3-pip are needed to clone the repo and build the venv.
+    apt-get install -y --no-install-recommends \
+        python3-venv python3-dev python3-pip \
+        git ca-certificates \
+        sqlite3 libsqlite3-0 \
+        avahi-daemon nftables || exit 1
+
+    logtoboth "> Plugin $pfx: Create system user/group $PA_USER"
+    if ! getent group "$PA_USER" >/dev/null; then
+        groupadd --system "$PA_USER"
+    fi
+    if ! getent passwd "$PA_USER" >/dev/null; then
+        # System account, real home, no interactive login shell needed for services.
+        useradd --system --gid "$PA_USER" --create-home --home-dir "$PA_HOME" \
+            --shell /usr/sbin/nologin "$PA_USER"
+    fi
+
+    logtoboth "> Plugin $pfx: Clone pantryatlas repo into $PA_REPO"
+    if [ -z "$commit" ]; then
+        logtoboth "? Plugin $pfx: no commit= given — pinning to origin/HEAD (NOT reproducible)"
+    fi
+    rm -rf "$PA_REPO"
+    git clone "$PA_REPO_URL" "$PA_REPO"
+    if [ -n "$commit" ]; then
+        git -C "$PA_REPO" checkout --detach "$commit"
+    fi
+    logtoboth "> Plugin $pfx: Pinned pantryatlas at $(git -C "$PA_REPO" rev-parse HEAD)"
+
+    logtoboth "> Plugin $pfx: Create venv + pip install (runtime only)"
+    python3 -m venv "$PA_VENV"
+    "$PA_VENV/bin/pip" install --upgrade pip
+    # Runtime extras only — NO [dev].
+    # editable: navigator resolves web/dist via __file__, which must point at the repo, not site-packages
+    "$PA_VENV/bin/pip" install -e "$PA_REPO"
+
+    logtoboth "> Plugin $pfx: Place baked payload from $INSTAGE"
+    mkdir -p "$PA_DATA" "$PA_CACHE"
+    cp -a "$INSTAGE/recipes.db" "$PA_DATA/recipes.db"
+    cp -a "$INSTAGE/bge-m3" "$PA_CACHE/bge-m3"
+    if [ -d "$INSTAGE/web-dist" ]; then
+        mkdir -p "$PA_REPO/web"
+        rm -rf "$PA_REPO/web/dist"
+        cp -a "$INSTAGE/web-dist" "$PA_REPO/web/dist"
+    fi
+
+    logtoboth "> Plugin $pfx: chown -R $PA_USER:$PA_USER $PA_HOME"
+    chown -R "$PA_USER:$PA_USER" "$PA_HOME"
+
+    logtoboth "> Plugin $pfx: Install systemd unit files"
+    for unit in "${PA_UNITS_ALL[@]}"; do
+        src="$PA_REPO/ops/systemd/${unit}.service"
+        if [ ! -f "$src" ]; then
+            logtoboth "? Plugin $pfx: missing unit file $src"
+            exit 1
+        fi
+        install -m 644 "$src" "/etc/systemd/system/${unit}.service"
+        logtoboth "  installed /etc/systemd/system/${unit}.service"
+    done
+    systemctl daemon-reload
+
+    logtoboth "> Plugin $pfx: Enable lean service set (gemma intentionally NOT enabled)"
+    for unit in "${PA_UNITS_ENABLE[@]}"; do
+        systemctl enable "${unit}.service"
+    done
+
+    logtoboth "> Plugin $pfx: Install + enable nftables redirect ruleset"
+    install -m 644 "$INSTAGE/nftables.conf" /etc/nftables.conf
+    systemctl enable nftables
+
+    logtoboth "> Plugin $pfx: Enable avahi-daemon (pantryatlas.local mDNS)"
+    systemctl enable avahi-daemon
+
+    logtoboth "> Plugin $pfx: Suppress Bookworm first-boot user wizard"
+    # Defense-in-depth alongside the build's '--plugin disables:piwiz'. The
+    # smoke-test asserts userconfig.service is masked/absent.
+    systemctl mask userconfig.service || true
+
+    logtoboth "> Plugin $pfx: Remove in-image stage scratch"
+    rm -rf "$INSTAGE"
+
+    logtoboth "* Plugin $pfx: Complete Phase 1"
+
+else
+    #
+    # post-install — nothing extra; everything is done in phase 1.
+    #
+    logtoboth "* Plugin $pfx: Phase post-install (no-op)"
+    plugin_getargs "$pfx" "$args" "$vldargs"
+    logtoboth "* Plugin $pfx: Phase post-install Completed"
+fi
+exit 0
