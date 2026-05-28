@@ -146,3 +146,81 @@ class KitchenStore:
     def list_items(self) -> list[dict[str, Any]]:
         rows = self._fetchall("SELECT * FROM pantry_items ORDER BY canonical_name")
         return [self._row_to_dict(r) for r in rows]
+
+    def _log_event(self, canonical_name: str, change_type: str, source: str,
+                   detail: dict | None = None) -> None:
+        self._conn.execute(
+            "INSERT INTO inventory_events (ts, canonical_name, change_type, detail_json, source) "
+            "VALUES (?,?,?,?,?)",
+            (_now_iso(), canonical_name, change_type,
+             json.dumps(detail) if detail else None, source),
+        )
+
+    def add_item(self, ingredient: Ingredient, source: str = "manual") -> dict[str, Any]:
+        now = _now_iso()
+        q = ingredient.quantity
+        exp = ingredient.expires_at.isoformat() if ingredient.expires_at else None
+        self._conn.execute(
+            """INSERT INTO pantry_items
+               (canonical_name, raw_text, quantity_amount, quantity_unit, expires_at,
+                state, confidence, last_observed_at, source, added_at, updated_at)
+               VALUES (?,?,?,?,?, 'present', 1.0, ?, ?, ?, ?)
+               ON CONFLICT(canonical_name) DO UPDATE SET
+                 raw_text=excluded.raw_text,
+                 quantity_amount=excluded.quantity_amount,
+                 quantity_unit=excluded.quantity_unit,
+                 expires_at=excluded.expires_at,
+                 state='present', confidence=1.0,
+                 last_observed_at=excluded.last_observed_at,
+                 source=excluded.source, updated_at=excluded.updated_at""",
+            (ingredient.canonical_name, ingredient.raw_text,
+             q.amount if q else None, q.unit if q else None, exp,
+             now, source, now, now),
+        )
+        self._log_event(ingredient.canonical_name, "add", source)
+        self._conn.commit()
+        return self.get_item(ingredient.canonical_name)
+
+    def get_item(self, canonical_name: str) -> dict[str, Any] | None:
+        row = self._fetchone(
+            "SELECT * FROM pantry_items WHERE canonical_name=?", (canonical_name,)
+        )
+        return self._row_to_dict(row) if row is not None else None
+
+    def remove_item(self, canonical_name: str) -> None:
+        cur = self._conn.execute(
+            "DELETE FROM pantry_items WHERE canonical_name=?", (canonical_name,)
+        )
+        if cur.rowcount:
+            self._log_event(canonical_name, "adjust", "manual", {"removed": True})
+        self._conn.commit()
+
+    def replace_all(self, ingredients: list[Ingredient], source: str = "manual") -> list[dict[str, Any]]:
+        existing = {i["canonical_name"] for i in self.list_items()}
+        incoming = {ing.canonical_name for ing in ingredients}
+        for gone in existing - incoming:
+            self._conn.execute("DELETE FROM pantry_items WHERE canonical_name=?", (gone,))
+            self._log_event(gone, "adjust", source, {"removed": True})
+        for ing in ingredients:
+            self.add_item(ing, source=source)  # commits per item; fine for a replace
+        self._conn.commit()
+        return self.list_items()
+
+    def on_hand(self) -> Pantry:
+        """Return a Pantry of present+low items for recipe ranking."""
+        placeholders = ",".join("?" * len(_ON_HAND_STATES))
+        rows = self._fetchall(
+            f"SELECT * FROM pantry_items WHERE state IN ({placeholders})",
+            _ON_HAND_STATES,
+        )
+        pantry = Pantry()
+        for r in rows:
+            qty = None
+            if r["quantity_amount"] is not None:
+                qty = Quantity(amount=r["quantity_amount"], unit=r["quantity_unit"] or "")
+            exp = date.fromisoformat(r["expires_at"]) if r["expires_at"] else None
+            pantry.add(Ingredient(
+                canonical_name=r["canonical_name"], raw_text=r["raw_text"],
+                quantity=qty, expires_at=exp,
+            ))
+        return pantry

@@ -58,3 +58,42 @@ def test_migration_is_idempotent(tmp_path: Path) -> None:
     # second open: pantry.json is gone, table already populated → no duplicate
     store2 = KitchenStore(db, pantry_json_path=pj)
     assert len(store2.list_items()) == 1
+
+
+# ---------------------------------------------------------------------------
+# Task 2: pantry CRUD + ledger + on-hand
+# ---------------------------------------------------------------------------
+from pantryatlas.pantry.models import Ingredient as Ing, Quantity as Qty
+
+
+def test_add_remove_and_ledger(tmp_path: Path) -> None:
+    store = KitchenStore(tmp_path / "kitchen.db")
+    store.add_item(Ing(canonical_name="garlic", raw_text="garlic"))
+    store.add_item(Ing(canonical_name="onion", raw_text="onion",
+                       quantity=Qty(1.0, "bulb"), expires_at=date(2026, 6, 1)))
+    assert {i["canonical_name"] for i in store.list_items()} == {"garlic", "onion"}
+    store.remove_item("garlic")
+    assert {i["canonical_name"] for i in store.list_items()} == {"onion"}
+    kinds = [r[0] for r in store._conn.execute(
+        "SELECT change_type FROM inventory_events ORDER BY id").fetchall()]
+    assert kinds == ["add", "add", "adjust"]
+
+
+def test_on_hand_excludes_used_up(tmp_path: Path) -> None:
+    store = KitchenStore(tmp_path / "kitchen.db")
+    store.add_item(Ing(canonical_name="garlic", raw_text="garlic"))
+    store.add_item(Ing(canonical_name="basil", raw_text="basil"))
+    store._conn.execute("UPDATE pantry_items SET state='used_up' WHERE canonical_name='basil'")
+    store._conn.commit()
+    pantry = store.on_hand()
+    names = {ing.canonical_name for ing in pantry}
+    assert names == {"garlic"}
+    assert "basil" not in pantry
+
+
+def test_replace_all(tmp_path: Path) -> None:
+    store = KitchenStore(tmp_path / "kitchen.db")
+    store.add_item(Ing(canonical_name="garlic", raw_text="garlic"))
+    store.replace_all([Ing(canonical_name="tomato", raw_text="tomato"),
+                       Ing(canonical_name="basil", raw_text="basil")])
+    assert {i["canonical_name"] for i in store.list_items()} == {"tomato", "basil"}
