@@ -6,6 +6,11 @@ export default defineConfig({
   root: resolve(__dirname),
   publicDir: 'public',
   plugins: [preact()],
+  server: {
+    proxy: {
+      '/navigator': 'http://localhost:8099',
+    },
+  },
   build: {
     outDir: 'dist',
     emptyOutDir: true,
