@@ -139,6 +139,9 @@ web/dist/
 web/.vite/
 web/coverage/
 
+# Wrangler (Cloudflare Pages) local cache + tmp — never commit
+.wrangler/
+
 # Stitch / Antigravity design pipeline outputs that may contain auth-bearing or
 # session-scoped artifacts. Keep web/design/ itself committed but exclude logs,
 # reference HTML, and any stray MCP config that an `agy` invocation might write.

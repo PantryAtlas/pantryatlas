@@ -14,22 +14,22 @@ Two audiences, same product:
 
 The product asks the user to pick one mode once, then disappears into the background and adapts ranking under the hood. There is no separate "advanced mode" or "tier dashboard." The user never sees an inference confidence indicator. The pantry is a list, the recipes are a list, and the system is quiet.
 
-## Visual language: Gemini AI principles on a terracotta base
+## Visual language: the cool Gemini gradient system
 
-PantryAtlas keeps its existing warm, food-grounded color identity (terracotta seed, kitchen-notebook voice) and adopts five transferable principles from Google's Gemini AI visual design language. We do **not** copy Google's brand palette (the four-color dots, the blue/red/yellow/green system) — that would fight the warm-kitchen voice.
+PantryAtlas adopts Google's **Gemini gradient** (cool blue → purple → magenta) as its core visual identity, matching the marketing site so the product and its landing page read as one system. Warmth comes from the *content* — natural-colored food imagery and a kitchen-notebook voice — not from the chrome. We use the Gemini *gradient*, not Google's four-color brand dots (blue/red/yellow/green); a small "Built with Gemma" line keeps the Google relationship honest (built on Google's open model, not an official Google product). The five Gemini design principles below still hold; only the palette moved from terracotta to cool.
 
 ### Principle 1: Gradients as energy, not decoration
 
 Gradients communicate that something *intelligent is happening*. They have a sharp, opaque leading edge that diffuses into a soft tail. They appear briefly during AI work — coverage scoring, ingredient resolution, recipe ranking — then settle. They never sit static under content as a passive background flourish.
 
-The PantryAtlas gradient palette is built from the seed:
+The PantryAtlas gradient palette is the cool Gemini set. (Token names are kept stable across the codebase; their values are now cool.) Blooms layer per-colour radials that are opaque at each core and fade to transparent, giving the "sharp leading edge, diffuse tail" quality rather than a flat band.
 
 | Token | Stops | Usage |
 |---|---|---|
-| `gradient-thinking` | `#B85C38` 0% → `#E89B62` 60% → `#F5DDB8` 100% | Active inference (radial, pulsing, 1.4s cycle) |
-| `gradient-warmth` | `#FFF8F6` 0% → `#FCE8E4` 100% | Page backgrounds (linear, top-to-bottom, static) |
-| `gradient-vessel` | `#FFDBCD` 0% → `#FFE8DB` 50% → `#F2E2A8` 100% | Coverage ring interiors, AI-result haloes (radial) |
-| `gradient-ember` | `#8B3A1F` 0% → `#B85C38` 100% | Primary action surfaces (linear, 135°) |
+| `gradient-thinking` | `#4285F4` 0% → `#6E6AD6` 55% → `#9B72CB` 100% | Active inference (radial, pulsing, 1.4s cycle) |
+| `gradient-warmth` | page bg: `#FCFCFF` + faint cool radials (`#EEF1FF`, `#F6ECFB`) | Page backgrounds (static; name kept, now a cool neutral) |
+| `gradient-vessel` | layered radials: `#4285F4` / `#9B72CB` / `#D96570` cores → transparent | Coverage ring interiors, AI-result haloes (radial) |
+| `gradient-ember` | `#1A73E8` 0% → `#6E6AD6` 54% → `#9B72CB` 76% → `#D96570` 100% | Primary action surfaces (linear, ~102°) |
 
 Gradients are **always** used with intent: they mark moments where the system is thinking, generating, or revealing. A static recipe card uses flat tonal fill — only the active card or the moment-of-result gets a gradient wash.
 
@@ -58,7 +58,7 @@ Animation shows the user that work is happening *and* what kind of work. Three m
 | **Settle** | Result arriving | Coverage ring fills (stroke-dashoffset, 600ms, emphasized) + result card fades in with 8px Y-translate (320ms) |
 | **Convergence** | Multiple results lining up | Recipe cards stagger in by score order, 60ms offset per card, max 6 staggered then batch |
 
-No glowing orbs. No purple haze. No "AI is special" sparkle iconography. The motion *is* the AI-state communication. Reduced-motion users get instant settle with a single 200ms opacity fade.
+No gratuitous glowing orbs, no decorative sparkle scattered across the product UI — the gradient and motion *are* the AI-state communication, used only at moments of actual inference. (The marketing site carries one brand sparkle in its hero/badge; the product itself stays quieter.) Reduced-motion users get instant settle with a single 200ms opacity fade.
 
 ### Principle 4: Softness as antidote to AI-anxiety
 
@@ -70,52 +70,52 @@ Shadow tokens:
 
 | Token | Value | Usage |
 |---|---|---|
-| `shadow-rest` | `0 1px 3px rgba(33,25,22,0.08), 0 4px 12px rgba(33,25,22,0.06)` | Cards at rest |
-| `shadow-active` | `0 2px 6px rgba(33,25,22,0.10), 0 12px 32px rgba(33,25,22,0.10)` | Hovered/pressed cards, sheets |
-| `shadow-vessel` | `0 0 24px rgba(184,92,56,0.18)` | Active inference glow (paired with radial pulse) |
+| `shadow-rest` | `0 1px 2px rgba(26,27,34,0.06), 0 4px 16px rgba(26,27,34,0.06)` | Cards at rest |
+| `shadow-active` | `0 2px 6px rgba(26,27,34,0.08), 0 16px 38px rgba(66,133,244,0.16)` | Hovered/pressed cards, sheets |
+| `shadow-vessel` | `0 0 44px rgba(123,97,202,0.24)` | Active inference glow (paired with radial pulse) |
 
 ### Principle 5: Thoughtfully imperfect
 
 Avoid grid-pixel-perfect rigidity. Recipe cards in the list can vary slightly in height (real recipes have different title lengths — don't force-clamp). Coverage rings show fractional fills truthfully (8.3 of 12 ingredients = 69% arc, not rounded to nearest 10%). The "Cooking now" illustration in the empty state is hand-drawn, not iconographic.
 
-## Color palette (unchanged from v1 — Gemini layers on top)
+## Color palette (cool Gemini — matches the marketing site)
 
-**Seed:** `#B85C38` (terracotta) — Material 3 dynamic palette derives the role tokens below.
+**Seed:** `#4285F4` (Gemini blue) — Material 3 neutral roles with a faint cool tint. Gemini gradient stops: blue `#4285F4` / blue-deep `#1A73E8` / indigo `#5E72E4` / purple `#9B72CB` / magenta `#D96570`.
 
 ### Light scheme
 | Role | Hex |
 |---|---|
-| primary | `#8B3A1F` |
+| primary | `#1A73E8` |
 | on-primary | `#FFFFFF` |
-| primary-container | `#FFDBCD` |
-| on-primary-container | `#360D00` |
-| secondary | `#77574C` |
-| secondary-container | `#FFDBD1` |
-| tertiary | `#695E2F` |
-| tertiary-container | `#F2E2A8` |
+| primary-container | `#DCE7FF` |
+| on-primary-container | `#00184A` |
+| secondary | `#565E71` |
+| secondary-container | `#E7DEFF` |
+| tertiary | `#8C4A60` |
+| tertiary-container | `#FFD9E1` |
 | error | `#BA1A1A` |
 | error-container | `#FFDAD6` |
-| surface | `#FFF8F6` |
-| surface-container | `#FCE8E4` |
-| surface-container-high | `#F6E2DE` |
-| on-surface | `#211916` |
-| on-surface-variant | `#53433F` |
-| outline | `#85736F` |
-| outline-variant | `#D8C2BD` |
+| surface | `#FCFCFF` |
+| surface-container | `#ECEEF7` |
+| surface-container-high | `#E6E9F4` |
+| on-surface | `#1A1B22` |
+| on-surface-variant | `#44464E` |
+| outline | `#74767E` |
+| outline-variant | `#C6C8D3` |
 
 ### Dark scheme
 | Role | Hex |
 |---|---|
-| primary | `#FFB59C` |
-| on-primary | `#551F07` |
-| primary-container | `#712708` |
-| surface | `#19110E` |
-| surface-container | `#2D1F1C` |
-| on-surface | `#F0DBD7` |
+| primary | `#AEC6FF` |
+| on-primary | `#002E69` |
+| primary-container | `#1A4691` |
+| surface | `#111319` |
+| surface-container | `#1D2027` |
+| on-surface | `#E3E2E9` |
 
 ## Typography
 
-**Stack:** `"Google Sans Text", "Inter", system-ui, -apple-system, sans-serif`
+**Stack:** `"DM Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif` — DM Sans is a free, OFL, Google-commissioned geometric sans (the closest free stand-in for Google Sans / Product Sans). Self-host the woff2 (no CDN) to preserve the privacy promise; the marketing site ships it from `assets/fonts/` as the reference.
 
 Reduced scale (subtracting per "dead simple" — only six type roles, not ten):
 
@@ -302,4 +302,4 @@ When regenerating mockups via Stitch against project `12279110322585036502`:
 
 ---
 
-*Design system version: PantryAtlas Navigator v0.2.0 · Gemini-influenced · Material 3 base · Seed #B85C38 · 2026-05-27*
+*Design system version: PantryAtlas Navigator v0.2.0 · cool Gemini gradient · Material 3 neutral base · Seed #4285F4 · DM Sans · 2026-05-27*

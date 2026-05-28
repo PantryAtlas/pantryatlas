@@ -1,14 +1,13 @@
 // PantryAtlas marketing — progressive enhancement only.
-// The page is fully readable with JS disabled; this adds reveal-on-scroll
-// and a subtle hero gradient parallax. Both respect prefers-reduced-motion.
+// The page is fully readable with JS disabled; this only adds reveal-on-scroll.
+// The hero "thinking" gradient motion is CSS-driven (see .hero__blob drift),
+// so JS no longer touches transforms. prefers-reduced-motion handled in CSS.
 
 (function () {
   "use strict";
 
   // Signal JS is active so CSS can hide reveal sections (no-JS users see everything).
   document.documentElement.classList.add("js");
-
-  var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   // ---- Reveal-on-scroll ----
   var reveals = document.querySelectorAll(".reveal");
@@ -25,23 +24,5 @@
   } else {
     // No IO support: just show everything.
     reveals.forEach(function (el) { el.classList.add("is-visible"); });
-  }
-
-  // ---- Hero gradient parallax (0.5x scroll) ----
-  if (!reduceMotion) {
-    var blob = document.querySelector(".hero__blob");
-    if (blob) {
-      var ticking = false;
-      window.addEventListener("scroll", function () {
-        if (!ticking) {
-          window.requestAnimationFrame(function () {
-            var y = window.scrollY * 0.5;
-            blob.style.transform = "translateY(" + (-y) + "px)";
-            ticking = false;
-          });
-          ticking = true;
-        }
-      }, { passive: true });
-    }
   }
 })();
