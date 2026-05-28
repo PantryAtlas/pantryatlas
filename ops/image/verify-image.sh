@@ -205,7 +205,7 @@ echo "  OK  nftables.conf contains '8090'"
 # Rationale for best-effort: the host may be x86_64 chrooting into arm64
 # (requires qemu-user-static + binfmt_misc registration which we cannot
 # guarantee here). Even on arm64, chroot-based service startup lacks the
-# full systemd environment. All hard provisiong assertions above already
+# full systemd environment. All hard provisioning assertions above already
 # prove correctness; this step only validates the uvicorn invocation path.
 # ---------------------------------------------------------------------------
 echo

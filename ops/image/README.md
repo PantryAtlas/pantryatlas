@@ -140,7 +140,7 @@ The bucket defaults to `pantryatlas-artifacts`.  Override with
 
 ## 5. Acceptance gate — one real hardware flash
 
-The chroot smoke-test is a provisioing check, not a boot test.  Before
+The chroot smoke-test is a provisioning check, not a boot test.  Before
 declaring v1 functional, flash a **spare SD card** (do not use your primary
 robot card) and boot a Pi 5:
 
