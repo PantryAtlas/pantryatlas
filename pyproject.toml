@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pantryatlas"
-version = "0.1.0"
+version = "0.2.0"
 description = "PantryAtlas: multilingual embeddings, sqlite-vec storage, Gemma 4 runner, SLERP math, pantry primitives, and Pi-side ops — one package, sub-products as submodules. Domain: https://pantryatlas.org"
 readme = "README.md"
 requires-python = ">=3.11"
