@@ -25,4 +25,4 @@ cook with what you have, ranked by how much of your ingredients they use.
 - **Genuinely delicious.** It combines ingredient coverage with flavor-pairing
   research, so matches taste good — not just technically possible.
 
-Next: [Choose a small computer](/en/setup/choose-a-pi/).
+Next: [Choose a small computer](/setup/choose-a-pi/).
