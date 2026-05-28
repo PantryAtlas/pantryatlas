@@ -111,10 +111,10 @@ The page is one long scroll. Six sections. No nav menu — that's a marketing-pa
   - **Option A — Raspberry Pi 5 (8GB)** *— the default*
     - Body: *"The friendlier choice. A Pi 5 kit from Amazon, Adafruit, or CanaKit includes everything you need: the computer, microSD card, USB-C power supply, and a small case. Around $120. Fast enough for everything PantryAtlas does — recipes, scoring, ingredient resolution, and photo recognition on small images."*
     - Pill-link: *"See a recommended Pi 5 kit →"*
-  - **Option B — Coral Dev Board** *— for kitchens processing lots of photos*
-    - Body: *"Google's small computer with a dedicated on-board AI accelerator (the Edge TPU chip). Same setup steps; photo recognition runs noticeably faster, which matters when a community-kitchen volunteer is photographing dozens of shelves per shift. Around $130 for the board plus accessories."*
+  - **Option B — Coral Dev Board** *— an alternative if you already have one*
+    - Body: *"Google's small computer with an on-board Edge TPU chip. Same PantryAtlas software, same setup steps, around $130 for the board plus accessories. PantryAtlas doesn't yet use the Edge TPU directly (everything currently runs on Coral's general-purpose CPU), so a Pi 5 is the faster default today. Choose Coral if you already own one, prefer Google hardware, or want to help us port the vision model to the Edge TPU in a future release."*
     - Pill-link: *"See the Coral Dev Board →"*
-- Footnote in `caption` below both options: *"Both boards run the same PantryAtlas image. You can start with a Pi 5 and migrate to a Coral later if your kitchen grows — your data is just a microSD card."*
+- Footnote in `caption` below both options: *"Both boards run the same PantryAtlas image. Your data lives on the microSD card, so you can move between boards anytime."*
 
 **Step 2 — Flash the card**
 - Title: *"Copy PantryAtlas onto the microSD card"*
