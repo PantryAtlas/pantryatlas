@@ -21,11 +21,12 @@ def test_published_db_matches_manifest(tmp_path):
     with urllib.request.urlopen(MANIFEST_URL, timeout=30) as resp:
         manifest = json.load(resp)
     db = tmp_path / "recipes.db"
-    urllib.request.urlretrieve(manifest["url"], db)
+    with urllib.request.urlopen(manifest["url"], timeout=120) as resp:
+        db.write_bytes(resp.read())
 
     assert db_publish.sha256_file(db) == manifest["sha256"]
 
-    conn = sqlite3.connect(str(db))  # plain sqlite3 — recipes_meta is a normal table
+    conn = sqlite3.connect(db)  # plain sqlite3 — recipes_meta is a normal table
     try:
         count = conn.execute("SELECT COUNT(*) FROM recipes_meta").fetchone()[0]
     finally:
