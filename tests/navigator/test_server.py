@@ -18,7 +18,9 @@ Design summary
 from __future__ import annotations
 
 import hashlib
+import importlib
 import json
+import sys
 from collections.abc import Callable
 from datetime import date
 from pathlib import Path
@@ -141,16 +143,28 @@ def client(tmp_store: RecipeStore, pantry_path: Path) -> TestClient:
 
 
 # ---------------------------------------------------------------------------
-# AC-1: file exists + app importable
+# AC-1: file exists + app importable (side-effect-free)
 # ---------------------------------------------------------------------------
 
 
-def test_import_app() -> None:
-    """AC-1: server module exports an ``app`` FastAPI instance."""
-    from pantryatlas.navigator import server  # noqa: F401
-    from pantryatlas.navigator.server import app
+def test_import_app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """AC-1: importing server must NOT create ~/.pantryatlas/recipes.db.
 
-    assert app is not None
+    We reload the module under a temp HOME so the production ``app`` is rebuilt
+    with the temp home path baked in.  After the import we confirm no DB file
+    was created, proving store init is truly deferred to first use.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    # Force a clean reload so _DEFAULT_DB_PATH re-evaluates under the patched HOME.
+    mod_name = "pantryatlas.navigator.server"
+    if mod_name in sys.modules:
+        del sys.modules[mod_name]
+    mod = importlib.import_module(mod_name)
+
+    assert mod.app is not None
+    # No DB must have been created by the import alone.
+    db_path = tmp_path / ".pantryatlas" / "recipes.db"
+    assert not db_path.exists(), f"Import opened DB at {db_path} — store init is not lazy!"
 
 
 # ---------------------------------------------------------------------------
@@ -402,15 +416,28 @@ def test_post_recipes_from_pantry_sorted_descending(client: TestClient) -> None:
 
 
 # ---------------------------------------------------------------------------
-# AC-11: no wildcard CORS header
+# AC-11: no wildcard CORS header (real preflight check)
 # ---------------------------------------------------------------------------
 
 
 def test_no_wildcard_cors(client: TestClient) -> None:
-    """AC-11: ACAO header must not be '*'."""
-    resp = client.get("/navigator/health")
+    """AC-11: preflight from an evil origin must NOT receive a permissive ACAO header.
+
+    Sends an OPTIONS preflight with a hostile origin.  Without CORSMiddleware the
+    response carries no ACAO header at all (empty string), which satisfies both
+    assertions.  A future accidental ``CORSMiddleware(allow_origins=["*"])`` or an
+    echo-back policy would fail one of these assertions immediately.
+    """
+    resp = client.options(
+        "/navigator/pantry",
+        headers={
+            "Origin": "https://evil.example",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
     acao = resp.headers.get("access-control-allow-origin", "")
     assert acao != "*", "Wildcard CORS must not be present"
+    assert acao != "https://evil.example", "Evil origin must not be echoed back in ACAO"
 
 
 # ---------------------------------------------------------------------------
@@ -426,12 +453,29 @@ def test_health_idempotent(client: TestClient) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Criterion 2 sanity via module-level app
+# Criterion 2 sanity via module-level app (side-effect-free)
 # ---------------------------------------------------------------------------
 
 
-def test_module_level_app_route_count() -> None:
-    """The module-level ``app`` object has ≥ 8 routes."""
-    from pantryatlas.navigator.server import app
+def test_module_level_app_route_count(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The module-level ``app`` has ≥ 8 routes AND importing it is side-effect-free.
 
-    assert len(app.routes) >= 8
+    Reloads the module under a temp HOME to ensure the production app bakes
+    in the temp path, then asserts neither the DB nor the .pantryatlas dir was
+    created by the import alone.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    mod_name = "pantryatlas.navigator.server"
+    if mod_name in sys.modules:
+        del sys.modules[mod_name]
+    mod = importlib.import_module(mod_name)
+
+    assert len(mod.app.routes) >= 8
+
+    # Confirm import had no FS side effects.
+    pantryatlas_dir = tmp_path / ".pantryatlas"
+    assert not pantryatlas_dir.exists(), (
+        f"Import created {pantryatlas_dir} — store init is not lazy!"
+    )

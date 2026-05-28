@@ -31,6 +31,9 @@ Design decisions
   and its absence guarantees no Access-Control-Allow-Origin: * header.
 - Static mount is guarded: StaticFiles is only mounted when web/dist/assets
   exists so the import never fails when the frontend isn't built yet.
+- The module-level ``app`` is side-effect-free at import time: no DB is opened,
+  no directory is created.  The real RecipeStore is opened lazily on first use
+  via ``app.state.store_factory`` (set by ``_build_production_app``).
 """
 
 from __future__ import annotations
@@ -145,13 +148,39 @@ def _save_pantry(pantry: Pantry, pantry_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Lazy store accessor
+# ---------------------------------------------------------------------------
+
+
+def _get_store(app: FastAPI) -> RecipeStore:
+    """Return the app's RecipeStore, initialising it lazily if needed.
+
+    Routes should call this instead of reading ``app.state.store`` directly.
+    Tests that inject an eager store via ``create_app(store=...)`` hit the fast
+    path (``app.state.store`` is already set).  The production module-level app
+    defers opening the real DB until the first request that needs the store.
+    """
+    store: RecipeStore | None = getattr(app.state, "store", None)
+    if store is None:
+        factory: Callable[[], RecipeStore] | None = getattr(
+            app.state, "store_factory", None
+        )
+        if factory is None:
+            raise RuntimeError("No RecipeStore and no store_factory configured on app.state")
+        app.state.store = factory()
+        store = app.state.store
+    return store
+
+
+# ---------------------------------------------------------------------------
 # App factory
 # ---------------------------------------------------------------------------
 
 
 def create_app(
     *,
-    store: RecipeStore,
+    store: RecipeStore | None = None,
+    store_factory: Callable[[], RecipeStore] | None = None,
     resolver: Callable[[str], Ingredient | None],
     embed_fn: Callable[[list[str]], np.ndarray],
     pantry_path: Path,
@@ -160,7 +189,11 @@ def create_app(
     """Build and return a FastAPI app wired to the given dependencies.
 
     Args:
-        store: RecipeStore instance (real or in-memory test instance).
+        store: Eager RecipeStore instance (real or in-memory test instance).
+            Mutually exclusive with ``store_factory``; tests use this path.
+        store_factory: Zero-argument callable that returns a RecipeStore.
+            Called lazily on first use.  Production wiring uses this so that
+            importing the module does not open the real DB.
         resolver: Callable mapping raw text → Optional[Ingredient].
             Must NOT trigger ONNX model loading in tests; pass a fake.
         embed_fn: Callable mapping list[str] → np.ndarray (N, D).
@@ -173,6 +206,11 @@ def create_app(
     Returns:
         Configured FastAPI application.
     """
+    if store is not None and store_factory is not None:
+        raise ValueError("Provide either store or store_factory, not both.")
+    if store is None and store_factory is None:
+        raise ValueError("One of store or store_factory is required.")
+
     app = FastAPI(
         title="PantryAtlas Navigator",
         description="Pantry-in → ranked-recipes-out API",
@@ -180,7 +218,8 @@ def create_app(
     )
 
     # Store dependencies on app.state so route handlers can access them.
-    app.state.store = store
+    app.state.store = store  # None when using factory; _get_store() fills lazily
+    app.state.store_factory = store_factory
     app.state.resolver = resolver
     app.state.embed_fn = embed_fn
     app.state.pantry_path = pantry_path
@@ -216,7 +255,7 @@ def create_app(
         """Return service health and recipe count from the store."""
         return {
             "status": "ok",
-            "recipe_count": app.state.store.count(),
+            "recipe_count": _get_store(app).count(),
         }
 
     # ------------------------------------------------------------------
@@ -321,7 +360,7 @@ def create_app(
         pantry = _load_pantry(app.state.pantry_path)
         canonical_names = [ing.canonical_name for ing in pantry]
 
-        candidates = app.state.store.iter_overlapping(canonical_names)
+        candidates = _get_store(app).iter_overlapping(canonical_names)
 
         if not candidates:
             # Fall back: return empty list rather than 500
@@ -353,23 +392,38 @@ def create_app(
 # ---------------------------------------------------------------------------
 # Production wiring (module-level app)
 # ---------------------------------------------------------------------------
-# Importing this module does NOT load the ONNX model.  The real embed and
-# Matcher are constructed lazily inside the route handlers via app.state,
-# so `python -c 'from pantryatlas.navigator.server import app'` is fast.
+# Importing this module does NOT open the database or create any directories.
+# The real RecipeStore is built lazily on first request via store_factory.
+# ``python -c 'from pantryatlas.navigator.server import app'`` is fast and
+# side-effect-free: no mkdir, no sqlite3.connect, no sqlite-vec load.
 
 _DEFAULT_PANTRY_PATH = Path.home() / ".pantryatlas" / "pantry.json"
 _DEFAULT_DB_PATH = Path.home() / ".pantryatlas" / "recipes.db"
 
 
-def _build_production_app() -> FastAPI:
-    """Build the production app with real store, resolver, and embed_fn.
+def _make_production_store_factory() -> Callable[[], RecipeStore]:
+    """Return a zero-argument factory that opens the real production RecipeStore.
 
-    Heavy imports (ONNX session, sqlite-vec) are deferred until this function
-    is called; the module-level ``app`` reference triggers this once at startup.
+    The factory is called lazily on first request, so importing the module
+    does NOT touch the filesystem.
+    """
+
+    def _factory() -> RecipeStore:
+        from pantryatlas.store.recipes import RecipeStore as _RS
+
+        _DEFAULT_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+        return _RS(_DEFAULT_DB_PATH)
+
+    return _factory
+
+
+def _build_production_app() -> FastAPI:
+    """Build the production app with lazy store, resolver, and embed_fn.
+
+    No filesystem I/O occurs here — everything is deferred to first use.
     """
     from pantryatlas.pantry import Matcher
     from pantryatlas.pantry._default_vocab import DEFAULT_VOCAB_NAMES
-    from pantryatlas.store.recipes import RecipeStore as _RS
 
     # Use module-level lazy embed so ONNX loads only once, shared across routes.
     def _prod_embed(texts: list[str]) -> np.ndarray:
@@ -388,11 +442,8 @@ def _build_production_app() -> FastAPI:
             )
         return _prod_resolver._matcher.resolve(raw)  # type: ignore[attr-defined]
 
-    _DEFAULT_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    store = _RS(_DEFAULT_DB_PATH)
-
     return create_app(
-        store=store,
+        store_factory=_make_production_store_factory(),
         resolver=_prod_resolver,
         embed_fn=_prod_embed,
         pantry_path=_DEFAULT_PANTRY_PATH,
