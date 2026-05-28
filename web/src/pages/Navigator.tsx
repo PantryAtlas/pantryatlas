@@ -32,6 +32,7 @@ import { ModeSwitcher } from '../components/ModeSwitcher'
 import { PhotoReviewSheet } from '../components/PhotoReviewSheet'
 import { RecipeCard } from '../components/RecipeCard'
 import { OfflineBanner } from '../components/OfflineBanner'
+import { AiHelpersPanel } from '../components/AiHelpersPanel'
 
 // ---------------------------------------------------------------------------
 // Debounce util
@@ -65,6 +66,8 @@ const _debouncedFetchRecipes = debounceRecipe(
 )
 
 export function Navigator() {
+  const [showHelpers, setShowHelpers] = useState(false)
+
   useEffect(() => {
     fetchPantry()
     wireOfflineReplay()
@@ -130,6 +133,30 @@ export function Navigator() {
 
           {/* Section D: Recipes section (T-008) */}
           <RecipesSection />
+
+          {/* Section E: AI helpers settings panel (T-014) */}
+          <div style={{ marginTop: '48px' }}>
+            <button
+              type="button"
+              className="link"
+              onClick={() => setShowHelpers((v) => !v)}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                fontFamily: 'var(--font)',
+                fontSize: 'var(--md-sys-typescale-label-medium-size)',
+                fontWeight: 'var(--md-sys-typescale-label-medium-weight)',
+                color: 'var(--md-sys-color-on-surface-variant)',
+                padding: '4px 0',
+                textDecoration: 'underline',
+                textUnderlineOffset: '3px',
+              }}
+            >
+              {showHelpers ? 'Hide AI helpers' : 'AI helpers'}
+            </button>
+            {showHelpers && <AiHelpersPanel />}
+          </div>
         </main>
       </div>
 
