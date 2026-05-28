@@ -143,6 +143,7 @@ web/coverage/
 # session-scoped artifacts. Keep web/design/ itself committed but exclude logs,
 # reference HTML, and any stray MCP config that an `agy` invocation might write.
 web/design/stitch-orchestration.log
+web/design/stitch-orchestration*.log
 web/design/screens/*.html
 
 # Secrets / credentials / MCP configs — defensive, should never appear in this
