@@ -7,14 +7,13 @@ All tests use an injected fake embed_fn — no bge-m3 ONNX model required.
 
 from __future__ import annotations
 
+import hashlib
 from datetime import date, timedelta
 
 import numpy as np
-import pytest
 
 from pantryatlas.navigator.ranking import RankedRecipe, rank_recipes
-from pantryatlas.pantry.models import Ingredient, Pantry, Quantity
-
+from pantryatlas.pantry.models import Ingredient, Pantry
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
@@ -43,15 +42,16 @@ def _recipe(title: str, *ingredients: str) -> dict:
 def _identity_embed(texts: list[str]) -> np.ndarray:
     """Fake embed_fn that creates unique deterministic unit vectors.
 
-    Each text gets a unique 8-dim unit vector based on a simple hash,
+    Each text gets a unique 8-dim unit vector based on a stable sha256 hash,
     so distinct texts have low cosine similarity while identical texts
-    have cosine=1. This is the default fake for most tests.
+    have cosine=1. Seeding via sha256 is process-invariant (PYTHONHASHSEED-safe).
     """
     dim = 8
     vecs = []
     for text in texts:
-        # Seed with hash of text for determinism
-        rng = np.random.default_rng(abs(hash(text)) % (2**31))
+        # Use sha256 for a stable, PYTHONHASHSEED-independent seed
+        seed = int.from_bytes(hashlib.sha256(text.encode()).digest()[:8], "big")
+        rng = np.random.default_rng(seed)
         v = rng.standard_normal(dim).astype(np.float32)
         v = v / np.linalg.norm(v)
         vecs.append(v)
@@ -72,8 +72,9 @@ def _fixed_embed(mapping: dict[str, np.ndarray]):
                 norm = np.linalg.norm(v)
                 result[i] = v / norm if norm > 0 else v
             else:
-                # Fallback: unique random unit vector
-                rng = np.random.default_rng(abs(hash(t)) % (2**31))
+                # Fallback: unique random unit vector (sha256-seeded for PYTHONHASHSEED safety)
+                seed = int.from_bytes(hashlib.sha256(t.encode()).digest()[:8], "big")
+                rng = np.random.default_rng(seed)
                 v = rng.standard_normal(dim).astype(np.float32)
                 result[i] = v / np.linalg.norm(v)
         return result
@@ -129,7 +130,7 @@ def test_perfect_coverage_score():
 
 
 def test_partial_coverage_missing():
-    """AC-5: pantry={garlic,tomato} + recipe={garlic,tomato,basil} → coverage=2/3, missing=['basil']."""
+    """AC-5: pantry={garlic,tomato} + recipe={garlic,tomato,basil} → coverage=2/3."""
     pantry = _make_pantry("garlic", "tomato")
     recipe = _recipe("Simple Sauce", "garlic", "tomato", "basil")
 
@@ -158,8 +159,8 @@ def test_expiration_urgency_ranking():
         expires={"milk": tomorrow},
     )
 
-    recipe_a = _recipe("Pancakes", "flour", "egg", "milk", "butter")   # uses expiring milk
-    recipe_b = _recipe("Shortbread", "flour", "egg", "butter")         # same coverage ratio: 3/3 = 1.0
+    recipe_a = _recipe("Pancakes", "flour", "egg", "milk", "butter")  # uses expiring milk
+    recipe_b = _recipe("Shortbread", "flour", "egg", "butter")  # coverage 3/3 = 1.0
 
     # recipe_b has 3 ingredients all present → coverage=1.0
     # recipe_a has 4 ingredients all present → coverage=1.0
@@ -179,6 +180,32 @@ def test_expiration_urgency_ranking():
 
 
 # ---------------------------------------------------------------------------
+# expiry_window_days kwarg is exercised
+# ---------------------------------------------------------------------------
+
+
+def test_expiry_window_days_controls_urgency():
+    """Passing a custom expiry_window_days changes which items count as expiring.
+
+    Item expiring in 10 days: invisible at window=7 (urgency==0),
+    visible at window=14 (urgency>0).
+    """
+    ten_days = date.today() + timedelta(days=10)
+    pantry = _make_pantry("flour", "milk", expires={"milk": ten_days})
+    recipe = _recipe("Milk Soup", "flour", "milk")
+
+    # Default window (7 days): milk is NOT within window → urgency == 0
+    results_default = rank_recipes(pantry, [recipe], embed_fn=_identity_embed)
+    assert results_default[0].expiration_urgency == 0.0
+
+    # Extended window (14 days): milk IS within window → urgency > 0
+    results_wide = rank_recipes(
+        pantry, [recipe], embed_fn=_identity_embed, expiry_window_days=14
+    )
+    assert results_wide[0].expiration_urgency > 0.0
+
+
+# ---------------------------------------------------------------------------
 # AC-7: substitution penalty ranks recipes
 # ---------------------------------------------------------------------------
 
@@ -186,30 +213,28 @@ def test_expiration_urgency_ranking():
 def test_substitution_penalty_ranking():
     """AC-7: missing ingredient with no close substitute → higher penalty → lower rank.
 
-    Recipe A: high coverage but one missing ingredient with cosine < 0.3 to pantry.
-    Recipe B: slightly lower coverage but missing ingredient has high cosine sub in pantry.
+    All vectors are hardcoded so the outcome is independent of PYTHONHASHSEED.
 
-    We engineer the embed_fn so:
-    - pantry has: 'garlic', 'tomato', 'soy_sauce'
-    - recipe_a misses 'mystery_spice' (cosine < 0.3 to all pantry items)
-    - recipe_b misses 'soy_sauce_sub' (cosine ≈ 0.9 to 'soy_sauce' in pantry)
+    Embedding space (4-dim, all unit vectors):
+    - pantry has: 'garlic' [0,1,0,0], 'tomato' [0,0,1,0], 'soy_sauce' [1,0,0,0]
+    - 'mystery_spice' = [0,0,0,1]  → cosine=0 to every pantry item → penalty ≈ 1.0
+    - 'soy_sauce_sub'≈[0.99,0.14,0,0] → cosine≈0.99 to 'soy_sauce' → penalty ≈ 0.01
 
-    Recipe A has 4/5 coverage (0.8), recipe B has 3/4 coverage (0.75).
-    But recipe_b's substitution_penalty is near 0, while recipe_a's is near 1.
-    The substitution penalty weight (0.20) should overcome the coverage gap.
+    recipe_a: garlic, tomato, soy_sauce, mystery_spice → coverage 3/4=0.75, missing=[mystery_spice]
+      score ≈ 0.50·0.75 + 0.20·(1-1.0) = 0.375
+
+    recipe_b: garlic, tomato, soy_sauce_sub → coverage 2/3≈0.667, missing=[soy_sauce_sub]
+      score ≈ 0.50·0.667 + 0.20·(1-0.01) ≈ 0.531
+
+    recipe_b must rank higher despite lower coverage (the sub-penalty weight overcomes it).
     """
-    dim = 4
-    # Build embedding space:
-    # soy_sauce and soy_sauce_sub are nearly identical (cosine ≈ 0.99)
-    # mystery_spice is orthogonal to everything in pantry (cosine ≈ 0)
     soy_sauce_vec = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)
+    # soy_sauce_sub_vec normalises to ≈ [0.990, 0.140, 0, 0]; cosine to soy_sauce ≈ 0.990
     soy_sauce_sub_vec = np.array([0.99, 0.14, 0.0, 0.0], dtype=np.float32)
     garlic_vec = np.array([0.0, 1.0, 0.0, 0.0], dtype=np.float32)
     tomato_vec = np.array([0.0, 0.0, 1.0, 0.0], dtype=np.float32)
+    # mystery_spice is orthogonal to every pantry vector → cosine=0 → penalty=1.0
     mystery_spice_vec = np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float32)
-
-    # soy_sauce and mystery_spice have cosine = 0 → mystery_spice has no substitute
-    # soy_sauce_sub vs soy_sauce cosine ≈ 0.99 → excellent substitute
 
     mapping = {
         "garlic": garlic_vec,
@@ -222,11 +247,11 @@ def test_substitution_penalty_ranking():
 
     pantry = _make_pantry("garlic", "tomato", "soy_sauce")
 
-    # recipe_a: 4 of 5 present, missing 'mystery_spice' (no sub in pantry)
-    recipe_a = _recipe("Mystery Stir Fry", "garlic", "tomato", "soy_sauce", "basil_extra", "mystery_spice")
+    # recipe_a: 3/4 present, missing 'mystery_spice' (orthogonal → no pantry substitute)
+    recipe_a = _recipe("Mystery Stir Fry", "garlic", "tomato", "soy_sauce", "mystery_spice")
 
-    # recipe_b: 3 of 4 present, missing 'soy_sauce_sub' (close to 'soy_sauce' in pantry)
-    recipe_b = _recipe("Teriyaki Noodles", "garlic", "tomato", "extra_herb", "soy_sauce_sub")
+    # recipe_b: 2/3 present, missing 'soy_sauce_sub' (cosine≈0.99 to 'soy_sauce' → great sub)
+    recipe_b = _recipe("Teriyaki Noodles", "garlic", "tomato", "soy_sauce_sub")
 
     results = rank_recipes(pantry, [recipe_a, recipe_b], embed_fn=embed_fn)
 
@@ -234,10 +259,10 @@ def test_substitution_penalty_ranking():
     a_result = next(r for r in results if r.recipe["title"] == "Mystery Stir Fry")
     b_result = next(r for r in results if r.recipe["title"] == "Teriyaki Noodles")
 
-    # recipe_a penalty near 1.0 (mystery_spice orthogonal to all pantry items)
-    # recipe_b penalty near 0.0 (soy_sauce_sub ≈ soy_sauce)
+    # recipe_a penalty ≈ 1.0 (mystery_spice orthogonal to all pantry items)
+    # recipe_b penalty ≈ 0.01 (soy_sauce_sub nearly identical to soy_sauce)
     assert a_result.substitution_penalty > b_result.substitution_penalty
-    # recipe_b should rank higher despite lower coverage
+    # recipe_b must rank higher despite lower raw coverage
     assert b_result.score > a_result.score
 
 
