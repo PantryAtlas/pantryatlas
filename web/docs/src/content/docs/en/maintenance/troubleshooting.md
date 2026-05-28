@@ -29,9 +29,10 @@ writing that image to a fresh card.
 
 ## Update PantryAtlas
 
-Download the latest image from GitHub releases and write it to the card. Back up
-first if you want to keep your current data.
+Pull the latest version from GitHub and re-run the installer (a one-click update
+image is coming soon). Back up first if you want to keep your current data.
 
 ## Start over
 
-Re-flash the microSD card with a fresh image. This erases everything on the card.
+Re-run the install from GitHub onto the microSD card. This erases everything on
+the card.
