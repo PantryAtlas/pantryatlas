@@ -5,6 +5,10 @@ import json
 from datetime import date
 from pathlib import Path
 
+import pytest
+
+from pantryatlas.pantry.models import Ingredient as Ing
+from pantryatlas.pantry.models import Quantity as Qty
 from pantryatlas.store.kitchen import KitchenStore
 
 
@@ -63,7 +67,6 @@ def test_migration_is_idempotent(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # Task 2: pantry CRUD + ledger + on-hand
 # ---------------------------------------------------------------------------
-from pantryatlas.pantry.models import Ingredient as Ing, Quantity as Qty
 
 
 def test_add_remove_and_ledger(tmp_path: Path) -> None:
@@ -102,7 +105,6 @@ def test_replace_all(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # Task 3: coarse consume transitions
 # ---------------------------------------------------------------------------
-import pytest
 
 
 @pytest.mark.parametrize(
@@ -119,7 +121,10 @@ import pytest
 def test_consume_transitions(tmp_path, start_state, coarse, end_state, end_conf, change_type):
     store = KitchenStore(tmp_path / "kitchen.db")
     store.add_item(Ing(canonical_name="garlic", raw_text="garlic"))
-    store._conn.execute("UPDATE pantry_items SET state=?, confidence=1.0 WHERE canonical_name='garlic'", (start_state,))
+    store._conn.execute(
+        "UPDATE pantry_items SET state=?, confidence=1.0 WHERE canonical_name='garlic'",
+        (start_state,),
+    )
     store._conn.commit()
     store.consume_item("garlic", coarse, source="manual")
     item = store.get_item("garlic")

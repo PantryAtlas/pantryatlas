@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -57,13 +57,13 @@ CREATE TABLE IF NOT EXISTS cook_events (
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _row_to_dict_from_cursor(cursor: sqlite3.Cursor, row: tuple) -> dict[str, Any]:
     """Convert a raw sqlite3 row tuple to a dict using cursor.description."""
     cols = [d[0] for d in cursor.description]
-    return dict(zip(cols, row))
+    return dict(zip(cols, row, strict=True))
 
 
 class KitchenStore:
@@ -96,7 +96,7 @@ class KitchenStore:
         cur = self._conn.execute(sql, params)
         rows = cur.fetchall()
         cols = [d[0] for d in cur.description]
-        return [dict(zip(cols, r)) for r in rows]
+        return [dict(zip(cols, r, strict=True)) for r in rows]
 
     def _migrate_from_json(self, json_path: Path) -> None:
         # Only migrate when the table is empty AND the json still exists.
@@ -138,7 +138,10 @@ class KitchenStore:
             "source": row["source"],
         }
         if row["quantity_amount"] is not None:
-            item["quantity"] = {"amount": row["quantity_amount"], "unit": row["quantity_unit"] or ""}
+            item["quantity"] = {
+                "amount": row["quantity_amount"],
+                "unit": row["quantity_unit"] or "",
+            }
         if row["expires_at"] is not None:
             item["expires_at"] = row["expires_at"]
         return item
@@ -195,7 +198,9 @@ class KitchenStore:
             self._log_event(canonical_name, "adjust", "manual", {"removed": True})
         self._conn.commit()
 
-    def replace_all(self, ingredients: list[Ingredient], source: str = "manual") -> list[dict[str, Any]]:
+    def replace_all(
+        self, ingredients: list[Ingredient], source: str = "manual"
+    ) -> list[dict[str, Any]]:
         existing = {i["canonical_name"] for i in self.list_items()}
         incoming = {ing.canonical_name for ing in ingredients}
         for gone in existing - incoming:
@@ -256,7 +261,8 @@ class KitchenStore:
 
     def restore_item(self, canonical_name: str, source: str = "manual") -> dict[str, Any] | None:
         cur = self._conn.execute(
-            "UPDATE pantry_items SET state='present', confidence=1.0, last_observed_at=?, updated_at=? "
+            "UPDATE pantry_items "
+            "SET state='present', confidence=1.0, last_observed_at=?, updated_at=? "
             "WHERE canonical_name=?",
             (_now_iso(), _now_iso(), canonical_name),
         )
@@ -341,7 +347,7 @@ class KitchenStore:
         return self.get_item(canonical_name)
 
     def waste_tally(self, window_days: int = 30) -> dict[str, Any]:
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=window_days)).isoformat()
+        cutoff = (datetime.now(UTC) - timedelta(days=window_days)).isoformat()
         rows = self._conn.execute(
             "SELECT canonical_name, change_type FROM inventory_events "
             "WHERE change_type IN ('discard','expire') AND ts >= ?",
