@@ -11,6 +11,13 @@
   padding: 0;
 }
 
+/* Brand mark: injected SVG fills its sized wrapper (see BrandMark.tsx) */
+.brand-mark > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 html {
   scroll-behavior: smooth;
   -webkit-text-size-adjust: 100%;

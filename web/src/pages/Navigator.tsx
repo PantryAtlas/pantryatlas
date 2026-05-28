@@ -33,6 +33,7 @@ import { PhotoReviewSheet } from '../components/PhotoReviewSheet'
 import { RecipeCard } from '../components/RecipeCard'
 import { OfflineBanner } from '../components/OfflineBanner'
 import { AiHelpersPanel } from '../components/AiHelpersPanel'
+import { BrandMark } from '../components/BrandMark'
 
 // ---------------------------------------------------------------------------
 // Debounce util
@@ -193,23 +194,30 @@ function TopBar() {
         // No shadow per spec — flat against gradient page background
       }}
     >
-      {/* Brand wordmark — gradient clip */}
-      <h1
-        style={{
-          fontFamily: 'var(--font)',
-          fontSize: 'var(--md-sys-typescale-title-medium-size)',
-          fontWeight: 'var(--md-sys-typescale-title-medium-weight)',
-          lineHeight: 'var(--md-sys-typescale-title-medium-line-height)',
-          letterSpacing: '-0.02em',
-          background: 'var(--gradient-gemini)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          backgroundClip: 'text',
-          color: 'transparent',
-        }}
-      >
-        PantryAtlas
-      </h1>
+      {/* Brand lockup — logo mark + wordmark (Pantry ink · Atlas gradient accent) */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <BrandMark size={26} />
+        <h1
+          style={{
+            fontFamily: 'var(--font)',
+            fontSize: 'var(--md-sys-typescale-title-medium-size)',
+            fontWeight: 700,
+            lineHeight: 'var(--md-sys-typescale-title-medium-line-height)',
+            letterSpacing: '-0.03em',
+            color: 'var(--md-sys-color-on-surface)',
+          }}
+        >
+          Pantry<span
+            style={{
+              background: 'var(--gradient-gemini)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+              color: 'transparent',
+            }}
+          >Atlas</span>
+        </h1>
+      </div>
 
       {/* Mode chip — tap to open mode switcher */}
       <button

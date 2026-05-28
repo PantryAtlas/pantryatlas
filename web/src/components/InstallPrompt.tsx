@@ -1,5 +1,6 @@
 import { h } from 'preact'
 import { useState, useEffect } from 'preact/hooks'
+import { BrandMark } from './BrandMark'
 
 // BeforeInstallPromptEvent is not in standard lib; declare it locally.
 interface BeforeInstallPromptEvent extends Event {
@@ -80,40 +81,7 @@ export function InstallPrompt() {
           justifyContent: 'center',
         }}
       >
-        <svg
-          width="24"
-          height="24"
-          viewBox="0 0 24 24"
-          fill="none"
-          aria-hidden="true"
-        >
-          {/* Bowl icon */}
-          <path
-            d="M5 12 H19 A7 7 0 0 1 5 12 Z"
-            fill="var(--md-sys-color-on-primary-container)"
-          />
-          <ellipse
-            cx="12"
-            cy="12"
-            rx="7"
-            ry="1.4"
-            fill="var(--md-sys-color-on-primary-container)"
-            opacity="0.5"
-          />
-          <rect
-            x="10"
-            y="18"
-            width="4"
-            height="2"
-            rx="1"
-            fill="var(--md-sys-color-on-primary-container)"
-          />
-          {/* Sparkle */}
-          <path
-            d="M18 4l.8 2.8 2.8.8-2.8.8L18 11l-.8-2.8L14.4 7.6l2.8-.8L18 4z"
-            fill="var(--md-sys-color-on-primary-container)"
-          />
-        </svg>
+        <BrandMark size={26} color="var(--md-sys-color-on-primary-container)" />
       </div>
 
       {/* Text content */}

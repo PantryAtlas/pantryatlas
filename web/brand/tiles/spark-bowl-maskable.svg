@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="pa-tilem-spark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1A73E8"/>
+      <stop offset="0.52" stop-color="#6E6AD6"/>
+      <stop offset="1" stop-color="#D96570"/>
+    </linearGradient>
+  </defs>
+  <!-- full-bleed background for maskable safe area -->
+  <rect x="0" y="0" width="64" height="64" fill="url(#pa-tilem-spark)"/>
+  <g transform="translate(10.88 10.88) scale(0.66)" fill="none">
+    <path d="M12 36 H52 A20 20 0 0 1 12 36 Z" fill="#ffffff"/>
+    <ellipse cx="32" cy="36" rx="20" ry="4.6" fill="none" stroke="#ffffff" stroke-width="3"/>
+    <path d="M32 6 c1.6 7.8 4.0 10.2 11.8 11.8 C36 19.6 33.6 22 32 29.8 C30.4 22 28 19.6 20.2 17.8 C28 16.2 30.4 13.8 32 6 Z" fill="#ffffff"/>
+    <path d="M47 9 c0.7 3.4 1.7 4.4 5.1 5.1 c-3.4 0.7 -4.4 1.7 -5.1 5.1 c-0.7 -3.4 -1.7 -4.4 -5.1 -5.1 c3.4 -0.7 4.4 -1.7 5.1 -5.1 Z" fill="#ffffff" opacity="0.7"/>
+  </g>
+</svg>

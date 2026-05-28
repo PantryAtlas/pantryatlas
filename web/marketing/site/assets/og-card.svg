@@ -19,6 +19,11 @@
       <stop offset="60%" stop-color="#9B72CB"/>
       <stop offset="100%" stop-color="#D96570"/>
     </linearGradient>
+    <linearGradient id="dialGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1A73E8"/>
+      <stop offset="50%" stop-color="#9B72CB"/>
+      <stop offset="100%" stop-color="#D96570"/>
+    </linearGradient>
   </defs>
   <rect width="1200" height="630" fill="url(#bg)"/>
   <circle cx="1050" cy="120" r="340" fill="url(#blob)" opacity="0.28"/>
@@ -41,8 +46,16 @@
     <path d="M250 56l4 14 14 4-14 4-4 14-4-14-14-4 14-4 4-14z" fill="#ffffff"/>
   </g>
 
+  <!-- brand lockup: Coverage Dial mark + wordmark (Pantry ink · Atlas gradient) -->
+  <g transform="translate(500, 206)" fill="none">
+    <circle cx="32" cy="32" r="23" stroke="#1A1B22" stroke-opacity="0.16" stroke-width="5"/>
+    <circle cx="32" cy="32" r="23" stroke="url(#dialGrad)" stroke-width="5" stroke-linecap="round" stroke-dasharray="98.27 144.51" transform="rotate(-90 32 32)"/>
+    <circle cx="32" cy="9" r="3.6" fill="url(#dialGrad)"/>
+    <path d="M21 31 a11 11 0 0 0 22 0 Z" fill="#1A1B22"/>
+    <ellipse cx="32" cy="31" rx="11" ry="2.6" fill="#1A1B22" opacity="0.4"/>
+  </g>
   <!-- text -->
-  <text x="500" y="262" font-family="'DM Sans', system-ui, sans-serif" font-size="70" font-weight="700" fill="#1A1B22">PantryAtlas</text>
+  <text x="582" y="262" font-family="'DM Sans', system-ui, sans-serif" font-size="70" font-weight="700"><tspan fill="#1A1B22">Pantry</tspan><tspan fill="url(#ink)">Atlas</tspan></text>
   <text x="500" y="334" font-family="'DM Sans', system-ui, sans-serif" font-size="38" font-weight="600" fill="url(#ink)">Your kitchen's smart pantry.</text>
   <text x="500" y="386" font-family="'DM Sans', system-ui, sans-serif" font-size="38" font-weight="600" fill="url(#ink)">Lives in your kitchen.</text>
   <text x="500" y="446" font-family="'DM Sans', system-ui, sans-serif" font-size="26" font-weight="400" fill="#44464E">Free · Open source · Built with Gemma, on-device</text>

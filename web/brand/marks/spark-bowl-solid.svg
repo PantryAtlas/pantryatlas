@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- single-color (reversed / inside-tile) variant: no gradient -->
+  <path d="M12 36 H52 A20 20 0 0 1 12 36 Z" fill="currentColor"/>
+  <ellipse cx="32" cy="36" rx="20" ry="4.6" fill="none" stroke="currentColor" stroke-width="3"/>
+  <path d="M32 6 c1.6 7.8 4.0 10.2 11.8 11.8 C36 19.6 33.6 22 32 29.8 C30.4 22 28 19.6 20.2 17.8 C28 16.2 30.4 13.8 32 6 Z" fill="currentColor"/>
+  <path d="M47 9 c0.7 3.4 1.7 4.4 5.1 5.1 c-3.4 0.7 -4.4 1.7 -5.1 5.1 c-0.7 -3.4 -1.7 -4.4 -5.1 -5.1 c3.4 -0.7 4.4 -1.7 5.1 -5.1 Z" fill="currentColor" opacity="0.7"/>
+</svg>

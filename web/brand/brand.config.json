@@ -1,0 +1,21 @@
+{
+  "$comment": "PantryAtlas logo system. 'primary' is the live brand mark; 'secondary' is staged for preview builds and can be promoted later. To switch surfaces to the secondary mark for a preview build, run `BRAND_VARIANT=spark-bowl node ops/brand/apply-brand.mjs` (and set VITE_BRAND_VARIANT=spark-bowl for the app build). To make the switch permanent, swap the 'primary'/'secondary' values and re-run the script. Source artwork lives in web/brand/marks (in-app + lockups) and web/brand/tiles (favicons + PWA icons).",
+  "primary": "coverage-dial",
+  "secondary": "spark-bowl",
+  "variants": {
+    "coverage-dial": {
+      "name": "Coverage Dial",
+      "mark": "marks/coverage-dial-accent.svg",
+      "markSolid": "marks/coverage-dial-solid.svg",
+      "tile": "tiles/coverage-dial.svg",
+      "tileMaskable": "tiles/coverage-dial-maskable.svg"
+    },
+    "spark-bowl": {
+      "name": "Spark Bowl",
+      "mark": "marks/spark-bowl-accent.svg",
+      "markSolid": "marks/spark-bowl-solid.svg",
+      "tile": "tiles/spark-bowl.svg",
+      "tileMaskable": "tiles/spark-bowl-maskable.svg"
+    }
+  }
+}
