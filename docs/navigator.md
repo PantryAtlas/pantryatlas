@@ -243,6 +243,8 @@ Resolves raw text to a canonical ingredient name **without** modifying the pantr
 
 **Query parameter (optional):** `cuisine` — cuisine string (e.g. `italian`). When supplied, recipes whose title contains this string receive `cultural_fit = 1.0`.
 
+> **Note:** `RecipeStore.query_by_vector` supports metadata filtering (`filters={"language": "en"}`), but the navigator route does not yet expose a language filter — the corpus is English-only today, so it would have exactly one valid value. A language filter param lands alongside multilingual aliases (see issue #1).
+
 **Response:** array of ranked recipe objects (`instructions` is a list of step strings):
 ```json
 [
