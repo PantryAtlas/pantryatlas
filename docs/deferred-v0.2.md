@@ -4,6 +4,24 @@ These five features are intentionally **not** shipped in v0.1.0. Each requires s
 
 ---
 
+## Shipped in v0.2.0
+
+### `pantryatlas.navigator`
+
+The navigator submodule shipped in v0.2.0. It provides pantry-in → ranked-recipes-out as a local FastAPI service with a Preact PWA frontend, all running on the Raspberry Pi 5.
+
+What ships:
+
+- **FastAPI server** (`pantryatlas.navigator.server`) — 7 REST routes: health, pantry read/replace/add-item/delete-item/resolve, and recipe ranking. Serves the built PWA from `web/dist/`.
+- **Ranking algorithm** (`pantryatlas.navigator.ranking`) — weighted composite score: `0.50 × coverage + 0.20 × expiration_urgency + 0.20 × (1 − substitution_penalty) + 0.10 × cultural_fit`.
+- **Ingestion CLI** (`pantryatlas.navigator.ingest`) — loads RecipeNLG parquet into `~/.pantryatlas/recipes.db` with ingredient-count curation (3–5 / 6–8 / 9+ buckets).
+- **Preact PWA** — single-screen UI with dual-modality input (type or photograph), coverage rings, Home / Community Kitchen mode chip.
+- **systemd unit** (`ops/systemd/pantryatlas-navigator.service`) — production unit binding to `0.0.0.0:8090`, accessible at `http://pantryatlas.local:8090` on the local network.
+
+See [docs/navigator.md](navigator.md) for the full reference.
+
+---
+
 ## Mode discovery
 
 **What it is:** Unsupervised clustering of recipes into flavor modes (cuisines, cooking styles, flavor families) using recipe embeddings.

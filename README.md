@@ -40,6 +40,7 @@ with gemma.runner.GemmaRunner() as runner:
 
 - **[Installation Guide](docs/install-pi5.md)** — Step-by-step Pi 5 setup (for community kitchens)
 - **[API Reference](docs/api.md)** — Complete public API reference
+- **[Navigator](docs/navigator.md)** — v0.2.0 pantry-in → ranked-recipes-out submodule (API reference, ranking algorithm, ingestion CLI, PWA install)
 - **[Deferred Features](docs/deferred-v0.2.md)** — What's coming in v0.2 and why
 - **[Gemma 4 Spec](docs/gemma4-verified-specs.md)** — Verified capability claims with sources
 - **[Full PRD](tasks/prd-pantryatlas.md)** — Product requirements and architecture
