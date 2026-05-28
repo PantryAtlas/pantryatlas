@@ -84,20 +84,6 @@ _EXPIRY_WINDOW_DAYS: int = 7
 # ---------------------------------------------------------------------------
 
 
-def _cosine(a: np.ndarray, b: np.ndarray) -> float:
-    """Cosine similarity between two 1-D float arrays.
-
-    Both vectors are assumed L2-normalised; falls back to safe division.
-    """
-    a = np.asarray(a, dtype=np.float32)
-    b = np.asarray(b, dtype=np.float32)
-    norm_a = float(np.linalg.norm(a))
-    norm_b = float(np.linalg.norm(b))
-    if norm_a < 1e-9 or norm_b < 1e-9:
-        return 0.0
-    return float(np.dot(a, b) / (norm_a * norm_b))
-
-
 def _compute_coverage(
     recipe_ingredients: list[str],
     pantry: Pantry,
