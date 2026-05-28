@@ -106,15 +106,15 @@ The page is one long scroll. Six sections. No nav menu — that's a marketing-pa
 
 **Step 1 — Pick your computer** (`label` "STEP 1" small caps above title)
 - Title in `title`: *"Pick a small computer"*
-- Body in `body`: *"PantryAtlas runs on two kinds of small computer. Either is a one-time purchase of around $120–$200 — you keep the hardware forever."*
+- Body in `body`: *"PantryAtlas runs on a small computer you keep in your kitchen — a one-time purchase of around $120, and it's yours forever."*
 - Two side-by-side option cards inside the step card (stacked on mobile), each 24px radius, `surface-container-low` fill, 20px padding:
   - **Option A — Raspberry Pi 5 (8GB)** *— the default*
     - Body: *"The friendlier choice. A Pi 5 kit from Amazon, Adafruit, or CanaKit includes everything you need: the computer, microSD card, USB-C power supply, and a small case. Around $120. Fast enough for everything PantryAtlas does — recipes, scoring, ingredient resolution, and photo recognition on small images."*
     - Pill-link: *"See a recommended Pi 5 kit →"*
-  - **Option B — Coral Dev Board** *— an alternative if you already have one*
-    - Body: *"Google's small computer with an on-board Edge TPU chip. Same PantryAtlas software, same setup steps, around $130 for the board plus accessories. PantryAtlas doesn't yet use the Edge TPU directly (everything currently runs on Coral's general-purpose CPU), so a Pi 5 is the faster default today. Choose Coral if you already own one, prefer Google hardware, or want to help us port the vision model to the Edge TPU in a future release."*
-    - Pill-link: *"See the Coral Dev Board →"*
-- Footnote in `caption` below both options: *"Both boards run the same PantryAtlas image. Your data lives on the microSD card, so you can move between boards anytime."*
+  - **Option B — Coral edition** *— coming soon*
+    - Body: *"Google and Synaptics recently released a new Coral board — a tiny, low-power computer with an on-board AI chip. We're building a PantryAtlas edition for it: it runs a small model on the board itself and, when there's heavy lifting to do, borrows a more powerful computer on your home network (like a Pi 5). It's not ready yet — for today, pick the Pi 5. Want to help build it? The work is open on GitHub."*
+    - Pill-link: *"Learn about the new Coral board →"*
+- Footnote in `caption` below both options: *"Your data lives on the microSD card, so it's easy to back up or move to a fresh card anytime."*
 
 **Step 2 — Flash the card**
 - Title: *"Copy PantryAtlas onto the microSD card"*
@@ -124,7 +124,7 @@ The page is one long scroll. Six sections. No nav menu — that's a marketing-pa
 
 **Step 3 — Plug it in**
 - Title: *"Plug it into power and Wi-Fi"*
-- Body: *"Put the microSD card into your Pi 5 (or Coral Dev Board), plug in the power supply, and either connect an ethernet cable to your router OR follow the on-first-boot Wi-Fi prompt. After about a minute, a small light on the board turns solid green — that means PantryAtlas is running."*
+- Body: *"Put the microSD card into your Pi 5, plug in the power supply, and either connect an ethernet cable to your router OR follow the on-first-boot Wi-Fi prompt. After about a minute, a small light on the board turns solid green — that means PantryAtlas is running."*
 - Illustration on the right: a circular vessel showing a small computer with a green LED, gentle radial pulse on the LED (CSS animation, 2s loop, respects reduced-motion)
 
 **Step 4 — Open it on your phone**
@@ -184,7 +184,7 @@ The page is one long scroll. Six sections. No nav menu — that's a marketing-pa
   - **Card 1 — Most people start here** (`primary-container` accent bar at top)
     - Leading 64px circular vessel icon (a hand-drawn microSD card)
     - Title: *"DIY in about 30 minutes"*
-    - Body: *"Buy a Pi 5 kit (or Coral Dev Board), download our pre-built image from GitHub, flash the microSD card with the free Raspberry Pi Imager, plug it in. The four steps above walk you through every part. You don't need to know Linux or use a terminal — just a web browser."*
+    - Body: *"Buy a Pi 5 kit, download our pre-built image from GitHub, flash the microSD card with the free Raspberry Pi Imager, plug it in. The four steps above walk you through every part. You don't need to know Linux or use a terminal — just a web browser."*
     - Two pill-links: *"Download image"* (filled `gradient-ember`) + *"Setup guide ↑"* (outlined, smooth-scrolls to Section 4)
   - **Card 2 — For developers** (`secondary-container` accent bar)
     - Leading 64px circular vessel icon (a hand-drawn terminal window)
