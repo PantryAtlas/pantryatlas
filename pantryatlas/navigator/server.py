@@ -50,6 +50,9 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from pantryatlas.inference.config import ProviderConfig, save_provider_config
+from pantryatlas.inference.providers.lan_endpoint import LanEndpointProvider
+from pantryatlas.inference.registry import ProviderRegistry
 from pantryatlas.navigator.ranking import RankedRecipe, compute_swaps, rank_recipes
 from pantryatlas.pantry.models import Ingredient, Pantry, Quantity
 from pantryatlas.store.recipes import RecipeStore
@@ -111,6 +114,14 @@ class SwapsIn(BaseModel):
     """Body for POST /navigator/recipes/swaps — one recipe's ingredient list."""
 
     ingredients: list[str]
+
+
+class ProviderIn(BaseModel):
+    """Body for POST /navigator/providers — add a LAN provider."""
+
+    name: str
+    base_url: str
+    multimodal: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -212,6 +223,8 @@ def create_app(
     pantry_path: Path,
     web_dist: Path | None = None,
     vision_client: GemmaClient | None = None,
+    provider_registry: ProviderRegistry | None = None,
+    providers_config_path: Path | None = None,
 ) -> FastAPI:
     """Build and return a FastAPI app wired to the given dependencies.
 
@@ -256,6 +269,8 @@ def create_app(
     app.state.pantry_path = pantry_path
     # vision_client is None by default → 503 until operator loads mmproj
     app.state.vision_client = vision_client
+    app.state.provider_registry = provider_registry
+    app.state.providers_config_path = providers_config_path
 
     # ------------------------------------------------------------------
     # Static PWA serving (guarded — tolerates missing web/dist)
@@ -478,8 +493,10 @@ def create_app(
         """
         from pantryatlas.navigator.vision import VisionUnavailable, parse_shelf
 
-        client = app.state.vision_client
-        if client is None:
+        registry = app.state.provider_registry
+        client = app.state.vision_client  # backward-compat fallback
+        backend = registry if registry is not None else client
+        if backend is None:
             return JSONResponse(
                 status_code=503,
                 content={"error": "vision_unavailable"},
@@ -508,7 +525,7 @@ def create_app(
             raise HTTPException(status_code=400, detail="Empty image upload.")
 
         try:
-            detected = parse_shelf(raw_bytes, client)
+            detected = parse_shelf(raw_bytes, backend)
         except VisionUnavailable:
             return JSONResponse(
                 status_code=503,
@@ -522,6 +539,68 @@ def create_app(
             "detected": [{"label": d.label, "confidence": d.confidence} for d in detected],
             "items": [d.label for d in detected],
         }
+
+    # ------------------------------------------------------------------
+    # Provider registry REST API
+    # ------------------------------------------------------------------
+
+    def _persist_providers() -> None:
+        reg = app.state.provider_registry
+        path = app.state.providers_config_path
+        if reg is not None and path is not None:
+            save_provider_config([p.to_config() for p in reg.all()], path)
+
+    @app.get("/navigator/providers")
+    def list_providers() -> list[dict[str, Any]]:
+        reg = app.state.provider_registry
+        if reg is None:
+            return []
+        return [
+            {
+                "name": i.name, "kind": i.kind, "capabilities": i.capabilities,
+                "priority": i.priority, "enabled": i.enabled, "available": i.available,
+            }
+            for i in reg.providers_status()
+        ]
+
+    @app.post("/navigator/providers", status_code=201)
+    def add_provider(body: ProviderIn) -> dict[str, Any]:
+        reg = app.state.provider_registry
+        if reg is None:
+            raise HTTPException(status_code=503, detail="Provider registry not configured.")
+        if reg.get(body.name) is not None:
+            raise HTTPException(status_code=409, detail=f"Provider '{body.name}' already exists.")
+        caps = ["text", "vision"] if body.multimodal else ["text"]
+        reg.add(LanEndpointProvider(
+            name=body.name, base_url=body.base_url, priority=10, capabilities=caps,
+        ))
+        _persist_providers()
+        return {"name": body.name, "capabilities": caps}
+
+    @app.post("/navigator/providers/{name}/test")
+    def test_provider(name: str) -> dict[str, Any]:
+        reg = app.state.provider_registry
+        p = reg.get(name) if reg is not None else None
+        if p is None:
+            raise HTTPException(status_code=404, detail=f"No provider '{name}'.")
+        return {"name": name, "available": p.force_probe()}
+
+    @app.delete("/navigator/providers/{name}")
+    def delete_provider(name: str) -> dict[str, str]:
+        reg = app.state.provider_registry
+        if reg is None or not reg.remove(name):
+            raise HTTPException(status_code=404, detail=f"No provider '{name}'.")
+        _persist_providers()
+        return {"deleted": name}
+
+    @app.put("/navigator/providers/order")
+    def reorder_providers(ordered_names: list[str]) -> list[dict[str, Any]]:
+        reg = app.state.provider_registry
+        if reg is None:
+            raise HTTPException(status_code=503, detail="Provider registry not configured.")
+        reg.reorder(ordered_names)
+        _persist_providers()
+        return list_providers()
 
     return app
 
@@ -573,6 +652,24 @@ def _build_production_app() -> FastAPI:
 
     No filesystem I/O occurs here — everything is deferred to first use.
     """
+    from pantryatlas.inference.config import DEFAULT_CONFIG_PATH, load_provider_config
+    from pantryatlas.inference.providers.local_runner import LocalRunnerProvider
+
+    def _build_registry() -> ProviderRegistry:
+        providers = []
+        for cfg in load_provider_config(DEFAULT_CONFIG_PATH):
+            if cfg.kind == "local":
+                providers.append(LocalRunnerProvider(
+                    name=cfg.name, priority=cfg.priority, enabled=cfg.enabled,
+                    capabilities=cfg.capabilities,
+                ))
+            elif cfg.kind == "lan" and cfg.base_url:
+                providers.append(LanEndpointProvider(
+                    name=cfg.name, base_url=cfg.base_url, priority=cfg.priority,
+                    enabled=cfg.enabled, capabilities=cfg.capabilities,
+                ))
+        return ProviderRegistry(providers)
+
     from pantryatlas.pantry import Matcher
     from pantryatlas.pantry._default_vocab import DEFAULT_VOCAB_NAMES
 
@@ -598,6 +695,8 @@ def _build_production_app() -> FastAPI:
         resolver=_prod_resolver,
         embed_fn=_prod_embed,
         pantry_path=_DEFAULT_PANTRY_PATH,
+        provider_registry=_build_registry(),
+        providers_config_path=DEFAULT_CONFIG_PATH,
     )
 
 
