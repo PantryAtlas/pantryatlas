@@ -904,12 +904,41 @@ In the three recompute routes, replace each `pantry = _load_pantry(app.state.pan
         pantry = _get_kitchen(app).on_hand()
 ```
 
-(applies at the former `:410`, `:443`, `:470`). Leave `_load_pantry`/`_save_pantry`/`_pantry_to_list` defined — `KitchenStore` handles persistence now, but the helpers stay until removed in a later cleanup to avoid touching unrelated tests.
+(applies at the former `:410`, `:443`, `:470`). Leave `_load_pantry`/`_save_pantry`/`_pantry_to_list` defined — `KitchenStore` handles persistence now, but the helpers stay until removed in a later cleanup.
 
-- [ ] **Step 4: Run it to verify it passes**
+- [ ] **Step 3c: Fix the EXISTING app-construction test sites (REGRESSION GUARD)**
 
-Run: `.venv/bin/python -m pytest tests/navigator/test_loop_routes.py -q 2>&1 | grep -v -E "profiling:|\.gcda:|Cannot open"`
-Expected: PASS (2 passed)
+Repointing the shared pantry/recompute routes means every `create_app(...)` test fixture now needs a `kitchen`, or those routes raise `RuntimeError` ("No KitchenStore..."). There are **four** sites (verified — none assert `pantry.json` file contents, so only the `kitchen=` argument is needed, no assertion rewrites):
+
+| File:line | tmp dir in scope | fix |
+|---|---|---|
+| `tests/navigator/test_server.py:132` (`client` fixture) | `pantry_path` (= `tmp_path/"pantry.json"`) | `kitchen=KitchenStore(pantry_path.parent / "kitchen.db")` |
+| `tests/navigator/test_server.py:198` | `pantry_path` | `kitchen=KitchenStore(pantry_path.parent / "kitchen.db")` |
+| `tests/navigator/test_vision.py:219` | `tmp_path` | `kitchen=KitchenStore(tmp_path / "kitchen.db")` |
+| `tests/navigator/test_providers_api.py:33` | `tmp_path` | `kitchen=KitchenStore(tmp_path / "kitchen.db")` |
+
+Add `from pantryatlas.store.kitchen import KitchenStore` to each of the three files and the `kitchen=` kwarg to each `create_app(...)` call. Example (test_server.py `client` fixture):
+
+```python
+    from pantryatlas.navigator.server import create_app
+    from pantryatlas.store.kitchen import KitchenStore
+
+    app = create_app(
+        store=tmp_store,
+        resolver=_fake_resolver,
+        embed_fn=_fake_embed,
+        pantry_path=pantry_path,
+        kitchen=KitchenStore(pantry_path.parent / "kitchen.db"),
+    )
+    return TestClient(app)
+```
+
+Re-grep to be sure no site was missed: `grep -rn "create_app(" tests/ | grep -v "create_app(store, resolver"` (the latter excludes the docstring).
+
+- [ ] **Step 4: Run it to verify it passes — the WHOLE navigator suite (this is the CI-trap guard)**
+
+Run: `.venv/bin/python -m pytest tests/navigator/ -q 2>&1 | grep -v -E "profiling:|\.gcda:|Cannot open"`
+Expected: PASS — both the new `test_loop_routes.py`/`test_kitchen_store.py` AND the pre-existing `test_server.py`/`test_vision.py`/`test_providers_api.py`. (If `test_server.py` 500s on `/navigator/pantry`, a `create_app` site is missing its `kitchen=`.)
 
 - [ ] **Step 5: Commit**
 
@@ -1327,10 +1356,10 @@ git commit -m "feat(web): 'I cooked this' on recipe card → cook event + decrem
 
 > Read the current pantry-list block in `Navigator.tsx` first. Add, per pantry row: (a) when `state === 'used_up'`, render the row dimmed (`opacity: 0.5`) with a "Still have it" restore button calling `restoreItem(name)`; (b) otherwise an overflow control with three coarse actions calling `consumeItem(name, 'half' | 'used_up' | 'discarded')`. Use the existing row markup + token styles.
 
-- [ ] **Step 1: Import the helpers** in `Navigator.tsx`:
+- [ ] **Step 1: Import the helpers AND the `PantryItem` type** in `Navigator.tsx` (verified: `Navigator.tsx` does not currently import `PantryItem`, so `PantryRowActions`'s prop type needs it):
 
 ```typescript
-import { consumeItem, restoreItem } from '../signals'
+import { consumeItem, restoreItem, type PantryItem } from '../signals'
 ```
 
 - [ ] **Step 2: Add a `PantryRowActions` helper component** at module scope in `Navigator.tsx` (complete code):
@@ -1585,10 +1614,10 @@ await browser.close()
 process.exit(cookedOk ? 0 : 1)
 ```
 
-- [ ] **Step 2: Run the full backend suite + lint** (the real gates):
+- [ ] **Step 2: Run the full backend suite + lint** (the real gates — match what CI runs, not a subset):
 
-Run: `cd ~/pantryatlas && .venv/bin/python -m pytest tests/navigator/test_kitchen_store.py tests/navigator/test_loop_routes.py -q 2>&1 | grep -v -E "profiling:|\.gcda:|Cannot open"`
-Expected: all pass.
+Run: `cd ~/pantryatlas && .venv/bin/python -m pytest tests/navigator/ -q 2>&1 | grep -v -E "profiling:|\.gcda:|Cannot open"`
+Expected: all pass — new AND pre-existing navigator tests (the regression guard from Task 6 Step 3c).
 Run: `.venv/bin/ruff check . 2>&1 | tail -5`
 Expected: no errors (matches CI's `ruff check .`).
 Run: `cd ~/pantryatlas/web && npm run build 2>&1 | tail -5`
@@ -1617,3 +1646,4 @@ git commit -m "test(web): headless loop verification + docs for SP-A routes"
 - **`servings` non-scaling** is explicit in T7 and the docs step, per the spec. ✓
 - **Type consistency:** `KitchenStore` method names (`add_item`, `remove_item`, `replace_all`, `on_hand`, `consume_item`, `restore_item`, `mark_expired`, `add_cook_event`, `list_meals`, `waste_tally`) are used identically in the route tasks; `_get_kitchen` / `kitchen` / `kitchen_factory` are consistent across T6 and T8; frontend `cookRecipe`/`consumeItem`/`restoreItem`/`fetchMeals`/`meals`/`expiringSoon` match between `signals.ts` (T9, T13) and their consumers (T10–T13). ✓
 - **No placeholders:** every code step shows complete code; the two `Navigator.tsx`-render steps (T11 S3, T12 S2, T13 S2) give complete inserted JSX and name the exact insertion site, deferring only to the existing surrounding markup the implementer is reading. ✓
+- **Cross-suite regression guard (added after advisor review):** repointing the shared pantry routes to `_get_kitchen` would 500 the four pre-existing `create_app(...)` test fixtures (`test_server.py:132,198`, `test_vision.py:219`, `test_providers_api.py:33`) that pass no `kitchen=`. T6 Step 3c updates all four (verified: none assert `pantry.json` file contents, so only the kwarg is needed), and T6 Step 4 + T14 Step 2 now run the **whole** `tests/navigator/` suite so the regression can't hide until CI. `PantryItem` is explicitly imported in T11 (verified absent from `Navigator.tsx`). ✓
