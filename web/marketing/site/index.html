@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>PantryAtlas — Your kitchen's smart pantry. Lives in your kitchen.</title>
+  <meta name="description" content="A free, open-source local server for home and community kitchens. Set up a small computer once, then cook delicious food from what's already on your shelf. Nothing leaves your kitchen." />
+  <meta name="theme-color" content="#FCFCFF" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="PantryAtlas — Your kitchen's smart pantry" />
+  <meta property="og:description" content="Free, open-source, runs on a small computer in your kitchen. Cook from what you have — at home, or for a community of hundreds." />
+  <meta property="og:url" content="https://pantryatlas.org" />
+  <meta property="og:image" content="/assets/og-card.svg" />
+
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+
+  <!-- Fixed wordmark -->
+  <header class="wordmark" aria-label="PantryAtlas">
+    <span class="wordmark__name">PantryAtlas</span>
+    <span class="wordmark__byline">Free · Open source · Runs on a small computer in your kitchen</span>
+  </header>
+
+  <main>
+
+    <!-- ============ SECTION 1: HERO ============ -->
+    <section class="hero" id="hero">
+      <div class="hero__blob" aria-hidden="true"></div>
+      <div class="hero__blob hero__blob--2" aria-hidden="true"></div>
+      <div class="hero__content">
+        <div class="vessel vessel--hero" aria-hidden="true">
+          <svg viewBox="0 0 200 200" width="100%" height="100%" role="img" aria-label="A small computer next to fresh vegetables">
+            <defs>
+              <radialGradient id="heroHi" cx="32%" cy="28%" r="58%">
+                <stop offset="0%" stop-color="#ffffff" stop-opacity="0.55" />
+                <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+              </radialGradient>
+            </defs>
+            <!-- glassy highlight on the gradient-filled vessel -->
+            <circle cx="100" cy="100" r="98" fill="url(#heroHi)" />
+            <!-- the small computer, kept neutral so it reads as hardware on the cool bloom -->
+            <rect x="54" y="78" width="62" height="42" rx="7" fill="#23252E" />
+            <rect x="54" y="78" width="62" height="42" rx="7" fill="none" stroke="#3C3F4B" stroke-width="1.5" />
+            <circle cx="65" cy="89" r="3" fill="#E6E9F4" /><circle cx="75" cy="89" r="3" fill="#E6E9F4" />
+            <circle cx="85" cy="89" r="3" fill="#E6E9F4" /><circle cx="95" cy="89" r="3" fill="#E6E9F4" />
+            <rect x="63" y="101" width="44" height="6" rx="3" fill="#5E72E4" />
+            <circle cx="124" cy="112" r="4" fill="#2E9E5B" /><!-- running LED, honest green -->
+            <!-- fresh vegetables: the warm, appetizing anchor, kept natural -->
+            <circle cx="140" cy="92" r="14" fill="#E0533B" />
+            <ellipse cx="152" cy="116" rx="16" ry="9" fill="#5FA84B" />
+            <circle cx="121" cy="120" r="9" fill="#F0A93F" />
+            <!-- the Gemini spark: it's thinking -->
+            <path d="M150 60l2.2 7.8L160 70l-7.8 2.2L150 80l-2.2-7.8L140 70l7.8-2.2L150 60z" fill="#ffffff" />
+            <path d="M168 84l1.3 4.7L174 90l-4.7 1.3L168 96l-1.3-4.7L162 90l4.7-1.3L168 84z" fill="#ffffff" opacity="0.8" />
+          </svg>
+        </div>
+
+        <h1 class="hero__headline">Your kitchen's smart pantry.<br />Lives in your kitchen.</h1>
+        <p class="hero__subhead">A small computer you set up once. It helps you cook delicious food from what's already on your shelf — whether you're feeding four people or four hundred. Free, open source, and nothing leaves your kitchen.</p>
+
+        <span class="gemma-badge">
+          <svg class="icon sparkle" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0l2.59 9.41L24 12l-9.41 2.59L12 24l-2.59-9.41L0 12l9.41-2.59L12 0z" fill="currentColor"/></svg>
+          Built with <strong>Gemma</strong> · Google's open model, running on-device
+        </span>
+
+        <div class="cta-row">
+          <a class="btn btn--filled" href="#setup">How to set it up</a>
+          <a class="btn btn--outlined" href="https://github.com/PantryAtlas/pantryatlas" rel="noopener">See it on GitHub →</a>
+        </div>
+      </div>
+
+      <a class="scroll-cue" href="#what" aria-label="Scroll down">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </a>
+    </section>
+
+    <!-- ============ SECTION 2: WHAT IT IS ============ -->
+    <section class="section section--narrow reveal" id="what">
+      <h2 class="headline center">It's a computer the size of a deck of cards that you keep in your kitchen.</h2>
+      <p class="body lead">Plug it into a power outlet and your Wi-Fi. From any phone or laptop on your home network, open a browser and go to <strong>pantryatlas.local</strong> — that's the address of the little computer. Type what's in your pantry, or snap a photo of your shelf with your phone's camera. PantryAtlas reads what you have and shows you real recipes you can cook with it, ranked by what uses the most of what you've already got. The Gemma&nbsp;4 model on the device combined with the Epicure flavor-pairing research makes the matches genuinely delicious — not just <em>technically possible</em>.</p>
+
+      <ul class="trust-row" role="list">
+        <li class="trust">
+          <span class="trust__icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L2 12V4a2 2 0 0 1 2-2h8l8.6 8.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.6"/></svg></span>
+          <span class="trust__title">Free forever</span>
+          <span class="trust__desc">Free software. You buy the small computer once.</span>
+        </li>
+        <li class="trust">
+          <span class="trust__icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span>
+          <span class="trust__title">Stays local</span>
+          <span class="trust__desc">Your pantry never leaves the device.</span>
+        </li>
+        <li class="trust">
+          <span class="trust__icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 8 5 12 9 16"/><polyline points="15 8 19 12 15 16"/></svg></span>
+          <span class="trust__title">Open source</span>
+          <span class="trust__desc">Apache 2.0 — see every line of code.</span>
+        </li>
+      </ul>
+    </section>
+
+    <!-- ============ SECTION 3: TWO KITCHENS ============ -->
+    <section class="section reveal" id="kitchens">
+      <h2 class="headline center">Two starting presets — and everything in between</h2>
+      <p class="body center subhead-narrow">Most kitchens land somewhere between "family dinner" and "feeding hundreds." Pick the preset closest to yours; PantryAtlas adapts ranking under the hood and you can switch anytime.</p>
+
+      <div class="two-col">
+        <article class="card kitchen-card">
+          <div class="vessel vessel--md" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 9.5V20h14V9.5"/><path d="M10 20v-6h4v6"/></svg></div>
+          <h3 class="title">Home Kitchen</h3>
+          <p class="label muted">4 to 10 servings</p>
+          <p class="body">A weekday family meal. You open the fridge, see what's there, and PantryAtlas finds five recipes that use most of it without making you go shopping. Add "expiring soon" tags so you cook the kale before it wilts.</p>
+        </article>
+        <article class="card kitchen-card">
+          <div class="vessel vessel--md" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M16 5.5a3 3 0 0 1 0 5"/><path d="M17 13.2A5.5 5.5 0 0 1 20.5 18.5"/></svg></div>
+          <h3 class="title">Community Kitchen</h3>
+          <p class="label muted">50 to 500 servings</p>
+          <p class="body">You run a soup kitchen, food pantry, or shelter meal program. A donation truck dropped off mixed produce, dry goods, and proteins. PantryAtlas ranks recipes that scale linearly, use bulk-friendly ingredients, and need minimum specialized equipment.</p>
+        </article>
+      </div>
+      <p class="caption center muted in-between">You pick once on first launch. You can switch anytime from the top bar. School cafeterias, refugee kitchens, monasteries, mutual-aid coalitions, a college house — all of these are "in between." Pick whichever preset feels closer.</p>
+    </section>
+
+    <!-- ============ SECTION 4: SETUP ============ -->
+    <section class="section reveal" id="setup">
+      <h2 class="headline center">Set it up in four steps</h2>
+      <p class="body center subhead-narrow">About 30 minutes the first time. Then it just sits there working.</p>
+
+      <ol class="steps" role="list">
+        <li class="card step">
+          <span class="step__num" aria-hidden="true">1</span>
+          <div class="step__body">
+            <p class="step__kicker">STEP 1</p>
+            <h3 class="title">Pick a small computer</h3>
+            <p class="body">PantryAtlas runs on a small computer you keep in your kitchen — a one-time purchase of around $120, and it's yours forever.</p>
+            <div class="two-col two-col--tight">
+              <div class="suboption">
+                <p class="suboption__head">Option A — Raspberry Pi 5 (8GB) <span class="pill-tag">default</span></p>
+                <p class="body">The friendlier choice. A Pi 5 kit from Amazon, Adafruit, or CanaKit includes everything you need: the computer, microSD card, USB-C power supply, and a small case. Around $120. Fast enough for everything PantryAtlas does.</p>
+                <a class="link" href="https://www.canakit.com/raspberry-pi-5-8gb.html" rel="noopener">See a recommended Pi 5 kit →</a>
+              </div>
+              <div class="suboption">
+                <p class="suboption__head">Option B — Coral edition <span class="pill-tag pill-tag--alt">coming soon</span></p>
+                <p class="body">Google and Synaptics recently released a new Coral board — a tiny, low-power computer with an on-board AI chip. We're building a PantryAtlas edition for it: it runs a small model on the board itself and, when there's heavy lifting to do, borrows a more powerful computer on your home network (like a Pi 5). It's not ready yet — for today, pick the Pi 5. Want to help build it? The work is open on GitHub.</p>
+                <a class="link" href="https://developers.google.com/coral" rel="noopener">Learn about the new Coral board →</a>
+              </div>
+            </div>
+            <p class="caption muted">Your data lives on the microSD card, so it's easy to back up or move to a fresh card anytime.</p>
+          </div>
+        </li>
+
+        <li class="card step step--alt">
+          <span class="step__num" aria-hidden="true">2</span>
+          <div class="step__body">
+            <p class="step__kicker">STEP 2</p>
+            <h3 class="title">Copy PantryAtlas onto the microSD card</h3>
+            <p class="body">Download our pre-built image from GitHub. Use the free <strong>Raspberry Pi Imager</strong> app on your computer to write the image to the card. It takes about 8 minutes.</p>
+            <div class="cta-row cta-row--left">
+              <a class="btn btn--tonal" href="https://github.com/PantryAtlas/pantryatlas/releases" rel="noopener">Download image</a>
+              <a class="btn btn--outlined btn--sm" href="https://www.raspberrypi.com/software/" rel="noopener">Get Raspberry Pi Imager</a>
+            </div>
+            <p class="caption muted">Already comfortable with Linux? You can also clone the repo and run our installer script — see the GitHub README.</p>
+          </div>
+        </li>
+
+        <li class="card step">
+          <span class="step__num" aria-hidden="true">3</span>
+          <div class="step__body">
+            <p class="step__kicker">STEP 3</p>
+            <h3 class="title">Plug it into power and Wi-Fi</h3>
+            <p class="body">Put the microSD card into your Pi 5, plug in the power supply, and either connect an ethernet cable to your router OR follow the on-first-boot Wi-Fi prompt. After about a minute, a small light on the board turns <span class="led-dot" aria-hidden="true"></span> solid green — that means PantryAtlas is running.</p>
+          </div>
+        </li>
+
+        <li class="card step step--alt">
+          <span class="step__num" aria-hidden="true">4</span>
+          <div class="step__body">
+            <p class="step__kicker">STEP 4</p>
+            <h3 class="title">Open pantryatlas.local in any browser</h3>
+            <p class="body">On your phone, tablet, or laptop — anything on the same Wi-Fi — open a web browser and go to <strong>pantryatlas.local</strong>. The first time, you'll pick Home Kitchen or Community Kitchen. Then you're done. Type ingredients, snap a photo of your shelf, get recipes.</p>
+            <p class="chip-callout"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="3" width="12" height="18" rx="2.5"/><line x1="10.5" y1="18" x2="13.5" y2="18"/><path d="M12 7v4M10 9h4"/></svg> On iPhone: tap Share → Add to Home Screen. On Android: tap menu → Install app. It feels like a real app.</p>
+          </div>
+        </li>
+      </ol>
+
+      <p class="body center muted reassure">Stuck? <a class="link" href="https://github.com/PantryAtlas/pantryatlas/issues" rel="noopener">Open a GitHub issue</a> or <a class="link" href="https://github.com/PantryAtlas/pantryatlas" rel="noopener">read the docs</a>.</p>
+    </section>
+
+    <!-- ============ SECTION 5: WHAT IT DOES ============ -->
+    <section class="section reveal" id="features">
+      <h2 class="headline center">What it does</h2>
+      <div class="three-col">
+        <article class="card feature">
+          <div class="vessel vessel--sm scan" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l1.5-2.2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.4"/></svg></div>
+          <h3 class="title">Snap a photo, or just type</h3>
+          <p class="body">Type ingredients one by one, or point your phone's camera at your shelf and let Gemma&nbsp;4 read it. Gemma is a small but capable AI model from Google that runs entirely on your kitchen computer — no photo ever leaves the device.</p>
+        </article>
+        <article class="card feature">
+          <div class="vessel vessel--sm" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/></svg></div>
+          <h3 class="title">Delicious matches, not just possible ones</h3>
+          <p class="body">Every recipe shows a coverage ring — 8/10 means you have 8 of the 10 ingredients. PantryAtlas combines coverage with the Epicure flavor-pairing research so the matches taste good, not just technically work. Expiring ingredients get a small boost so nothing goes to waste.</p>
+        </article>
+        <article class="card feature">
+          <div class="vessel vessel--sm" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></svg></div>
+          <h3 class="title">From a family of four to four hundred</h3>
+          <p class="body">In Community Kitchen mode, PantryAtlas favors recipes that scale linearly to hundreds of servings, use bulk-friendly ingredients, and need minimum specialized equipment. School cafeterias, refugee kitchens, mutual-aid coalitions — everyone in between is welcome.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- ============ SECTION 6: OPEN SOURCE ============ -->
+    <section class="section section--narrow reveal" id="open">
+      <h2 class="headline center">Yours, not ours</h2>
+      <p class="body center">PantryAtlas is free software. It runs entirely on the small computer sitting in your kitchen. There is no cloud account. We don't see your pantry. We don't track what you cook. We don't sell anything to anyone. The code is Apache&nbsp;2.0 — read it, fork it, audit it, run it. Recipe data comes from the public RecipeNLG corpus (CC-BY-NC-4.0) curated by Bień et al. Ingredient and flavor data comes from FlavorDB (CC-BY-NC-3.0) curated by Garg et al. Built for kitchens everywhere, by people who think food access is a human concern, not a market.</p>
+      <ul class="trust-pills" role="list">
+        <li class="pill-chip">Apache 2.0</li>
+        <li class="pill-chip">RecipeNLG CC-BY-NC-4.0</li>
+        <li class="pill-chip">FlavorDB CC-BY-NC-3.0</li>
+        <li class="pill-chip">No telemetry</li>
+      </ul>
+    </section>
+
+    <!-- ============ SECTION 7: GET IT ============ -->
+    <section class="section reveal" id="get">
+      <h2 class="headline center">Ready to set up your kitchen?</h2>
+      <div class="two-col">
+        <article class="card get-card get-card--primary">
+          <span class="accent-bar accent-bar--primary" aria-hidden="true"></span>
+          <div class="vessel vessel--sm" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="1.5"/><rect x="9.5" y="9.5" width="5" height="5"/><path d="M9 6V3M15 6V3M9 21v-3M15 21v-3M6 9H3M6 15H3M21 9h-3M21 15h-3"/></svg></div>
+          <h3 class="title">DIY in about 30 minutes</h3>
+          <p class="body">Buy a Pi 5 kit, download our pre-built image from GitHub, flash the microSD card with the free Raspberry Pi Imager, plug it in. The four steps above walk you through every part. You don't need to know Linux or use a terminal — just a web browser.</p>
+          <div class="cta-row cta-row--left">
+            <a class="btn btn--filled" href="https://github.com/PantryAtlas/pantryatlas/releases" rel="noopener">Download image</a>
+            <a class="btn btn--outlined btn--sm" href="#setup">Setup guide ↑</a>
+          </div>
+        </article>
+        <article class="card get-card get-card--dev">
+          <span class="accent-bar accent-bar--secondary" aria-hidden="true"></span>
+          <div class="vessel vessel--sm" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><polyline points="7 9 10 12 7 15"/><line x1="12.5" y1="15" x2="16.5" y2="15"/></svg></div>
+          <h3 class="title">Clone the repo</h3>
+          <p class="body">Comfortable with Linux and git? Clone the repo, run the installer script, or contribute. Apache 2.0. Pull requests welcome. The project is small, the codebase is reasonable, the issues are friendly.</p>
+          <div class="cta-row cta-row--left">
+            <a class="btn btn--outlined" href="https://github.com/PantryAtlas/pantryatlas" rel="noopener">GitHub →</a>
+          </div>
+        </article>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ============ FOOTER ============ -->
+  <footer class="footer">
+    <div class="footer__inner">
+      <p class="footer__brand">PantryAtlas</p>
+      <p class="caption muted footer__tagline">Use what you have, not what a recipe demands.</p>
+      <div class="footer__grid">
+        <div class="footer__col">
+          <p class="footer__head">Project</p>
+          <a class="link" href="https://github.com/PantryAtlas/pantryatlas" rel="noopener">GitHub</a>
+          <a class="link" href="https://github.com/PantryAtlas/pantryatlas/blob/main/LICENSE" rel="noopener">License</a>
+          <a class="link" href="https://github.com/PantryAtlas/pantryatlas/releases" rel="noopener">Releases</a>
+        </div>
+        <div class="footer__col">
+          <p class="footer__head">Data</p>
+          <a class="link" href="https://github.com/Glorf/recipenlg" rel="noopener">RecipeNLG</a>
+          <a class="link" href="https://cosylab.iiitd.edu.in/flavordb/" rel="noopener">FlavorDB</a>
+        </div>
+        <div class="footer__col">
+          <p class="footer__head">Connect</p>
+          <a class="link" href="https://github.com/PantryAtlas/pantryatlas/issues" rel="noopener">GitHub Issues</a>
+          <a class="link" href="https://github.com/PantryAtlas/pantryatlas/discussions" rel="noopener">Discussions</a>
+        </div>
+      </div>
+      <p class="caption muted footer__legal">© 2026 PantryAtlas project · Apache 2.0 · Built on a Raspberry Pi 5</p>
+    </div>
+  </footer>
+
+  <script src="/main.js" defer></script>
+</body>
+</html>

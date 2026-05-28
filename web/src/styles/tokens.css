@@ -1,0 +1,341 @@
+/* ============================================================
+   PantryAtlas Navigator — Design Token System
+   Material 3 standard token names + cool Gemini values.
+   References: web/marketing/site/styles.css (canonical),
+               web/design/DESIGN.md (navigator brief),
+               web/design/design-system.json (token values).
+   ============================================================ */
+
+/* ---------- Self-hosted DM Sans (variable, weight axis) ---------- */
+@font-face {
+  font-family: "DM Sans";
+  font-style: normal;
+  font-weight: 100 1000;
+  font-display: swap;
+  src: url("/fonts/dm-sans-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "DM Sans";
+  font-style: normal;
+  font-weight: 100 1000;
+  font-display: swap;
+  src: url("/fonts/dm-sans-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* ============================================================
+   LIGHT SCHEME (default)
+   ============================================================ */
+:root {
+  /* ----------------------------------------------------------
+     M3 Color tokens — sys level (standard M3 names)
+     Values: cool Gemini palette seed #4285F4
+     ---------------------------------------------------------- */
+
+  /* Primary */
+  --md-sys-color-primary: #1A73E8;
+  --md-sys-color-on-primary: #FFFFFF;
+  --md-sys-color-primary-container: #DCE7FF;
+  --md-sys-color-on-primary-container: #00184A;
+  --md-sys-color-inverse-primary: #AEC6FF;
+  --md-sys-color-primary-fixed: #D8E2FF;
+  --md-sys-color-primary-fixed-dim: #AEC6FF;
+  --md-sys-color-on-primary-fixed: #001A41;
+  --md-sys-color-on-primary-fixed-variant: #00458F;
+
+  /* Secondary */
+  --md-sys-color-secondary: #565E71;
+  --md-sys-color-on-secondary: #FFFFFF;
+  --md-sys-color-secondary-container: #E7DEFF;
+  --md-sys-color-on-secondary-container: #21005D;
+  --md-sys-color-secondary-fixed: #DAE2F9;
+  --md-sys-color-secondary-fixed-dim: #BEC6DC;
+  --md-sys-color-on-secondary-fixed: #131C2B;
+  --md-sys-color-on-secondary-fixed-variant: #3E4759;
+
+  /* Tertiary */
+  --md-sys-color-tertiary: #8C4A60;
+  --md-sys-color-on-tertiary: #FFFFFF;
+  --md-sys-color-tertiary-container: #FFD9E1;
+  --md-sys-color-on-tertiary-container: #3E0021;
+  --md-sys-color-tertiary-fixed: #FFD9E1;
+  --md-sys-color-tertiary-fixed-dim: #E2BDC8;
+  --md-sys-color-on-tertiary-fixed: #31101D;
+  --md-sys-color-on-tertiary-fixed-variant: #633B48;
+
+  /* Error */
+  --md-sys-color-error: #BA1A1A;
+  --md-sys-color-on-error: #FFFFFF;
+  --md-sys-color-error-container: #FFDAD6;
+  --md-sys-color-on-error-container: #410002;
+
+  /* Surface + neutral */
+  --md-sys-color-surface: #FCFCFF;
+  --md-sys-color-surface-dim: #DBD9E0;
+  --md-sys-color-surface-bright: #FCFCFF;
+  --md-sys-color-surface-container-lowest: #FFFFFF;
+  --md-sys-color-surface-container-low: #F4F5FB;
+  --md-sys-color-surface-container: #ECEEF7;
+  --md-sys-color-surface-container-high: #E6E9F4;
+  --md-sys-color-surface-container-highest: #E0E3EE;
+  --md-sys-color-on-surface: #1A1B22;
+  --md-sys-color-on-surface-variant: #44464E;
+  --md-sys-color-inverse-surface: #2F3036;
+  --md-sys-color-inverse-on-surface: #EEF0F9;
+  --md-sys-color-surface-tint: #1A73E8;
+  --md-sys-color-surface-variant: #E0E3EE;
+
+  /* Outline */
+  --md-sys-color-outline: #74767E;
+  --md-sys-color-outline-variant: #C6C8D3;
+
+  /* Background */
+  --md-sys-color-background: #FCFCFF;
+  --md-sys-color-on-background: #1A1B22;
+
+  /* Scrim + shadow */
+  --md-sys-color-scrim: #000000;
+  --md-sys-color-shadow: #000000;
+
+  /* ----------------------------------------------------------
+     M3 Typescale tokens — sys level
+     Font: DM Sans (self-hosted), scale per DESIGN.md
+     ---------------------------------------------------------- */
+
+  /* Display Large */
+  --md-sys-typescale-display-large-font: "DM Sans";
+  --md-sys-typescale-display-large-weight: 700;
+  --md-sys-typescale-display-large-size: 48px;
+  --md-sys-typescale-display-large-line-height: 56px;
+  --md-sys-typescale-display-large-tracking: -0.01em;
+
+  /* Display Medium */
+  --md-sys-typescale-display-medium-font: "DM Sans";
+  --md-sys-typescale-display-medium-weight: 700;
+  --md-sys-typescale-display-medium-size: 40px;
+  --md-sys-typescale-display-medium-line-height: 48px;
+  --md-sys-typescale-display-medium-tracking: 0;
+
+  /* Display Small */
+  --md-sys-typescale-display-small-font: "DM Sans";
+  --md-sys-typescale-display-small-weight: 700;
+  --md-sys-typescale-display-small-size: 32px;
+  --md-sys-typescale-display-small-line-height: 40px;
+  --md-sys-typescale-display-small-tracking: 0;
+
+  /* Headline Large */
+  --md-sys-typescale-headline-large-font: "DM Sans";
+  --md-sys-typescale-headline-large-weight: 600;
+  --md-sys-typescale-headline-large-size: 32px;
+  --md-sys-typescale-headline-large-line-height: 40px;
+  --md-sys-typescale-headline-large-tracking: -0.01em;
+
+  /* Headline Medium */
+  --md-sys-typescale-headline-medium-font: "DM Sans";
+  --md-sys-typescale-headline-medium-weight: 600;
+  --md-sys-typescale-headline-medium-size: 28px;
+  --md-sys-typescale-headline-medium-line-height: 36px;
+  --md-sys-typescale-headline-medium-tracking: -0.01em;
+
+  /* Headline Small */
+  --md-sys-typescale-headline-small-font: "DM Sans";
+  --md-sys-typescale-headline-small-weight: 600;
+  --md-sys-typescale-headline-small-size: 24px;
+  --md-sys-typescale-headline-small-line-height: 32px;
+  --md-sys-typescale-headline-small-tracking: -0.01em;
+
+  /* Title Large */
+  --md-sys-typescale-title-large-font: "DM Sans";
+  --md-sys-typescale-title-large-weight: 600;
+  --md-sys-typescale-title-large-size: 22px;
+  --md-sys-typescale-title-large-line-height: 28px;
+  --md-sys-typescale-title-large-tracking: 0;
+
+  /* Title Medium */
+  --md-sys-typescale-title-medium-font: "DM Sans";
+  --md-sys-typescale-title-medium-weight: 600;
+  --md-sys-typescale-title-medium-size: 20px;
+  --md-sys-typescale-title-medium-line-height: 28px;
+  --md-sys-typescale-title-medium-tracking: 0;
+
+  /* Title Small */
+  --md-sys-typescale-title-small-font: "DM Sans";
+  --md-sys-typescale-title-small-weight: 600;
+  --md-sys-typescale-title-small-size: 14px;
+  --md-sys-typescale-title-small-line-height: 20px;
+  --md-sys-typescale-title-small-tracking: 0;
+
+  /* Body Large */
+  --md-sys-typescale-body-large-font: "DM Sans";
+  --md-sys-typescale-body-large-weight: 400;
+  --md-sys-typescale-body-large-size: 16px;
+  --md-sys-typescale-body-large-line-height: 24px;
+  --md-sys-typescale-body-large-tracking: 0;
+
+  /* Body Medium */
+  --md-sys-typescale-body-medium-font: "DM Sans";
+  --md-sys-typescale-body-medium-weight: 400;
+  --md-sys-typescale-body-medium-size: 14px;
+  --md-sys-typescale-body-medium-line-height: 20px;
+  --md-sys-typescale-body-medium-tracking: 0;
+
+  /* Body Small */
+  --md-sys-typescale-body-small-font: "DM Sans";
+  --md-sys-typescale-body-small-weight: 400;
+  --md-sys-typescale-body-small-size: 11px;
+  --md-sys-typescale-body-small-line-height: 16px;
+  --md-sys-typescale-body-small-tracking: 0;
+
+  /* Label Large */
+  --md-sys-typescale-label-large-font: "DM Sans";
+  --md-sys-typescale-label-large-weight: 500;
+  --md-sys-typescale-label-large-size: 14px;
+  --md-sys-typescale-label-large-line-height: 20px;
+  --md-sys-typescale-label-large-tracking: 0;
+
+  /* Label Medium */
+  --md-sys-typescale-label-medium-font: "DM Sans";
+  --md-sys-typescale-label-medium-weight: 500;
+  --md-sys-typescale-label-medium-size: 13px;
+  --md-sys-typescale-label-medium-line-height: 18px;
+  --md-sys-typescale-label-medium-tracking: 0;
+
+  /* Label Small */
+  --md-sys-typescale-label-small-font: "DM Sans";
+  --md-sys-typescale-label-small-weight: 500;
+  --md-sys-typescale-label-small-size: 11px;
+  --md-sys-typescale-label-small-line-height: 16px;
+  --md-sys-typescale-label-small-tracking: 0;
+
+  /* ----------------------------------------------------------
+     M3 Shape tokens — sys level
+     Corner radii per DESIGN.md ("cards 32px, marketing 28px")
+     ---------------------------------------------------------- */
+  --md-sys-shape-corner-none: 0px;
+  --md-sys-shape-corner-extra-small: 4px;
+  --md-sys-shape-corner-small: 8px;
+  --md-sys-shape-corner-medium: 16px;
+  --md-sys-shape-corner-large: 28px;
+  --md-sys-shape-corner-extra-large: 32px;
+  --md-sys-shape-corner-full: 9999px;
+
+  /* ----------------------------------------------------------
+     Gemini gradient + bloom tokens (branded, named separately)
+     These are the cool-Gemini design system primitives.
+     ---------------------------------------------------------- */
+
+  /* Brand stops */
+  --gemini-blue: #4285F4;
+  --gemini-blue-deep: #1A73E8;
+  --gemini-indigo: #5E72E4;
+  --gemini-purple: #9B72CB;
+  --gemini-magenta: #D96570;
+
+  /* Gradients */
+  --gradient-gemini: linear-gradient(102deg, #1A73E8 0%, #4285F4 24%, #6E6AD6 54%, #9B72CB 76%, #D96570 100%);
+  --gradient-gemini-soft: linear-gradient(102deg, #4285F4 0%, #8A6FD0 55%, #D96570 100%);
+  --gradient-thinking: linear-gradient(135deg, #4285F4 0%, #6E6AD6 55%, #9B72CB 100%);
+  --gradient-ember: linear-gradient(102deg, #1A73E8 0%, #6E6AD6 54%, #9B72CB 76%, #D96570 100%);
+
+  /* Bloom (layered radials — sharp leading edge, diffuse tail) */
+  --bloom-gemini:
+    radial-gradient(62% 86% at 26% 24%, var(--gemini-blue) 0%, rgba(66,133,244,0) 62%),
+    radial-gradient(54% 74% at 70% 30%, var(--gemini-purple) 0%, rgba(155,114,203,0) 70%),
+    radial-gradient(64% 82% at 56% 86%, var(--gemini-magenta) 0%, rgba(217,101,112,0) 78%),
+    radial-gradient(120% 120% at 50% 40%, #5E72E4 0%, rgba(94,114,228,0) 60%);
+
+  /* Noise grain (SVG fractal, soft-light blend) */
+  --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+
+  /* Page background */
+  --gradient-page:
+    radial-gradient(140% 90% at 85% -10%, #EEF1FF 0%, rgba(238,241,255,0) 55%),
+    radial-gradient(120% 80% at 0% 0%, #F6ECFB 0%, rgba(246,236,251,0) 50%),
+    var(--md-sys-color-surface);
+
+  /* Shadows */
+  --shadow-rest: 0 1px 2px rgba(26,27,34,0.06), 0 4px 16px rgba(26,27,34,0.06);
+  --shadow-active: 0 2px 6px rgba(26,27,34,0.08), 0 16px 38px rgba(66,133,244,0.16);
+  --shadow-bloom: 0 0 44px rgba(123,97,202,0.24);
+  --shadow-vessel: 0 0 44px rgba(123,97,202,0.24);
+
+  /* Type alias (DM Sans stack) */
+  --font: "DM Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  /* Shape aliases (convenience) */
+  --radius-card: var(--md-sys-shape-corner-extra-large);
+  --radius-med: var(--md-sys-shape-corner-medium);
+  --radius-full: var(--md-sys-shape-corner-full);
+
+  /* LED */
+  --led-green: #2E9E5B;
+}
+
+/* ============================================================
+   DARK SCHEME
+   Overrides M3 color roles to cool dark neutrals.
+   ============================================================ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Primary */
+    --md-sys-color-primary: #AEC6FF;
+    --md-sys-color-on-primary: #002E69;
+    --md-sys-color-primary-container: #1A4691;
+    --md-sys-color-on-primary-container: #D8E2FF;
+
+    /* Secondary */
+    --md-sys-color-secondary: #BEC6DC;
+    --md-sys-color-on-secondary: #283041;
+    --md-sys-color-secondary-container: #3E4759;
+    --md-sys-color-on-secondary-container: #DAE2F9;
+
+    /* Tertiary */
+    --md-sys-color-tertiary: #E2BDC8;
+    --md-sys-color-on-tertiary: #4C2535;
+    --md-sys-color-tertiary-container: #633B48;
+    --md-sys-color-on-tertiary-container: #FFD9E1;
+
+    /* Error */
+    --md-sys-color-error: #FFB4AB;
+    --md-sys-color-on-error: #690005;
+    --md-sys-color-error-container: #93000A;
+    --md-sys-color-on-error-container: #FFDAD6;
+
+    /* Surface — dark neutrals, cool slate */
+    --md-sys-color-surface: #111319;
+    --md-sys-color-surface-dim: #111319;
+    --md-sys-color-surface-bright: #37393F;
+    --md-sys-color-surface-container-lowest: #0C0E14;
+    --md-sys-color-surface-container-low: #1A1C22;
+    --md-sys-color-surface-container: #1D2027;
+    --md-sys-color-surface-container-high: #282A30;
+    --md-sys-color-surface-container-highest: #33353B;
+    --md-sys-color-on-surface: #E3E2E9;
+    --md-sys-color-on-surface-variant: #C6C8D3;
+    --md-sys-color-inverse-surface: #E3E2E9;
+    --md-sys-color-inverse-on-surface: #2F3036;
+    --md-sys-color-inverse-primary: #1A73E8;
+
+    /* Outline */
+    --md-sys-color-outline: #8F9099;
+    --md-sys-color-outline-variant: #44464E;
+
+    /* Background */
+    --md-sys-color-background: #111319;
+    --md-sys-color-on-background: #E3E2E9;
+
+    /* Page gradient (dark) */
+    --gradient-page:
+      radial-gradient(140% 90% at 85% -10%, rgba(26,73,232,0.15) 0%, rgba(26,73,232,0) 55%),
+      radial-gradient(120% 80% at 0% 0%, rgba(94,114,228,0.12) 0%, rgba(94,114,228,0) 50%),
+      var(--md-sys-color-surface);
+
+    --shadow-rest: 0 1px 2px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.3);
+    --shadow-active: 0 2px 6px rgba(0,0,0,0.4), 0 16px 38px rgba(66,133,244,0.2);
+  }
+}

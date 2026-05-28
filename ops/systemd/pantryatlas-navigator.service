@@ -1,0 +1,17 @@
+[Unit]
+Description=PantryAtlas Navigator API (FastAPI)
+After=network.target pantryatlas-embeddings.service pantryatlas-gemma.service
+Wants=pantryatlas-embeddings.service pantryatlas-gemma.service
+
+[Service]
+Type=simple
+User=pantryatlas
+Group=pantryatlas
+WorkingDirectory=/home/pantryatlas/pantryatlas
+Environment="PANTRYATLAS_HOME=/home/pantryatlas/.pantryatlas"
+ExecStart=/home/pantryatlas/pantryatlas/venv/bin/uvicorn pantryatlas.navigator.server:app --host 0.0.0.0 --port 8090
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

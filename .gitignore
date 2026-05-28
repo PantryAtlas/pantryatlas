@@ -1,0 +1,179 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# PEP 582
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# ruff
+.ruff_cache/
+
+# Data pipeline staging and outputs
+/pantryatlas/data/_staging/
+/pantryatlas/data/*.parquet
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Frontend (web/) — Node + Vite build outputs
+web/node_modules/
+web/dist/
+web/.vite/
+web/coverage/
+# web/src/lib/ is committed source; un-exclude from the blanket lib/ rule above
+!web/src/lib/
+
+# Wrangler (Cloudflare Pages) local cache + tmp — never commit
+.wrangler/
+
+# Stitch / Antigravity design pipeline outputs that may contain auth-bearing or
+# session-scoped artifacts. Keep web/design/ itself committed but exclude logs,
+# reference HTML, and any stray MCP config that an `agy` invocation might write.
+web/design/stitch-orchestration.log
+web/design/stitch-orchestration*.log
+web/design/screens/*.html
+# Base64-encoded transmission scratch from agy paste-and-run workflows
+# (DESIGN.md.base64, MARKETING.md.base64, *_B64.txt, etc. — never commit)
+**/*.base64
+**/*.base64.*
+**/*_B64.txt
+
+# Secrets / credentials / MCP configs — defensive, should never appear in this
+# repo but belt-and-suspenders. Antigravity's mcp_config.json lives under
+# ~/.gemini/config/ and must never be copied into this tree.
+mcp_config.json
+**/mcp_config.json
+.gemini/
+.anthropic/
+.env.local
+.env.*.local
+*.key
+*.pem
+credentials.json
+client_secret*.json
+service-account*.json
+secrets.json
+secrets.yaml
+secrets.yml
+
+# Operator scratch — keep ad-hoc dev scratchpads out
+scratch/
+notes/private/

@@ -1,0 +1,315 @@
+{
+  "project": "pantryatlas-navigator",
+  "branchName": "feat/navigator-v0.2.0",
+  "description": "v0.2.0 navigator submodule: recipe ingestion + ranking API + Preact PWA with Material 3 Expressive / Stitch-driven design. Built on v0.1 primitives.",
+  "tasks": [
+    {
+      "id": "T-004B",
+      "title": "Generate visual design via Stitch MCP (Antigravity-routed)",
+      "description": "Spawn `agy -p` (Antigravity in print mode, --dangerously-skip-permissions) with a Stitch orchestration prompt that creates a project, uploads DESIGN.md, generates a design system, and produces mockups for 3 screens × 2 devices. Save artifacts to web/design/. This is the visual source-of-truth for T-005/T-006/T-007/T-008. Stitch MCP is reached at ~/.gemini/antigravity/mcp/StitchMCP/ via mcp-remote → https://stitch.googleapis.com/mcp.",
+      "acceptanceCriteria": [
+        "File `/home/craigm26/pantryatlas/web/design/DESIGN.md` exists with sections: Brand, Color palette (seed=#B85C38 terracotta), Typography, Shape, Motion, 3 screen descriptions (PantryEditor, RecipeResults, RecipeDetail)",
+        "Run `wc -w /home/craigm26/pantryatlas/web/design/DESIGN.md` - prints integer ≥ 400 (brief is substantive, not skeletal)",
+        "File `/home/craigm26/pantryatlas/web/design/stitch-orchestration.log` exists with the agy stdout+stderr from the orchestration run",
+        "File `/home/craigm26/pantryatlas/web/design/STITCH_PROJECT.txt` exists and contains a URL matching regex `https://stitch.google.*/projects?/[0-9]+`",
+        "File `/home/craigm26/pantryatlas/web/design/design-system.json` exists and parses as valid JSON (run `python3 -m json.tool < web/design/design-system.json > /dev/null` - exits 0)",
+        "All 6 mockup PNG files exist: `ls /home/craigm26/pantryatlas/web/design/screens/{pantry-editor,recipe-results,recipe-detail}-{mobile,desktop}.png` - exits 0",
+        "Each mockup PNG is ≥ 1KB (not zero-byte placeholder): `find web/design/screens -name '*.png' -size +1k | wc -l` - prints `6`",
+        "Each screen's JSON metadata sidecar exists: `ls web/design/screens/*.json | wc -l` - prints `6`",
+        "Run `git check-ignore -v web/design/stitch-orchestration.log web/design/screens/foo.html` - both patterns matched (gitignore is active)",
+        "Run `git add web/design/` then `git status --porcelain` shows the committed files (DESIGN.md, design-system.json, screens/*.{json,png}, STITCH_PROJECT.txt) — NOT the .log or any *.html"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-001",
+      "title": "Recipe curation + ingestion CLI scaffold",
+      "description": "Create `pantryatlas/navigator/__init__.py` and `pantryatlas/navigator/ingest.py`. CLI entry `python -m pantryatlas.navigator.ingest --limit N --dry-run` reads RecipeNLG staged parquet, parses input text into (title, ingredients, instructions) tuples, applies curation rules (≥3 distinct ingredients, balanced across count buckets 3-5, 6-8, 9+), reports a summary. No DB writes in dry-run.",
+      "acceptanceCriteria": [
+        "File `/home/craigm26/pantryatlas/pantryatlas/navigator/__init__.py` exists",
+        "File `/home/craigm26/pantryatlas/pantryatlas/navigator/ingest.py` exists",
+        "Run `python -c 'from pantryatlas.navigator import ingest'` - exits 0",
+        "Run `python -m pantryatlas.navigator.ingest --limit 1000 --dry-run 2>&1 | tee /tmp/t001-ingest.log` - exits 0 in <30s",
+        "Output log contains lines matching: `selected: N`, `discarded: N (reason)`, `bucket 3-5: N`, `bucket 6-8: N`, `bucket 9+: N`",
+        "Each bucket count is ≥ 25% of selected total (parse the log and assert)",
+        "Run `ls /tmp/test-recipes.db` - file does NOT exist (no DB writes in dry-run)",
+        "Run `ruff check /home/craigm26/pantryatlas/pantryatlas/navigator/` - exits 0",
+        "Run `pytest /home/craigm26/pantryatlas/tests/ -m 'not pi_integration' -q` - exits 0 (no regressions in existing 102 tests)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-003",
+      "title": "Pantry→recipes ranking algorithm (pure Python)",
+      "description": "Implement `pantryatlas/navigator/ranking.py` with `rank_recipes(pantry, candidate_recipes, embed_fn, k=20) -> list[RankedRecipe]`. Score = 0.50*coverage + 0.20*expiration_urgency + 0.20*(1-substitution_penalty) + 0.10*cultural_fit. Pure function — caller supplies candidate recipes (sqlite-vec pre-filter happens at the API layer in T-004).",
+      "acceptanceCriteria": [
+        "File `/home/craigm26/pantryatlas/pantryatlas/navigator/ranking.py` exists",
+        "Run `python -c 'from pantryatlas.navigator.ranking import rank_recipes, RankedRecipe'` - exits 0",
+        "Run `pytest /home/craigm26/pantryatlas/tests/navigator/test_ranking.py -q` - exits 0 with ≥ 8 tests passing",
+        "Test asserts: pantry={garlic,tomato,basil,olive oil,pasta} + recipe with exactly those 5 ingredients → score ≈ 0.50*1.0 + 0.20*0 + 0.20*1.0 + 0.10*0 = 0.70 (within 1e-6)",
+        "Test asserts: pantry={garlic,tomato} + recipe={garlic,tomato,basil} → coverage == 2/3, missing == ['basil']",
+        "Test asserts: two recipes with identical coverage; one consumes an expiring item; the expiring-consuming recipe ranks strictly higher",
+        "Test asserts: high-coverage recipe with one missing ingredient that has no pantry substitute (cosine to nearest pantry item < 0.3) ranks below a slightly-lower-coverage recipe where missing items have close substitutes",
+        "Test asserts: with cuisine='italian', a recipe with 'italian' in title ranks above an otherwise-identical recipe without",
+        "Test uses an injected fake embed_fn (no live bge-m3 needed for unit tests)",
+        "Run `ruff check /home/craigm26/pantryatlas/pantryatlas/navigator/ranking.py` - exits 0"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-004",
+      "title": "FastAPI navigator endpoint (server.py)",
+      "description": "`pantryatlas/navigator/server.py` exposes 7 routes: GET /navigator/health, GET/PUT /navigator/pantry, POST /navigator/pantry/items, DELETE /navigator/pantry/items/{name}, POST /navigator/pantry/resolve (debounced raw-text resolution), POST /navigator/recipes/from-pantry, plus serving the PWA from /web/dist/ via GET / and /static/*. Pantry storage = flat JSON at ~/.pantryatlas/pantry.json.",
+      "acceptanceCriteria": [
+        "File `/home/craigm26/pantryatlas/pantryatlas/navigator/server.py` exists with `app = FastAPI(...)`",
+        "Run `python -c 'from pantryatlas.navigator.server import app; print(len(app.routes))'` - prints integer ≥ 8 (7 API routes + at least 1 static)",
+        "Run `pytest /home/craigm26/pantryatlas/tests/navigator/test_server.py -q` - exits 0 with ≥ 10 tests passing",
+        "Test: PUT /navigator/pantry with a 5-item body, then GET /navigator/pantry returns the same 5 items (JSON round-trip lossless)",
+        "Test: POST /navigator/pantry/items with `{raw_text: 'garlic'}` returns 201 and resolved canonical_name == 'garlic'",
+        "Test: POST /navigator/pantry/resolve with `{raw: 'old garlic'}` returns canonical_name='garlic' WITHOUT persisting (subsequent GET returns previous state)",
+        "Test: DELETE /navigator/pantry/items/garlic removes only that item",
+        "Test: POST /navigator/recipes/from-pantry with a 5-item pantry against a 1000-recipe test fixture returns ≥ 1 result with valid RankedRecipe shape",
+        "Test: GET /navigator/health returns 200 with `{\"status\": \"ok\", \"recipe_count\": <int>}` where recipe_count is read from the store, not hardcoded",
+        "Test: malformed PUT /navigator/pantry body returns 422 (Pydantic validation)",
+        "Test asserts CORS allows same-origin only (no Access-Control-Allow-Origin: * header)",
+        "Run `ruff check /home/craigm26/pantryatlas/pantryatlas/navigator/server.py` - exits 0"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-005",
+      "title": "Frontend scaffold + M3 Expressive design system (Vite + Preact at /web/)",
+      "description": "Initialize /web/ with Vite + Preact + TypeScript + @material/material-color-utilities + local Material Symbols font. Implement M3 Expressive design tokens via CSS custom properties driven by Stitch's design-system.json (T-004B output). Landing page renders a styled card demonstrating tokens working in both light/dark.",
+      "acceptanceCriteria": [
+        "Files exist: `web/package.json`, `web/vite.config.ts`, `web/tsconfig.json`, `web/src/main.tsx`, `web/index.html`, `web/src/styles/tokens.css`, `web/src/styles/global.css`",
+        "Run `cd web && npm install` - exits 0",
+        "Run `cd web && npm run build` - exits 0",
+        "File `web/dist/index.html` exists after build",
+        "Run `grep -c 'PantryAtlas Navigator' web/dist/index.html` - prints integer ≥ 1",
+        "Run `grep -E -c '\\-\\-md-sys-color-primary' web/dist/assets/*.css` - prints integer ≥ 1 (M3 color token present in built CSS)",
+        "Run `grep -E -c '\\-\\-md-sys-typescale-display-large' web/dist/assets/*.css` - prints integer ≥ 1",
+        "Run `grep -E -c '\\-\\-md-sys-shape-corner-extra-large' web/dist/assets/*.css` - prints integer ≥ 1",
+        "Run `grep -Ec 'fonts\\.googleapis\\.com|fonts\\.gstatic\\.com' web/dist/index.html web/dist/assets/*.css` - prints `0` (no Google Fonts CDN — symbols font bundled locally)",
+        "Run `du -k web/dist | tail -1 | awk '{print $1}'` - prints integer ≤ 800 (dist <800KB raw; gzipped will be ~400KB)",
+        "Run `cd web && npm run build 2>&1 | grep -i 'error' | wc -l` - prints `0`",
+        "Browser verification (via mcp__claude-in-chrome__navigate + screenshot): open `file://web/dist/index.html`, screenshot at viewport 390x844 saved to `/tmp/t005-mobile-light.png`, screenshot is >5KB (real render, not blank)",
+        "Browser verification: toggle to dark color-scheme via DevTools `Emulation.setEmulatedMedia`, screenshot saved to `/tmp/t005-mobile-dark.png` is also >5KB",
+        "`.gitignore` patterns `web/node_modules/` and `web/dist/` already covered by the security commit; verify with `git check-ignore -v web/node_modules/foo web/dist/foo`"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-006",
+      "title": "PWA shell (manifest + service worker + install prompt + adaptive icon)",
+      "description": "Add web/public/manifest.webmanifest with M3-derived theme_color, icons (192/512, both any+maskable), and a service worker that precaches the app shell + runtime-caches /navigator/recipes/from-pantry and /navigator/pantry GETs. Install prompt component uses M3 filled-tonal button styling.",
+      "acceptanceCriteria": [
+        "File `web/public/manifest.webmanifest` exists",
+        "Run `python3 -c 'import json; m = json.load(open(\"web/public/manifest.webmanifest\")); assert set([\"name\",\"short_name\",\"icons\",\"start_url\",\"display\",\"theme_color\",\"background_color\"]).issubset(m.keys()); print(\"ok\")'` - prints `ok`",
+        "Manifest icons array contains at least 4 entries: 192 any, 192 maskable, 512 any, 512 maskable (test parses and asserts)",
+        "File `web/src/sw.ts` exists with `self.addEventListener('install'` and `self.addEventListener('fetch'`",
+        "After `npm run build`, file `web/dist/sw.js` exists",
+        "Service worker registration in `web/src/main.tsx` is gated by `if (import.meta.env.PROD)` — `grep -E 'import.meta.env.PROD' web/src/main.tsx` exits 0",
+        "Install prompt component file exists at `web/src/components/InstallPrompt.tsx`",
+        "Install prompt uses M3 tokens — `grep -cE 'var\\(--md-sys-' web/src/components/InstallPrompt.tsx` prints integer ≥ 3",
+        "Install prompt does NOT use any hardcoded hex colors — `grep -cE '#[0-9a-fA-F]{3,8}' web/src/components/InstallPrompt.tsx` prints `0`",
+        "Maskable icon manual-check screenshot saved to `web/design/icon-maskable-preview.png` (operator confirms in subsequent review)",
+        "Lighthouse PWA audit recorded in commit message (score not gated, just documented)"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-007",
+      "title": "Navigator single screen — shell + pantry section (cool-Gemini, per DESIGN.md)",
+      "description": "Build the ONE scrolling navigator screen at route `/` in `web/src/pages/Navigator.tsx` (no separate /pantry or /recipes routes). This task delivers the shell + pantry half; T-008 adds the recipe half to the SAME screen. Per web/design/DESIGN.md (cool-Gemini, single screen): fixed/sticky top bar (gradient wordmark 'PantryAtlas' + Home/Community mode chip); pill add-ingredient input with leading + icon and trailing camera icon-button (dual modality: type OR photograph); 'My Pantry · N items' section; pantry item cards (leading icon, canonical name in title, raw_text in caption if it differs, trailing expiration chip + delete icon-button); empty state with vessel illustration. Mode-switcher bottom sheet (Home Kitchen / Community Kitchen, persists). Photo-review sheet (camera capture → POST /navigator/vision/parse-shelf → checklist of detected items; gracefully shows 'vision not configured' when the endpoint 503s, since T-014 builds it). Preact Signals for state. Wire to T-004 API: GET/PUT /navigator/pantry, POST /navigator/pantry/items, DELETE /navigator/pantry/items/{name}, POST /navigator/pantry/resolve (debounced live feedback). Use the T-005 cool-Gemini tokens. Verification via headless chromium (puppeteer-core at /tmp/node_modules + /usr/bin/chromium) — the Chrome MCP is NOT available.",
+      "acceptanceCriteria": [
+        "File `web/src/pages/Navigator.tsx` exists and is the single-screen root (no react-router-style separate /pantry route; one scrolling screen)",
+        "Run `grep -cE 'var\\(--md-sys-|--gemini-|--gradient-|--bloom-' web/src/pages/Navigator.tsx web/src/components/*.tsx` - prints integer ≥ 10 (heavy cool-Gemini token use)",
+        "Run `grep -cE '#[0-9a-fA-F]{3,8}|font-size:\\s*[0-9]+px' web/src/pages/Navigator.tsx` - prints `0` (no hardcoded hex or px font-size; use tokens)",
+        "Mode-switcher component exists (e.g. web/src/components/ModeSwitcher.tsx) offering exactly two presets: Home Kitchen and Community Kitchen; selection persists (localStorage or backend)",
+        "Add-ingredient input has BOTH a text field and a camera icon-button (grep for an input[type=file] capture or a camera handler); photo-review sheet component exists and calls POST /navigator/vision/parse-shelf, handling a 503 with a non-blocking 'vision not configured' message",
+        "Run `cd web && npm run build` - exits 0 with no TypeScript errors",
+        "Headless-chromium (puppeteer-core /tmp/node_modules + /usr/bin/chromium) against a running backend (uvicorn on a test port) + a small seeded pantry: screenshot empty pantry at 390x844 → /tmp/t007-empty-mobile.png (>10KB)",
+        "Headless-chromium: type 'garlic', wait for debounced resolve, screenshot shows a success/primary-tonal resolution chip → /tmp/t007-resolved-mobile.png",
+        "Headless-chromium: submit, screenshot shows the item added to the pantry list → /tmp/t007-added-mobile.png",
+        "Headless-chromium: type an unresolvable token (e.g. 'xyzzy'), screenshot shows an error-tonal (NOT success) inline message → /tmp/t007-unresolved-mobile.png",
+        "Headless-chromium: an item with expiration ≤1 day shows an error-container expiration chip; ≥3 days shows secondary/tertiary-container → /tmp/t007-expiry-mobile.png",
+        "Dark-mode screenshot at 390x844 → /tmp/t007-dark.png (>10KB, visibly different from light)",
+        "Desktop screenshot at 1280x800 → /tmp/t007-desktop.png (single centered column ≤720px per DESIGN.md, NOT a multi-column bento)",
+        "Run `cd web && npm run build` exits 0 AND `python -m pytest tests/ -m 'not pi_integration' -q` stays green (146); no separate routes, no bottom nav, no FAB (DESIGN.md subtractions honored)"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "Re-scoped 2026-05-27 from the stale 'separate /pantry page' criteria to the single-screen cool-Gemini design per web/design/DESIGN.md. Old Stitch mockup refs (pantry-editor-*.png) were deleted; DESIGN.md is the SOT."
+    },
+    {
+      "id": "T-008",
+      "title": "Navigator single screen — recipe section + inline expand (cool-Gemini, per DESIGN.md)",
+      "description": "Add the recipe half to the SAME single scrolling screen built in T-007 (web/src/pages/Navigator.tsx) — below the pantry section, no separate route. Per web/design/DESIGN.md: a 'Recipes you can cook tonight' (Home) / 'Recipes you can scale to N meals' (Community) section; single-column recipe list (NOT a bento grid); each recipe is a card with a CoverageRing (SVG, gradient stroke, center fraction like '8/10'), recipe title, and ONE chip line ('N missing · M min' or 'All ingredients · M min' — collapsed from the old 3-chip row); tap a card to EXPAND INLINE in place (NOT a bottom-sheet or side-sheet) revealing the ingredient list (check_circle when in pantry / circle when missing), numbered instructions in soft sub-cards, source attribution ('From RecipeNLG · CC-BY-NC-4.0'), and 'Add missing to shopping list' + 'Hide for now' actions; collapse via a chevron. Results recompute LIVE as the pantry changes (NO 'Find recipes' FAB). While ranking, show the convergence state (radial-pulse vessel + 'Finding what works...'). Stagger entry (60ms/card, max 6). Wire to POST /navigator/recipes/from-pantry (passes the current pantry + mode). Verification via headless chromium.",
+      "acceptanceCriteria": [
+        "Files exist: `web/src/components/RecipeCard.tsx`, `web/src/components/CoverageRing.tsx` (NO RecipeDetailSheet — detail is inline expand-in-place, not a sheet)",
+        "The recipe section renders within the SAME `web/src/pages/Navigator.tsx` screen as the pantry (no separate /recipes route)",
+        "Run `grep -cE 'var\\(--md-sys-|--gemini-|--gradient-|--bloom-' web/src/components/RecipeCard.tsx web/src/components/CoverageRing.tsx` - prints integer ≥ 12",
+        "Run `grep -cE '#[0-9a-fA-F]{3,8}|padding:\\s*[0-9]+px' web/src/components/RecipeCard.tsx web/src/components/CoverageRing.tsx` - prints `0` (negative-lookahead exception: SVG stroke/fill may use var() tokens, not literals)",
+        "Source attribution present: `grep -F 'RecipeNLG' web/src/components/RecipeCard.tsx` exits 0",
+        "Recipe card shows exactly ONE chip line (not three separate missing/expiring/substitution chips) — verify in source + screenshot",
+        "Tapping a card expands it INLINE (the card grows in place); there is no bottom-sheet/side-sheet component for recipe detail",
+        "Run `cd web && npm run build` - exits 0",
+        "Headless-chromium (puppeteer-core + /usr/bin/chromium) against a running backend seeded with a ~1000-recipe fixture: with an empty pantry, screenshot the recipe empty-state → /tmp/t008-empty-mobile.png (illustration + prompt to add ingredients)",
+        "Headless-chromium: add 5 pantry items, screenshot results (recompute live, no FAB) → /tmp/t008-results-mobile.png — shows ≥1 recipe card with coverage ring + one chip line + attribution",
+        "Headless-chromium: tap a card, screenshot the INLINE-expanded card → /tmp/t008-expanded-mobile.png — shows ingredient check/circle list + instructions + source + actions, all within the grown card",
+        "Desktop 1280x800 screenshot → /tmp/t008-results-desktop.png — single centered column (coverage ring may shift to card-leading per DESIGN.md), NOT a multi-column bento",
+        "Dark-mode results screenshot → /tmp/t008-results-dark.png — polished",
+        "Run `cd web && npm run build` exits 0 AND `python -m pytest tests/ -m 'not pi_integration' -q` stays green"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "Re-scoped 2026-05-27 from the stale 'bento grid + detail sheet + FAB on a /recipes page' criteria to the single-screen inline-expand cool-Gemini design per web/design/DESIGN.md. Old mockup refs (recipe-results-*.png) deleted; DESIGN.md is SOT. Builds on the screen from T-007."
+    },
+    {
+      "id": "T-009",
+      "title": "Offline cache (recent recipes survive airplane mode)",
+      "description": "Extend service worker with cache-first for app shell, stale-while-revalidate for /navigator/recipes/from-pantry (last 20), network-first for /navigator/pantry. Pantry edits made offline queue in IndexedDB and replay on reconnect. Show offline banner when navigator.onLine === false.",
+      "acceptanceCriteria": [
+        "File `web/src/sw.ts` updated with three explicit handlers: app-shell cache-first, recipes-results stale-while-revalidate (capped at 20 entries), pantry-get network-first",
+        "Run `grep -cE 'cache.*-first|stale-while-revalidate|network-first' web/src/sw.ts` - prints integer ≥ 3",
+        "File `web/src/lib/offline-queue.ts` exists with IndexedDB-based queue for pantry mutations",
+        "Run `grep -cE 'idb|indexedDB|IDBFactory' web/src/lib/offline-queue.ts` - prints integer ≥ 1",
+        "File `web/src/components/OfflineBanner.tsx` exists",
+        "Browser: load app, take screenshot at 390x844 - no offline banner visible (online)",
+        "Browser: use mcp__claude-in-chrome (DevTools network override) to set offline, reload, screenshot shows 'offline — showing cached results' banner",
+        "Browser: while offline, add 2 pantry items, screenshot shows the items appear locally with a 'pending sync' indicator",
+        "Browser: re-enable network, wait 2s, take screenshot - pending-sync indicator gone; GET /navigator/pantry on backend now includes the 2 items (verify via curl after)",
+        "Cache size cap test: programmatically insert 25 fake recipe results into the SW cache via Chrome DevTools, verify only 20 remain after the cap enforces (oldest evicted)",
+        "Run `cd web && npm run build` - exits 0"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-002",
+      "title": "Full recipe ingestion with embeddings → RecipeStore",
+      "description": "Extend `pantryatlas.navigator.ingest` to actually embed each recipe (title + ingredients concat) via `pantryatlas.embeddings.embed` (batched 64 at a time) and upsert into RecipeStore at ~/.pantryatlas/recipes.db. Resumable on re-run (skip rows already present by recipe id). Slow task — runs ~40-60min for 50K rows on Pi 5.",
+      "acceptanceCriteria": [
+        "Run `python -m pantryatlas.navigator.ingest --limit 1000 --target-db /tmp/t002-recipes.db 2>&1 | tee /tmp/t002.log` - exits 0",
+        "File `/tmp/t002-recipes.db` exists and size > 1MB after ingestion",
+        "Run `python -c 'from pantryatlas.store.recipes import RecipeStore; s = RecipeStore(\"/tmp/t002-recipes.db\"); import numpy as np; from pantryatlas.embeddings import embed; vec = embed([\"pasta carbonara\"])[0]; r = s.query_by_vector(vec, top_k=5); print(len(r))'` - prints `5`",
+        "Run the same ingestion command again with `--limit 1000 --target-db /tmp/t002-recipes.db` - exits 0 in < 30s (skip path) and log contains `skipped: 1000 already present` (or equivalent)",
+        "Run `du -k /tmp/t002-recipes.db | awk '{print $1}'` - integer ≤ 6000 (≤6MB for 1000 rows; extrapolates to ~300MB for 50K which is under the 500MB ceiling)",
+        "Log line contains `embeddings_throughput_per_sec=` followed by a float (recorded for later perf tracking)",
+        "Run `pytest tests/navigator/test_ingest.py -q` - exits 0 (smoke tests using synthetic fixture, not requiring the 2.1M raw parquet)",
+        "Run `ruff check pantryatlas/navigator/ingest.py` - exits 0"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-010",
+      "title": "Navigator systemd unit + bootstrap web-build integration",
+      "description": "Add `ops/systemd/pantryatlas-navigator.service` (uvicorn host=0.0.0.0 port=8090). Add to ops/systemd/install.sh UNITS array. Extend ops/pi-bootstrap.sh with a new `stage_web_build` stage that runs `cd web && npm install && npm run build` gated by a stamp file.",
+      "acceptanceCriteria": [
+        "File `ops/systemd/pantryatlas-navigator.service` exists",
+        "Run `grep -E 'Restart=on-failure' ops/systemd/pantryatlas-navigator.service` - exits 0",
+        "Run `grep -E 'User=pantryatlas' ops/systemd/pantryatlas-navigator.service` - exits 0",
+        "Run `grep -E 'ExecStart=.*uvicorn.*pantryatlas.navigator.server:app.*--host 0\\.0\\.0\\.0.*--port 8090' ops/systemd/pantryatlas-navigator.service` - exits 0",
+        "Run `grep -E 'pantryatlas-navigator\\.service' ops/systemd/install.sh` - exits 0 (added to UNITS array)",
+        "Run `grep -E 'stage_web_build' ops/pi-bootstrap.sh` - exits 0",
+        "Run `grep -E 'npm install.*npm run build|cd web' ops/pi-bootstrap.sh` - exits 0",
+        "Run `bash -n ops/pi-bootstrap.sh` - exits 0 (syntax check)",
+        "Run `shellcheck ops/pi-bootstrap.sh` - exits 0 (no severity-warning issues introduced)",
+        "Run `systemd-analyze verify ops/systemd/pantryatlas-navigator.service` - exits 0 OR documented skip with same rationale as T-013 v0.1 (ExecStart paths don't exist on dev host)"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-011",
+      "title": "End-to-end navigator integration test (Pi-gated, opt-in)",
+      "description": "`tests/integration/test_navigator_e2e.py` marked @pytest.mark.pi_integration. Boots FastAPI in-process via httpx.AsyncClient, PUTs a 5-item pantry, POSTs /recipes/from-pantry, asserts ≥1 result with coverage > 0.4 and runtime < 10s. Opt-in via PANTRYATLAS_PI_INTEGRATION=1.",
+      "acceptanceCriteria": [
+        "File `tests/integration/test_navigator_e2e.py` exists",
+        "Run `grep -E '@pytest.mark.pi_integration' tests/integration/test_navigator_e2e.py` - exits 0",
+        "Run `pytest tests/integration/test_navigator_e2e.py -m 'not pi_integration' -q` - exits 0 with 0 tests selected (default-skip confirmed)",
+        "Test source explicitly imports: `from pantryatlas.navigator.server import app`, `from httpx import AsyncClient`",
+        "Test asserts response includes source attribution field (RecipeNLG license compliance)",
+        "Test logs line matching `navigator_e2e_runtime_seconds=\\d+\\.\\d+` and assert < 10.0",
+        "Run `EPICURE_PI_INTEGRATION=1 pytest tests/integration/test_end_to_end_pi.py -q` (the v0.1 test) - still exits 0 (no regression)",
+        "Run `ruff check tests/integration/test_navigator_e2e.py` - exits 0"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-012",
+      "title": "Documentation (docs/navigator.md + README + deferred-v0.2 update)",
+      "description": "Write docs/navigator.md (overview, ingestion, running, PWA install, API reference, ranking algorithm, privacy + attribution). Update README to link it. Update docs/deferred-v0.2.md: move 'pantryatlas.navigator' to a new 'Shipped in v0.2.0' section.",
+      "acceptanceCriteria": [
+        "File `docs/navigator.md` exists with section headers matching: Overview, Ingestion, Running, PWA install, API reference, Ranking algorithm, Privacy + attribution",
+        "Run `grep -cE '^## (Overview|Ingestion|Running|PWA install|API reference|Ranking algorithm|Privacy)' docs/navigator.md` - prints integer ≥ 7",
+        "All 7 navigator API endpoints documented — `grep -cE '`(GET|POST|PUT|DELETE) /navigator' docs/navigator.md` - prints integer ≥ 7",
+        "Run `grep -E 'docs/navigator.md' README.md` - exits 0",
+        "Run `grep -E '^## Shipped in v0.2.0' docs/deferred-v0.2.md` - exits 0",
+        "Run `grep -E 'pantryatlas\\.navigator' docs/deferred-v0.2.md | head -1` - finds it in the Shipped section (verify by line context)",
+        "Privacy section explicitly mentions: no telemetry, everything on-Pi, RecipeNLG attribution (CC-BY-NC-4.0)",
+        "Quality checks pass"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-014",
+      "title": "Gemma 4 vision endpoint for shelf-photo parsing",
+      "description": "Add POST /navigator/vision/parse-shelf to the FastAPI server. Accepts multipart image upload (JPEG/PNG, ≤8MB), calls Gemma 4 multimodal variant via pantryatlas.gemma.GemmaClient (extended for vision), returns JSON {detected: [{label: str, confidence: float}, ...]}. Includes image preprocessing (resize to model input, EXIF rotate), prompt template requesting structured JSON output, parse loop with repair fallback (relaxed JSON + regex rescue). Model: same Gemma 4 E4B GGUF as text path if vision-capable; otherwise pin a vision variant in docs/gemma4-verified-specs.md. Surfaces in DESIGN.md Section B photo-review sheet.",
+      "acceptanceCriteria": [
+        "File `/home/craigm26/pantryatlas/pantryatlas/navigator/vision.py` exists with function `parse_shelf(image_bytes: bytes, gemma_client) -> list[DetectedIngredient]`",
+        "File `/home/craigm26/pantryatlas/pantryatlas/gemma/client.py` has new method `vision_generate(image_bytes: bytes, prompt: str, strict: bool = False) -> str` (or extends `generate()` with optional image param)",
+        "FastAPI route POST /navigator/vision/parse-shelf registered in `pantryatlas/navigator/server.py`",
+        "Run `curl -s -X POST -F image=@tests/fixtures/test-shelf.jpg http://localhost:8000/navigator/vision/parse-shelf | python3 -m json.tool` - prints valid JSON with `detected` array containing ≥1 item",
+        "Test fixture `tests/fixtures/test-shelf.jpg` exists (a photo of 3-5 obvious vegetables on a counter; ≤500KB)",
+        "Test `tests/navigator/test_vision.py` exists with: (a) mock-gemma test asserting JSON parse, (b) integration test marked pi_integration that hits real Gemma and asserts ≥1 detection on the fixture",
+        "Run `pytest tests/navigator/test_vision.py -m 'not pi_integration' -q` - exits 0",
+        "Run `pytest tests/ -m 'not pi_integration' -q` - exits 0 (no regressions across 102+ tests)",
+        "Endpoint returns 503 with body `{error: 'vision_unavailable'}` when Gemma vision model is not loaded (graceful fallback so navigator UI can show 'vision not configured' state)",
+        "Run `ruff check pantryatlas/navigator/vision.py pantryatlas/gemma/client.py` - exits 0",
+        "docs/gemma4-verified-specs.md updated with vision model pin (URL + SHA256) and the empirically-measured latency on Pi 5 for a 1024×768 input"
+      ],
+      "priority": 9.5,
+      "passes": false,
+      "notes": "Per operator pivot 2026-05-27 — camera-input flow in web/design/DESIGN.md Section B depends on this endpoint. Ships with v0.2.0. Spec covered in DESIGN.md commit dcbd09c."
+    },
+    {
+      "id": "T-013",
+      "title": "Cut v0.2.0 release (version bump, CHANGELOG, tag, push, issue #1 update)",
+      "description": "Bump pantryatlas version 0.1.0 → 0.2.0, write CHANGELOG entry covering all 14 navigator tasks, merge feat/navigator-v0.2.0 → main, tag v0.2.0, push, ensure CI green, comment on PantryAtlas/pantryatlas#1 checking off the navigator item.",
+      "acceptanceCriteria": [
+        "Run `grep -E '^version = \"0.2.0\"$' pyproject.toml` - exits 0",
+        "Run `grep -E '^## \\[0.2.0\\] - 20[0-9]{2}-[0-1][0-9]-[0-3][0-9]' CHANGELOG.md` - exits 0",
+        "CHANGELOG [0.2.0] section enumerates T-001 through T-013 (plus T-004B and T-014) — `grep -c 'T-00[1-9]\\|T-01[0-4]\\|T-004B' CHANGELOG.md` - prints integer ≥ 15",
+        "Run `git tag -l v0.2.0` - prints `v0.2.0`",
+        "Run `git -C /home/craigm26/pantryatlas status --porcelain` - prints empty",
+        "Run `git ls-remote --tags origin v0.2.0` - exits 0 (tag pushed)",
+        "Run `gh run list --repo PantryAtlas/pantryatlas --branch v0.2.0 --limit 1 --json conclusion --jq '.[0].conclusion'` - prints `success`",
+        "Run `gh issue view 1 --repo PantryAtlas/pantryatlas --json comments --jq '[.comments[].body] | join(\"\\n\")' | grep -c 'pantryatlas\\.navigator.*shipped\\|navigator.*v0\\.2\\.0'` - prints integer ≥ 1 (comment posted)"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

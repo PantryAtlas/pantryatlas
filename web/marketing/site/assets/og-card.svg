@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FCFCFF"/>
+      <stop offset="100%" stop-color="#EEF0F9"/>
+    </linearGradient>
+    <radialGradient id="blob" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#4285F4"/>
+      <stop offset="48%" stop-color="#9B72CB"/>
+      <stop offset="100%" stop-color="#D96570"/>
+    </radialGradient>
+    <radialGradient id="vessel" cx="34%" cy="30%" r="80%">
+      <stop offset="0%" stop-color="#5E9CFF"/>
+      <stop offset="46%" stop-color="#8A6FD0"/>
+      <stop offset="100%" stop-color="#D96570"/>
+    </radialGradient>
+    <linearGradient id="ink" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#1A73E8"/>
+      <stop offset="60%" stop-color="#9B72CB"/>
+      <stop offset="100%" stop-color="#D96570"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <circle cx="1050" cy="120" r="340" fill="url(#blob)" opacity="0.28"/>
+  <circle cx="120" cy="560" r="220" fill="url(#blob)" opacity="0.18"/>
+
+  <!-- vessel illustration -->
+  <g transform="translate(120, 150)">
+    <circle cx="150" cy="150" r="150" fill="url(#vessel)"/>
+    <!-- neutral small computer -->
+    <rect x="84" y="112" width="124" height="84" rx="14" fill="#23252E"/>
+    <rect x="84" y="112" width="124" height="84" rx="14" fill="none" stroke="#3C3F4B" stroke-width="3"/>
+    <circle cx="106" cy="134" r="6" fill="#E6E9F4"/><circle cx="126" cy="134" r="6" fill="#E6E9F4"/>
+    <circle cx="146" cy="134" r="6" fill="#E6E9F4"/><circle cx="166" cy="134" r="6" fill="#E6E9F4"/>
+    <rect x="100" y="158" width="88" height="12" rx="6" fill="#5E72E4"/>
+    <circle cx="216" cy="182" r="8" fill="#2E9E5B"/>
+    <!-- natural veg -->
+    <circle cx="230" cy="120" r="26" fill="#E0533B"/>
+    <ellipse cx="246" cy="172" rx="30" ry="16" fill="#5FA84B"/>
+    <!-- spark -->
+    <path d="M250 56l4 14 14 4-14 4-4 14-4-14-14-4 14-4 4-14z" fill="#ffffff"/>
+  </g>
+
+  <!-- text -->
+  <text x="500" y="262" font-family="'DM Sans', system-ui, sans-serif" font-size="70" font-weight="700" fill="#1A1B22">PantryAtlas</text>
+  <text x="500" y="334" font-family="'DM Sans', system-ui, sans-serif" font-size="38" font-weight="600" fill="url(#ink)">Your kitchen's smart pantry.</text>
+  <text x="500" y="386" font-family="'DM Sans', system-ui, sans-serif" font-size="38" font-weight="600" fill="url(#ink)">Lives in your kitchen.</text>
+  <text x="500" y="446" font-family="'DM Sans', system-ui, sans-serif" font-size="26" font-weight="400" fill="#44464E">Free · Open source · Built with Gemma, on-device</text>
+  <text x="500" y="482" font-family="'DM Sans', system-ui, sans-serif" font-size="26" font-weight="400" fill="#44464E">Runs on a small computer in your kitchen.</text>
+</svg>
