@@ -1,0 +1,169 @@
+{
+  "name": "assets/918bae4fe0cf46e1ab818e2979a0afc4",
+  "designSystem": {
+    "displayName": "Terracotta Kitchen",
+    "styleGuidelines": "## Brand & Style\n\nThe design system for this culinary navigator is built on a \"local-first\" philosophy, emphasizing warmth, practicality, and trust. It eschews the typical \"AI aesthetic\" of dark modes and glowing neon in favor of a **Corporate / Modern** style mixed with **Tactile** warmth, inspired by high-end kitchen notebooks and farmers' markets.\n\nThe visual narrative is \"Expressive Material,\" utilizing generous whitespace, organic shapes, and a palette that suggests natural materials like clay and fresh produce. The UI is designed to feel quietly intelligent\u2014focused on speed and clarity rather than decorative animation. It prioritizes high-quality typography and tonal depth to create an environment that feels as reliable as a well-seasoned cast-iron skillet.\n\n**Key Brand Pillars:**\n- **Warm & Grounded:** Terracotta tones and soft surfaces avoid the coldness of standard SaaS.\n- **Low-Friction:** A mobile-first, single-column focus that values the user's time and current inventory.\n- **Privacy-Centric:** Trust is visually communicated through a \"local-first\" look\u2014no cloud-heavy imagery or surveillance-oriented data visualizations.\n\n## Layout & Spacing\n\nThe layout follows a **Fluid Grid** model with a mobile-first philosophy. It transitions from a single-column stack on mobile to a \"Bento-style\" card grid on larger viewports.\n\n- **Mobile (\u2264600px):** Single column with 16px margins. Primary navigation is handled via a bottom bar.\n- **Tablet / Desktop (>600px):** Elements reflow into a grid with a minimum column width of 280px. A 16px gap is maintained between all grid items. Navigation shifts to a left-aligned Rail or Drawer.\n- **Rhythm:** The spacing system is built on a 4px base unit. Standard component internal padding is 16px, while recipe and pantry cards use a more generous 24px padding to enhance the \"expressive\" and spacious feel.\n- **Sticky Elements:** Small App Bars (56px) remain fixed at the top, while the mobile Extended FAB is pinned to the bottom-right with a 16px margin.\n\n## Elevation & Depth\n\nElevation is primarily communicated through **Tonal Layers** rather than heavy shadows. This reinforces the modern, flat culinary aesthetic.\n\n- **Tonal Tiers:** Surfaces use Material 3 container tiers. Backgrounds use `surface`, while cards and interactive elements use `surface-container-high` to create a natural stacked appearance.\n- **Shadows:** At rest, elements use a very soft ambient shadow: `0 2px 6px rgba(33, 25, 22, 0.12)`. Upon interaction (hover/press), the shadow intensifies to `0 6px 16px rgba(33, 25, 22, 0.20)`.\n- **Interaction Feedback:** Cards utilize a scale-up effect (`1.02x`) on hover to provide a tactile, responsive feel.\n- **Dividers:** Use `outline-variant` for subtle separation, though tonal container shifts are the preferred method for defining sections.\n\n## Components\n\n### Buttons\n- **Filled Tonal:** Use for primary card actions. `primary-container` background with `on-primary-container` text.\n- **Filled:** Reserved for the most important CTA (e.g., \"Add Ingredient\").\n- **Extended FAB:** Pill-shaped, `primary-container` fill, featuring both a 24px icon and a `label-large` text string.\n\n### Cards (The Bento Grid)\n- **Container:** `surface-container-high` background with 28px rounded corners.\n- **Padding:** 24px internal padding on all sides.\n- **Animation:** Staggered entry (50ms offset) with a 280ms duration. SVG coverage rings animate from 0 to target percentage.\n\n### Chips\n- **Status Chips:** Used for expiration and ingredient matching.\n- **Match Chip:** `tertiary-container` fill.\n- **Warning Chip:** `secondary-container` fill for mild warnings; `error-container` for urgent expiry.\n- **Radius:** 20px (large) or full pill for metadata.\n\n### Input Fields\n- **Outlined Style:** `outline` color for the border at rest, 8px corner radius.\n- **Icons:** Always include a leading Material Symbol icon (e.g., `add_shopping_cart`) to provide visual context.\n\n### Bottom Sheets (Mobile)\n- **Shape:** 28px top-corner radii only.\n- **Drag Handle:** 32x4px centered pill in `outline-variant`.\n- **Motion:** Slide up with 350ms emphasized easing.\n\n### Lists\n- **Pantry Items:** Vertical stack of `surface-container-high` cards with no vertical dividers; whitespace and card boundaries provide the separation.",
+    "theme": {
+      "colorMode": "LIGHT",
+      "font": "GOOGLE_SANS_TEXT",
+      "roundness": "ROUND_EIGHT",
+      "customColor": "#8b3a1f",
+      "headlineFont": "GOOGLE_SANS_TEXT",
+      "bodyFont": "GOOGLE_SANS_TEXT",
+      "labelFont": "GOOGLE_SANS_TEXT",
+      "namedColors": {
+        "background": "#fff8f6",
+        "error": "#ba1a1a",
+        "error-container": "#FFDAD6",
+        "error_container": "#ffdad6",
+        "inverse_on_surface": "#f6efed",
+        "inverse_primary": "#ffb59e",
+        "inverse_surface": "#33302f",
+        "on-error-container": "#410002",
+        "on-primary-container": "#360D00",
+        "on-secondary-container": "#2C150D",
+        "on-tertiary-container": "#221B00",
+        "on_background": "#1d1b1a",
+        "on_error": "#ffffff",
+        "on_error_container": "#93000a",
+        "on_primary": "#ffffff",
+        "on_primary_container": "#ffb59f",
+        "on_primary_fixed": "#3a0b00",
+        "on_primary_fixed_variant": "#7b2e14",
+        "on_secondary": "#ffffff",
+        "on_secondary_container": "#7a594e",
+        "on_secondary_fixed": "#2c160d",
+        "on_secondary_fixed_variant": "#5d4036",
+        "on_surface": "#1d1b1a",
+        "on_surface_variant": "#55433d",
+        "on_tertiary": "#ffffff",
+        "on_tertiary_container": "#493f13",
+        "on_tertiary_fixed": "#221b00",
+        "on_tertiary_fixed_variant": "#50461a",
+        "outline": "#88726c",
+        "outline-variant": "#D8C2BD",
+        "outline_variant": "#dbc1b9",
+        "primary": "#6d240a",
+        "primary-container": "#FFDBCD",
+        "primary_container": "#8b3a1f",
+        "primary_fixed": "#ffdbd0",
+        "primary_fixed_dim": "#ffb59e",
+        "secondary": "#77574c",
+        "secondary-container": "#FFDBD1",
+        "secondary_container": "#ffd3c5",
+        "secondary_fixed": "#ffdbcf",
+        "secondary_fixed_dim": "#e7bdb0",
+        "surface": "#fff8f6",
+        "surface-container": "#FCE8E4",
+        "surface-container-high": "#F6E2DE",
+        "surface-container-highest": "#F0DBD7",
+        "surface-container-low": "#FFF1EE",
+        "surface_bright": "#fff8f6",
+        "surface_container": "#f3ecea",
+        "surface_container_high": "#ede7e5",
+        "surface_container_highest": "#e8e1df",
+        "surface_container_low": "#f9f2f0",
+        "surface_container_lowest": "#ffffff",
+        "surface_dim": "#dfd9d7",
+        "surface_tint": "#9a4529",
+        "surface_variant": "#e8e1df",
+        "tertiary": "#695e2f",
+        "tertiary-container": "#F2E2A8",
+        "tertiary_container": "#b9ab74",
+        "tertiary_fixed": "#f2e2a7",
+        "tertiary_fixed_dim": "#d5c68d"
+      },
+      "designMd": "---\nname: Terracotta Kitchen\ncolors:\n  surface: '#fff8f6'\n  surface-dim: '#dfd9d7'\n  surface-bright: '#fff8f6'\n  surface-container-lowest: '#ffffff'\n  surface-container-low: '#FFF1EE'\n  surface-container: '#FCE8E4'\n  surface-container-high: '#F6E2DE'\n  surface-container-highest: '#F0DBD7'\n  on-surface: '#1d1b1a'\n  on-surface-variant: '#55433d'\n  inverse-surface: '#33302f'\n  inverse-on-surface: '#f6efed'\n  outline: '#88726c'\n  outline-variant: '#D8C2BD'\n  surface-tint: '#9a4529'\n  primary: '#6d240a'\n  on-primary: '#ffffff'\n  primary-container: '#FFDBCD'\n  on-primary-container: '#360D00'\n  inverse-primary: '#ffb59e'\n  secondary: '#77574c'\n  on-secondary: '#ffffff'\n  secondary-container: '#FFDBD1'\n  on-secondary-container: '#2C150D'\n  tertiary: '#695e2f'\n  on-tertiary: '#ffffff'\n  tertiary-container: '#F2E2A8'\n  on-tertiary-container: '#221B00'\n  error: '#ba1a1a'\n  on-error: '#ffffff'\n  error-container: '#FFDAD6'\n  on-error-container: '#410002'\n  primary-fixed: '#ffdbd0'\n  primary-fixed-dim: '#ffb59e'\n  on-primary-fixed: '#3a0b00'\n  on-primary-fixed-variant: '#7b2e14'\n  secondary-fixed: '#ffdbcf'\n  secondary-fixed-dim: '#e7bdb0'\n  on-secondary-fixed: '#2c160d'\n  on-secondary-fixed-variant: '#5d4036'\n  tertiary-fixed: '#f2e2a7'\n  tertiary-fixed-dim: '#d5c68d'\n  on-tertiary-fixed: '#221b00'\n  on-tertiary-fixed-variant: '#50461a'\n  background: '#fff8f6'\n  on-background: '#1d1b1a'\n  surface-variant: '#e8e1df'\ntypography:\n  display-large:\n    fontFamily: Google Sans Text\n    fontSize: 57px\n    fontWeight: '700'\n    lineHeight: 64px\n    letterSpacing: -0.02em\n  headline-large:\n    fontFamily: Google Sans Text\n    fontSize: 32px\n    fontWeight: '700'\n    lineHeight: 40px\n    letterSpacing: -0.02em\n  headline-medium:\n    fontFamily: Google Sans Text\n    fontSize: 28px\n    fontWeight: '700'\n    lineHeight: 36px\n    letterSpacing: -0.02em\n  title-large:\n    fontFamily: Google Sans Text\n    fontSize: 22px\n    fontWeight: '500'\n    lineHeight: 28px\n    letterSpacing: '0'\n  title-medium:\n    fontFamily: Google Sans Text\n    fontSize: 16px\n    fontWeight: '500'\n    lineHeight: 24px\n    letterSpacing: '0'\n  body-large:\n    fontFamily: Google Sans Text\n    fontSize: 16px\n    fontWeight: '400'\n    lineHeight: 24px\n    letterSpacing: '0'\n  body-medium:\n    fontFamily: Google Sans Text\n    fontSize: 14px\n    fontWeight: '400'\n    lineHeight: 20px\n    letterSpacing: '0'\n  label-large:\n    fontFamily: Google Sans Text\n    fontSize: 14px\n    fontWeight: '500'\n    lineHeight: 20px\n    letterSpacing: '0'\n  label-medium:\n    fontFamily: Google Sans Text\n    fontSize: 12px\n    fontWeight: '500'\n    lineHeight: 16px\n    letterSpacing: '0'\n  label-small:\n    fontFamily: Google Sans Text\n    fontSize: 11px\n    fontWeight: '500'\n    lineHeight: 16px\n    letterSpacing: '0'\nrounded:\n  sm: 0.25rem\n  DEFAULT: 0.5rem\n  md: 0.75rem\n  lg: 1rem\n  xl: 1.5rem\n  full: 9999px\nspacing:\n  base: 4px\n  gutter-mobile: 16px\n  gutter-desktop: 32px\n  card-padding: 24px\n  component-gap: 16px\n  bento-min-width: 280px\n---\n\n## Brand & Style\n\nThe design system for this culinary navigator is built on a \"local-first\" philosophy, emphasizing warmth, practicality, and trust. It eschews the typical \"AI aesthetic\" of dark modes and glowing neon in favor of a **Corporate / Modern** style mixed with **Tactile** warmth, inspired by high-end kitchen notebooks and farmers' markets.\n\nThe visual narrative is \"Expressive Material,\" utilizing generous whitespace, organic shapes, and a palette that suggests natural materials like clay and fresh produce. The UI is designed to feel quietly intelligent\u2014focused on speed and clarity rather than decorative animation. It prioritizes high-quality typography and tonal depth to create an environment that feels as reliable as a well-seasoned cast-iron skillet.\n\n**Key Brand Pillars:**\n- **Warm & Grounded:** Terracotta tones and soft surfaces avoid the coldness of standard SaaS.\n- **Low-Friction:** A mobile-first, single-column focus that values the user's time and current inventory.\n- **Privacy-Centric:** Trust is visually communicated through a \"local-first\" look\u2014no cloud-heavy imagery or surveillance-oriented data visualizations.\n\n## Colors\n\nThe color system is derived from a **Terracotta (#B85C38)** seed, creating a warm, culinary-themed palette. The system uses a multi-layered surface strategy (Material 3 Surface Tiers) to create depth without relying on heavy shadows.\n\n- **Primary & Secondary:** Used for high-emphasis actions and navigation. The deep earthy reds and browns provide a grounded, sophisticated feel.\n- **Tertiary:** Dedicated to \"Coverage\" and success states\u2014specifically the pantry-match progress rings.\n- **Surface Containers:** The layout relies on `surface-container` tiers (`low`, `default`, `high`, `highest`) to differentiate the background from the \"Bento-style\" cards and interactive sheets.\n- **Functional Containers:** `error-container` (soft red) is used for expiration warnings and missing ingredients, while `secondary-container` acts as a \"mild\" warning state.\n\n## Typography\n\nThis design system uses the **Material 3 Expressive** type scale. The ramp is built entirely on **Google Sans Text**, providing a consistent, modern, and highly legible experience.\n\n- **Headlines:** Use a bold weight (700) and tight tracking (-0.02em) to command attention and provide editorial character, reminiscent of cookbook titles.\n- **Titles & Labels:** Medium weights (500) ensure hierarchy without being as aggressive as headlines. They are used for card labels and buttons.\n- **Body Text:** Standard weight (400) with zero tracking ensures maximum legibility for recipe instructions and ingredient lists.\n- **Expressive Scale:** High contrast between `headline-large` and `label-small` creates a clear visual hierarchy that guides the eye through data-heavy screens.\n\n## Layout & Spacing\n\nThe layout follows a **Fluid Grid** model with a mobile-first philosophy. It transitions from a single-column stack on mobile to a \"Bento-style\" card grid on larger viewports.\n\n- **Mobile (\u2264600px):** Single column with 16px margins. Primary navigation is handled via a bottom bar.\n- **Tablet / Desktop (>600px):** Elements reflow into a grid with a minimum column width of 280px. A 16px gap is maintained between all grid items. Navigation shifts to a left-aligned Rail or Drawer.\n- **Rhythm:** The spacing system is built on a 4px base unit. Standard component internal padding is 16px, while recipe and pantry cards use a more generous 24px padding to enhance the \"expressive\" and spacious feel.\n- **Sticky Elements:** Small App Bars (56px) remain fixed at the top, while the mobile Extended FAB is pinned to the bottom-right with a 16px margin.\n\n## Elevation & Depth\n\nElevation is primarily communicated through **Tonal Layers** rather than heavy shadows. This reinforces the modern, flat culinary aesthetic.\n\n- **Tonal Tiers:** Surfaces use Material 3 container tiers. Backgrounds use `surface`, while cards and interactive elements use `surface-container-high` to create a natural stacked appearance.\n- **Shadows:** At rest, elements use a very soft ambient shadow: `0 2px 6px rgba(33, 25, 22, 0.12)`. Upon interaction (hover/press), the shadow intensifies to `0 6px 16px rgba(33, 25, 22, 0.20)`.\n- **Interaction Feedback:** Cards utilize a scale-up effect (`1.02x`) on hover to provide a tactile, responsive feel.\n- **Dividers:** Use `outline-variant` for subtle separation, though tonal container shifts are the preferred method for defining sections.\n\n## Shapes\n\nThe shape language is **Rounded and Generous**, emphasizing the soft, approachable nature of the brand.\n\n- **Cards & Dialogs:** Use the `extra-large` radius (28px) for a distinctive, modern \"Bento\" appearance.\n- **Buttons & Large Chips:** Use a `large` radius (20px) to provide a soft, tactile target for interactions.\n- **Input Fields:** Use a `small` radius (8px) for a more structured, functional look.\n- **Pill Shapes:** Used for Floating Action Buttons (FAB), avatar chips, and the bottom sheet drag handle to provide maximum contrast with rectangular card forms.\n\n## Components\n\n### Buttons\n- **Filled Tonal:** Use for primary card actions. `primary-container` background with `on-primary-container` text.\n- **Filled:** Reserved for the most important CTA (e.g., \"Add Ingredient\").\n- **Extended FAB:** Pill-shaped, `primary-container` fill, featuring both a 24px icon and a `label-large` text string.\n\n### Cards (The Bento Grid)\n- **Container:** `surface-container-high` background with 28px rounded corners.\n- **Padding:** 24px internal padding on all sides.\n- **Animation:** Staggered entry (50ms offset) with a 280ms duration. SVG coverage rings animate from 0 to target percentage.\n\n### Chips\n- **Status Chips:** Used for expiration and ingredient matching.\n- **Match Chip:** `tertiary-container` fill.\n- **Warning Chip:** `secondary-container` fill for mild warnings; `error-container` for urgent expiry.\n- **Radius:** 20px (large) or full pill for metadata.\n\n### Input Fields\n- **Outlined Style:** `outline` color for the border at rest, 8px corner radius.\n- **Icons:** Always include a leading Material Symbol icon (e.g., `add_shopping_cart`) to provide visual context.\n\n### Bottom Sheets (Mobile)\n- **Shape:** 28px top-corner radii only.\n- **Drag Handle:** 32x4px centered pill in `outline-variant`.\n- **Motion:** Slide up with 350ms emphasized easing.\n\n### Lists\n- **Pantry Items:** Vertical stack of `surface-container-high` cards with no vertical dividers; whitespace and card boundaries provide the separation.",
+      "colorVariant": "FIDELITY",
+      "overridePrimaryColor": "#8b3a1f",
+      "overrideSecondaryColor": "#77574c",
+      "overrideTertiaryColor": "#695e2f",
+      "overrideNeutralColor": "#fff8f6",
+      "spacingScale": 2,
+      "typography": {
+        "body-large": {
+          "fontFamily": "Google Sans Text",
+          "fontSize": "16px",
+          "fontWeight": "400",
+          "lineHeight": "24px",
+          "letterSpacing": "0"
+        },
+        "body-medium": {
+          "fontFamily": "Google Sans Text",
+          "fontSize": "14px",
+          "fontWeight": "400",
+          "lineHeight": "20px",
+          "letterSpacing": "0"
+        },
+        "display-large": {
+          "fontFamily": "Google Sans Text",
+          "fontSize": "57px",
+          "fontWeight": "700",
+          "lineHeight": "64px",
+          "letterSpacing": "-0.02em"
+        },
+        "headline-large": {
+          "fontFamily": "Google Sans Text",
+          "fontSize": "32px",
+          "fontWeight": "700",
+          "lineHeight": "40px",
+          "letterSpacing": "-0.02em"
+        },
+        "headline-medium": {
+          "fontFamily": "Google Sans Text",
+          "fontSize": "28px",
+          "fontWeight": "700",
+          "lineHeight": "36px",
+          "letterSpacing": "-0.02em"
+        },
+        "label-large": {
+          "fontFamily": "Google Sans Text",
+          "fontSize": "14px",
+          "fontWeight": "500",
+          "lineHeight": "20px",
+          "letterSpacing": "0"
+        },
+        "label-medium": {
+          "fontFamily": "Google Sans Text",
+          "fontSize": "12px",
+          "fontWeight": "500",
+          "lineHeight": "16px",
+          "letterSpacing": "0"
+        },
+        "label-small": {
+          "fontFamily": "Google Sans Text",
+          "fontSize": "11px",
+          "fontWeight": "500",
+          "lineHeight": "16px",
+          "letterSpacing": "0"
+        },
+        "title-large": {
+          "fontFamily": "Google Sans Text",
+          "fontSize": "22px",
+          "fontWeight": "500",
+          "lineHeight": "28px",
+          "letterSpacing": "0"
+        },
+        "title-medium": {
+          "fontFamily": "Google Sans Text",
+          "fontSize": "16px",
+          "fontWeight": "500",
+          "lineHeight": "24px",
+          "letterSpacing": "0"
+        }
+      },
+      "spacing": {
+        "base": "4px",
+        "bento-min-width": "280px",
+        "card-padding": "24px",
+        "component-gap": "16px",
+        "gutter-desktop": "32px",
+        "gutter-mobile": "16px"
+      },
+      "headlineFontFamily": "Google Sans Text",
+      "bodyFontFamily": "Google Sans Text",
+      "labelFontFamily": "Google Sans Text"
+    }
+  },
+  "version": "1"
+}
