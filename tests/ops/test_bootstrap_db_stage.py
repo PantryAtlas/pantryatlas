@@ -29,8 +29,10 @@ def test_stage_db_download_skips_when_stamp_present(tmp_path):
 def test_stage_db_download_errors_on_unset_sha(tmp_path):
     stamps = tmp_path / "stamps"
     stamps.mkdir()
+    # Pins are overridable; force the unset-sentinel to exercise the guard.
     cmd = (
         f'export STAMPS_DIR="{stamps}"; '
+        f'export RECIPES_DB_SHA256="REPLACE_AFTER_FIRST_PUBLISH"; '
         f'source "{SCRIPT}"; '
         f"stage_db_download"
     )

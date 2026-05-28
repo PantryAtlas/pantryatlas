@@ -37,10 +37,10 @@ REPO_DIR="${REPO_DIR:-$HOME/pantryatlas}"
 PANTRYATLAS_DATA_DIR="${PANTRYATLAS_DATA_DIR:-$HOME/.pantryatlas}"
 
 # Prebuilt recipe DB artifact — update these pins after each
-# `ops/release/publish-db.sh` run (use the r2.dev URL until dl.pantryatlas.org
-# is attached in the Cloudflare dashboard).
-RECIPES_DB_URL="https://dl.pantryatlas.org/db/recipes-v0.2.0.db"
-RECIPES_DB_SHA256="REPLACE_AFTER_FIRST_PUBLISH"
+# `ops/release/publish-db.sh` run. dl.pantryatlas.org is the R2 custom domain
+# bound to the pantryatlas-artifacts bucket.
+RECIPES_DB_URL="${RECIPES_DB_URL:-https://dl.pantryatlas.org/db/recipes-v0.2.0.db}"
+RECIPES_DB_SHA256="${RECIPES_DB_SHA256:-8d4be6892d3b5cf39b963227ad2ddbcee5d1157ca0d525ab8f3e14297dfb7c9b}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=ops/lib/fetch.sh
