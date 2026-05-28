@@ -116,6 +116,23 @@ hardware).  See Step 5.
 
 ## 4. Publish to R2
 
+The image is ~2 GB, and `wrangler r2 object put` caps single uploads at 300 MiB,
+so `publish-image.sh` uploads via **rclone** (S3 multipart). Configure the remote
+once — interactively, so the secret stays in your terminal, never in a script or
+shell history:
+
+```bash
+rclone config
+#   name: r2
+#   Storage: s3        Provider: Cloudflare
+#   access_key_id / secret_access_key: from an R2 API token
+#     (Cloudflare dash → R2 → Manage R2 API Tokens → Object Read & Write)
+#   region: auto
+#   endpoint: https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+```
+
+Verify the remote (lists buckets, no secrets): `rclone lsd r2:`
+
 Dry-run first to confirm the upload targets:
 
 ```bash
@@ -125,8 +142,7 @@ PUBLISH_DRY_RUN=1 ops/release/publish-image.sh \
     dist/manifest-v0.2.0
 ```
 
-Then publish for real (needs Cloudflare R2 credentials — same bucket as the
-recipe-DB sub-project):
+Then publish for real:
 
 ```bash
 ops/release/publish-image.sh \
@@ -135,8 +151,15 @@ ops/release/publish-image.sh \
     dist/manifest-v0.2.0
 ```
 
-The bucket defaults to `pantryatlas-artifacts`.  Override with
-`PANTRYATLAS_R2_BUCKET=<name>` if needed.
+Bucket defaults to `pantryatlas-artifacts` (`PANTRYATLAS_R2_BUCKET` to override);
+rclone remote defaults to `r2` (`PANTRYATLAS_R2_REMOTE` to override). rclone may
+log a `501 Not Implemented` on its first attempt then succeed on retry — that is
+a benign R2/rclone quirk; the upload completes. Verify the published image:
+
+```bash
+curl -fsS -A Mozilla/5.0 https://dl.pantryatlas.org/img/pantryatlas-v0.2.0.img.xz | sha256sum
+# compare to "sha256" in dist/manifest-v0.2.0/pantryatlas-v0.2.0.json
+```
 
 ---
 
