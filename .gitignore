@@ -177,3 +177,8 @@ secrets.yml
 # Operator scratch — keep ad-hoc dev scratchpads out
 scratch/
 notes/private/
+
+# Astro docs site (web/docs)
+web/docs/dist/
+web/docs/.astro/
+web/docs/node_modules/
