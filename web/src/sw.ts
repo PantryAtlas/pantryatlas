@@ -4,17 +4,16 @@
 export {}; // Make this a module to avoid global scope conflicts
 // Re-declare self with the correct type for ServiceWorkerGlobalScope
 declare const self: ServiceWorkerGlobalScope & typeof globalThis;
-// Strategy rationale:
-//   - Precache: app shell (index.html + hashed JS/CSS) at install time.
-//     These are immutable-by-hash so cache-first is safe.
-//   - Runtime navigator API GETs (/navigator/recipes/from-pantry,
-//     /navigator/pantry): stale-while-revalidate — instant load from
-//     cache on repeat visits, background fetch keeps data fresh.
-//     Chosen over network-first because pantry data doesn't change
-//     second-by-second; stale results are still useful offline.
 
+// ---------------------------------------------------------------------------
+// Cache names
+// ---------------------------------------------------------------------------
 const SHELL_CACHE = 'pantryatlas-shell-v1';
-const API_CACHE = 'pantryatlas-api-v1';
+const RECIPES_CACHE = 'pantryatlas-recipes-v1'; // stale-while-revalidate, capped at 20
+const PANTRY_CACHE = 'pantryatlas-pantry-v1';   // network-first
+
+// Max recipe-results cache entries (evict oldest when exceeded)
+const RECIPES_CACHE_MAX = 20;
 
 // App shell assets to precache at install.
 // NOTE: hashed JS/CSS filenames are injected at build time only in the
@@ -23,9 +22,9 @@ const API_CACHE = 'pantryatlas-api-v1';
 // runtime-cached on first fetch.
 const SHELL_ASSETS = ['/', '/index.html'];
 
-// Navigator API paths to runtime-cache (stale-while-revalidate)
-const API_PATHS = ['/navigator/recipes/from-pantry', '/navigator/pantry'];
-
+// ---------------------------------------------------------------------------
+// Install: precache app shell (cache-first)
+// ---------------------------------------------------------------------------
 self.addEventListener('install', (event: ExtendableEvent) => {
   event.waitUntil(
     caches
@@ -35,15 +34,18 @@ self.addEventListener('install', (event: ExtendableEvent) => {
   );
 });
 
+// ---------------------------------------------------------------------------
+// Activate: prune old caches
+// ---------------------------------------------------------------------------
 self.addEventListener('activate', (event: ExtendableEvent) => {
-  // Remove old shell caches that don't match current version
+  const CURRENT_CACHES = new Set([SHELL_CACHE, RECIPES_CACHE, PANTRY_CACHE]);
   event.waitUntil(
     caches
       .keys()
       .then((keys) =>
         Promise.all(
           keys
-            .filter((k) => k.startsWith('pantryatlas-') && k !== SHELL_CACHE && k !== API_CACHE)
+            .filter((k) => k.startsWith('pantryatlas-') && !CURRENT_CACHES.has(k))
             .map((k) => caches.delete(k)),
         ),
       )
@@ -51,63 +53,137 @@ self.addEventListener('activate', (event: ExtendableEvent) => {
   );
 });
 
+// ---------------------------------------------------------------------------
+// Message: support 'enforce_recipe_cap' for testing
+// ---------------------------------------------------------------------------
+self.addEventListener('message', (event: ExtendableMessageEvent) => {
+  if (event.data && event.data.type === 'enforce_recipe_cap') {
+    event.waitUntil(
+      enforceRecipesCap().then(() => {
+        if (event.ports && event.ports[0]) {
+          event.ports[0].postMessage({ done: true });
+        }
+      }),
+    );
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Fetch: three explicit routing strategies
+// ---------------------------------------------------------------------------
 self.addEventListener('fetch', (event: FetchEvent) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Only handle GET requests for same-origin
-  if (request.method !== 'GET' || url.origin !== self.location.origin) {
+  // Limit to same-origin only
+  if (url.origin !== self.location.origin) {
     return;
   }
 
   const pathname = url.pathname;
 
-  // Navigator API: stale-while-revalidate
-  if (API_PATHS.some((p) => pathname.startsWith(p))) {
-    event.respondWith(staleWhileRevalidate(API_CACHE, request));
+  // ── Strategy 1: stale-while-revalidate — /navigator/recipes/from-pantry ──
+  // POST requests can't be cached directly by Cache API; we use a synthetic
+  // GET key derived from the URL so cache.match/put work normally.
+  // The recipes result cache is capped at RECIPES_CACHE_MAX entries.
+  if (pathname.startsWith('/navigator/recipes/from-pantry')) {
+    if (request.method === 'POST') {
+      event.respondWith(staleWhileRevalidateRecipes(request));
+      return;
+    }
+    // Ignore other methods for this path
     return;
   }
 
-  // App shell (HTML navigation requests) and hashed static assets:
-  // cache-first with network fallback
-  if (pathname === '/' || pathname.endsWith('.html')) {
-    event.respondWith(cacheFirstWithNetworkFallback(SHELL_CACHE, request));
+  // Only handle GET from here on
+  if (request.method !== 'GET') {
     return;
   }
 
-  // JS/CSS/font assets (hashed filenames → immutable): cache-first,
-  // store on first fetch so subsequent loads are instant
+  // ── Strategy 2: network-first — /navigator/pantry GET ──
+  if (pathname.startsWith('/navigator/pantry')) {
+    event.respondWith(networkFirst(PANTRY_CACHE, request));
+    return;
+  }
+
+  // ── Strategy 3: cache-first — app shell (HTML navigation + hashed assets) ──
   if (
+    pathname === '/' ||
+    pathname.endsWith('.html') ||
     pathname.startsWith('/assets/') ||
     pathname.startsWith('/fonts/') ||
     pathname.startsWith('/icons/')
   ) {
-    event.respondWith(cacheFirstWithNetworkFallback(SHELL_CACHE, request));
+    event.respondWith(cacheFirst(SHELL_CACHE, request));
     return;
   }
 });
 
-async function staleWhileRevalidate(cacheName: string, request: Request): Promise<Response> {
-  const cache = await caches.open(cacheName);
-  const cached = await cache.match(request);
+// ---------------------------------------------------------------------------
+// Strategy implementations
+// ---------------------------------------------------------------------------
 
-  const networkFetch = fetch(request)
-    .then((response) => {
+/**
+ * stale-while-revalidate: return cache immediately while revalidating in
+ * background. Used for /navigator/recipes/from-pantry (POST).
+ *
+ * Because POST bodies can't be cached by the Cache API directly, we
+ * consume the request body and build a synthetic GET key:
+ *   synthetic URL = original URL + '?_body=' + base64(body)
+ * This lets cache.match/put work on the cloned request.
+ * Cache is capped at RECIPES_CACHE_MAX; oldest entry evicted on overflow.
+ */
+async function staleWhileRevalidateRecipes(request: Request): Promise<Response> {
+  const cache = await caches.open(RECIPES_CACHE);
+
+  // Build a synthetic cache key (GET with body encoded in URL)
+  const bodyText = await request.clone().text();
+  const syntheticKey = new Request(
+    request.url + '?_body=' + encodeURIComponent(bodyText),
+    { method: 'GET' },
+  );
+
+  const cached = await cache.match(syntheticKey);
+
+  // Network fetch (original request — body is still intact on the clone)
+  const networkFetch = fetch(request.clone())
+    .then(async (response) => {
       if (response.ok) {
-        cache.put(request, response.clone());
+        await cache.put(syntheticKey, response.clone());
+        await enforceRecipesCap();
       }
       return response;
     })
-    .catch(() => null);
+    .catch(() => null as Response | null);
 
   // Return cached immediately; network revalidates in background
   return cached ?? (await networkFetch) ?? new Response('Offline', { status: 503 });
 }
 
-async function cacheFirstWithNetworkFallback(
-  cacheName: string,
-  request: Request,
-): Promise<Response> {
+/**
+ * network-first: try network; fall back to cache when offline.
+ * Used for /navigator/pantry GET.
+ */
+async function networkFirst(cacheName: string, request: Request): Promise<Response> {
+  const cache = await caches.open(cacheName);
+  try {
+    const response = await fetch(request.clone());
+    if (response.ok) {
+      cache.put(request, response.clone()); // background write
+    }
+    return response;
+  } catch {
+    // Network failed — fall back to cache
+    const cached = await cache.match(request);
+    return cached ?? new Response('Offline', { status: 503 });
+  }
+}
+
+/**
+ * cache-first: serve from cache; fetch and store on cache miss.
+ * Used for app shell (index.html, hashed JS/CSS, fonts, icons).
+ */
+async function cacheFirst(cacheName: string, request: Request): Promise<Response> {
   const cache = await caches.open(cacheName);
   const cached = await cache.match(request);
   if (cached) return cached;
@@ -120,5 +196,19 @@ async function cacheFirstWithNetworkFallback(
     return response;
   } catch {
     return new Response('Offline', { status: 503 });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Cap enforcement: keep RECIPES_CACHE_MAX most-recent entries
+// (cache.keys() returns insertion order — evict from the front)
+// ---------------------------------------------------------------------------
+async function enforceRecipesCap(): Promise<void> {
+  const cache = await caches.open(RECIPES_CACHE);
+  const keys = await cache.keys();
+  const excess = keys.length - RECIPES_CACHE_MAX;
+  if (excess > 0) {
+    // Delete oldest entries (front of the list)
+    await Promise.all(keys.slice(0, excess).map((k) => cache.delete(k)));
   }
 }

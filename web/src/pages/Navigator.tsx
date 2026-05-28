@@ -14,6 +14,7 @@ import {
   recipes,
   recipeLoadState,
   deleteItem,
+  addItem,
   addInputValue,
   addState,
   addResolvedName,
@@ -23,10 +24,12 @@ import {
   photoSheetState,
   daysUntilExpiry,
   hasPersistedMode,
+  wireOfflineReplay,
 } from '../signals'
 import { ModeSwitcher } from '../components/ModeSwitcher'
 import { PhotoReviewSheet } from '../components/PhotoReviewSheet'
 import { RecipeCard } from '../components/RecipeCard'
+import { OfflineBanner } from '../components/OfflineBanner'
 
 // ---------------------------------------------------------------------------
 // Debounce util
@@ -62,6 +65,7 @@ const _debouncedFetchRecipes = debounceRecipe(
 export function Navigator() {
   useEffect(() => {
     fetchPantry()
+    wireOfflineReplay()
     // Open mode switcher on first launch (no persisted mode)
     if (!hasPersistedMode()) {
       modeSwitcherOpen.value = true
@@ -78,6 +82,9 @@ export function Navigator() {
 
   return (
     <Fragment>
+      {/* Offline banner — shown when navigator.onLine === false */}
+      <OfflineBanner />
+
       {/* Main scrolling screen */}
       <div
         style={{
@@ -267,18 +274,15 @@ function AddIngredientRow() {
     if (!raw) return
 
     try {
-      const res = await fetch('/navigator/pantry/items', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ raw_text: raw }),
-      })
-      if (res.ok || res.status === 201) {
+      const result = await addItem(raw)
+      if (result.ok) {
         addInputValue.value = ''
         addState.value = 'idle'
         addErrorMsg.value = ''
         addResolvedName.value = ''
-        await fetchPantry()
-      } else if (res.status === 422) {
+        // fetchPantry() already called by addItem on online path;
+        // offline path updates pantry signal directly.
+      } else if (result.status === 422) {
         addState.value = 'error'
         addErrorMsg.value = `I don't know '${raw}' yet — try a simpler name?`
         triggerShake()
@@ -597,11 +601,13 @@ interface PantryCardProps {
     canonical_name: string
     raw_text: string
     expires_at?: string
+    _pending?: boolean
   }
 }
 
 function PantryCard({ item }: PantryCardProps) {
   const days = daysUntilExpiry(item.expires_at)
+  const isPending = item._pending === true
 
   // Expiry chip styling
   let expiryBg = 'var(--md-sys-color-secondary-container)'
@@ -717,8 +723,48 @@ function PantryCard({ item }: PantryCardProps) {
         )}
       </div>
 
-      {/* Trailing: expiry chip + delete button */}
+      {/* Trailing: pending-sync chip + expiry chip + delete button */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+        {/* Pending-sync indicator — shown for optimistic offline items */}
+        {isPending && (
+          <span
+            data-testid="pending-sync"
+            aria-label="Pending sync — will upload when back online"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '3px 10px',
+              borderRadius: 'var(--md-sys-shape-corner-full)',
+              background: 'var(--md-sys-color-secondary-container)',
+              color: 'var(--md-sys-color-on-secondary-container)',
+              fontFamily: 'var(--font)',
+              fontSize: 'var(--md-sys-typescale-label-small-size)',
+              fontWeight: 'var(--md-sys-typescale-label-medium-weight)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {/* Sync icon */}
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M1 4v6h6M23 20v-6h-6"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <path
+                d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10M23 14l-4.64 4.36A9 9 0 0 1 3.51 15"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+            pending sync
+          </span>
+        )}
+
         {/* Expiry chip */}
         {expiryText && (
           <span

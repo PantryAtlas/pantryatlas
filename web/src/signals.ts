@@ -4,6 +4,7 @@
  */
 import { signal, computed } from '@preact/signals'
 import type { RankedRecipe } from './components/RecipeCard'
+import { enqueueMutation, replayQueue } from './lib/offline-queue'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -16,6 +17,8 @@ export interface PantryItem {
   raw_text: string
   quantity?: { amount: number; unit: string }
   expires_at?: string // ISO date string or null
+  /** Present on optimistically-added items awaiting sync. Cleared after replay. */
+  _pending?: boolean
 }
 
 export type AddState = 'idle' | 'resolving' | 'resolved' | 'error'
@@ -79,7 +82,51 @@ export async function fetchPantry() {
   }
 }
 
+/**
+ * Add a pantry item via text input.
+ * - Online: POST to backend, then re-fetch.
+ * - Offline: enqueue the mutation + optimistically add with _pending flag.
+ */
+export async function addItem(rawText: string): Promise<{ ok: boolean; status?: number }> {
+  if (!navigator.onLine) {
+    // Offline path: enqueue + optimistic update
+    await enqueueMutation('add', { raw_text: rawText })
+    // Optimistic local pantry insert (canonical_name = raw for now; replaced on sync)
+    const optimistic: PantryItem = {
+      canonical_name: rawText.trim().toLowerCase(),
+      raw_text: rawText,
+      _pending: true,
+    }
+    pantry.value = [...pantry.value.filter(i => i.canonical_name !== optimistic.canonical_name), optimistic]
+    return { ok: true }
+  }
+
+  // Online path
+  const res = await fetch('/navigator/pantry/items', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ raw_text: rawText }),
+  })
+  if (res.ok || res.status === 201) {
+    await fetchPantry()
+  }
+  return { ok: res.ok || res.status === 201, status: res.status }
+}
+
+/**
+ * Delete a pantry item.
+ * - Online: DELETE to backend, then re-fetch.
+ * - Offline: enqueue the mutation + optimistically remove from local list.
+ */
 export async function deleteItem(canonicalName: string) {
+  if (!navigator.onLine) {
+    // Offline path: enqueue + optimistic removal
+    await enqueueMutation('delete', { canonical_name: canonicalName })
+    pantry.value = pantry.value.filter(i => i.canonical_name !== canonicalName)
+    return
+  }
+
+  // Online path
   try {
     await fetch(`/navigator/pantry/items/${encodeURIComponent(canonicalName)}`, {
       method: 'DELETE',
@@ -88,6 +135,33 @@ export async function deleteItem(canonicalName: string) {
   } catch {
     // ignore
   }
+}
+
+// ---------------------------------------------------------------------------
+// Reconnect replay — wired up in main.tsx via wireOfflineReplay()
+// ---------------------------------------------------------------------------
+
+let _replayScheduled = false
+
+/**
+ * Call once at app init. Listens for 'online' events and replays any
+ * pending offline mutations, then refreshes pantry from server.
+ */
+export function wireOfflineReplay() {
+  if (_replayScheduled) return
+  _replayScheduled = true
+
+  window.addEventListener('online', async () => {
+    try {
+      const count = await replayQueue()
+      if (count > 0) {
+        // Clear _pending flags by re-fetching authoritative pantry state
+        await fetchPantry()
+      }
+    } catch {
+      // best-effort replay
+    }
+  })
 }
 
 // ---------------------------------------------------------------------------

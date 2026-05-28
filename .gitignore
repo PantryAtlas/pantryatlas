@@ -138,6 +138,8 @@ web/node_modules/
 web/dist/
 web/.vite/
 web/coverage/
+# web/src/lib/ is committed source; un-exclude from the blanket lib/ rule above
+!web/src/lib/
 
 # Wrangler (Cloudflare Pages) local cache + tmp — never commit
 .wrangler/
