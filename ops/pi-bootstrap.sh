@@ -29,8 +29,22 @@ PANTRYATLAS_HOME="${PANTRYATLAS_HOME:-$HOME/pantryatlas}"
 PANTRYATLAS_VENV="$PANTRYATLAS_HOME/venv"
 LLAMA_CPP_DIR="$PANTRYATLAS_HOME/llama.cpp"
 MODELS_DIR="$PANTRYATLAS_HOME/models"
-STAMPS_DIR="$PANTRYATLAS_HOME/.bootstrap-stamps"
+STAMPS_DIR="${STAMPS_DIR:-$PANTRYATLAS_HOME/.bootstrap-stamps}"
 REPO_DIR="${REPO_DIR:-$HOME/pantryatlas}"
+
+# Runtime data dir (where the app + systemd unit read recipes.db). Distinct from
+# PANTRYATLAS_HOME above, which is the install root.
+PANTRYATLAS_DATA_DIR="${PANTRYATLAS_DATA_DIR:-$HOME/.pantryatlas}"
+
+# Prebuilt recipe DB artifact — update these pins after each
+# `ops/release/publish-db.sh` run. dl.pantryatlas.org is the R2 custom domain
+# bound to the pantryatlas-artifacts bucket.
+RECIPES_DB_URL="${RECIPES_DB_URL:-https://dl.pantryatlas.org/db/recipes-v0.2.0.db}"
+RECIPES_DB_SHA256="${RECIPES_DB_SHA256:-8d4be6892d3b5cf39b963227ad2ddbcee5d1157ca0d525ab8f3e14297dfb7c9b}"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=ops/lib/fetch.sh
+source "$SCRIPT_DIR/lib/fetch.sh"
 
 # ============================================================
 # Stage helpers
@@ -113,18 +127,27 @@ stage_gemma_download() {
     fi
     mkdir -p "$MODELS_DIR"
     log "gemma download: fetching ~5 GB GGUF..."
-    curl -fL --retry 3 -o "$gguf.tmp" "$GEMMA4_GGUF_URL"
-    log "gemma download: verifying SHA256..."
-    local actual
-    actual="$(sha256sum "$gguf.tmp" | awk '{print $1}')"
-    if [ "$actual" != "$GEMMA4_GGUF_SHA256" ]; then
-        echo "ERROR: SHA256 mismatch: expected $GEMMA4_GGUF_SHA256, got $actual" >&2
-        rm -f "$gguf.tmp"
-        exit 2
-    fi
-    mv "$gguf.tmp" "$gguf"
+    fetch_verified "$GEMMA4_GGUF_URL" "$GEMMA4_GGUF_SHA256" "$gguf"
     touch "$stamp"
     log "gemma download: done (verified)"
+}
+
+stage_db_download() {
+    local stamp="$STAMPS_DIR/07-db-download.done"
+    if [ -f "$stamp" ]; then
+        log "db download: already done"
+        return 0
+    fi
+    if [ "$RECIPES_DB_SHA256" = "REPLACE_AFTER_FIRST_PUBLISH" ]; then
+        echo "ERROR: RECIPES_DB_SHA256 is still REPLACE_AFTER_FIRST_PUBLISH — run ops/release/publish-db.sh and update the pins" >&2
+        return 3
+    fi
+    mkdir -p "$PANTRYATLAS_DATA_DIR"
+    log "db download: fetching prebuilt recipes.db..."
+    fetch_verified "$RECIPES_DB_URL" "$RECIPES_DB_SHA256" \
+        "$PANTRYATLAS_DATA_DIR/recipes.db"
+    touch "$stamp"
+    log "db download: done (verified)"
 }
 
 stage_pip_install() {
@@ -175,15 +198,19 @@ main() {
     stage_venv
     stage_llama_cpp
     stage_gemma_download
+    stage_db_download
     stage_pip_install
     stage_web_build
     stage_smoke_test
 
     log "Venv:           $PANTRYATLAS_VENV"
     log "Gemma 4 GGUF:   $MODELS_DIR/gemma-4-E4B-it-Q4_K_M.gguf"
+    log "Recipes DB:     $PANTRYATLAS_DATA_DIR/recipes.db"
     log "llama.cpp:      $LLAMA_CPP_DIR/build"
     log "Next:           T-010 will use these via GemmaRunner"
     log "BOOTSTRAP COMPLETE"
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi

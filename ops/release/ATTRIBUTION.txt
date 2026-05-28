@@ -1,0 +1,15 @@
+PantryAtlas recipe database — data attribution
+===============================================
+
+This database is derived from the RecipeNLG dataset.
+
+  RecipeNLG: A Cooking Recipes Dataset for Semi-Structured Text Generation.
+  Michal Bien, Michal Gilski, Martyna Maciejewska, Wojciech Taisner,
+  Dawid Wisniewski, Agnieszka Lawrynowicz. INLG 2020.
+  https://recipenlg.cs.put.poznan.pl/
+
+License: Creative Commons Attribution-NonCommercial 4.0 International
+         (CC-BY-NC-4.0) — https://creativecommons.org/licenses/by-nc/4.0/
+
+The recipe text and derived embeddings in this artifact are provided for
+non-commercial use. Attribution to RecipeNLG must accompany redistribution.
