@@ -50,7 +50,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from pantryatlas.inference.config import ProviderConfig, save_provider_config
+from pantryatlas.inference.config import save_provider_config
 from pantryatlas.inference.providers.lan_endpoint import LanEndpointProvider
 from pantryatlas.inference.registry import ProviderRegistry
 from pantryatlas.navigator.ranking import RankedRecipe, compute_swaps, rank_recipes

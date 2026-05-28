@@ -1,4 +1,5 @@
 import httpx
+import pytest
 
 from pantryatlas.gemma.client import GemmaClient
 from pantryatlas.inference.provider import CapabilityUnavailable
@@ -26,11 +27,9 @@ def test_vision_without_capability_raises():
         capabilities=["text"], client=GemmaClient(transport=_fake_chat("x")),
         health_check=lambda: True,
     )
-    try:
+    with pytest.raises(CapabilityUnavailable) as exc_info:
         p.vision_generate(b"jpegbytes", "prompt", "system")
-        assert False, "expected CapabilityUnavailable"
-    except CapabilityUnavailable as e:
-        assert e.capability == "vision"
+    assert exc_info.value.capability == "vision"
 
 
 def test_is_available_reflects_health_and_enabled():
