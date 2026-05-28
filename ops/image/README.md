@@ -33,12 +33,14 @@ They must exist at the standard PantryAtlas paths before running the build:
 | Recipe database | `~/.pantryatlas/recipes.db` |
 | BGE-M3 int8 ONNX model | `~/.cache/pantryatlas/bge-m3/onnx/model_int8.onnx` |
 
-Ingest the DB and pull the model first if they are missing:
+Ingest the DB if it is missing:
 
 ```bash
-pantryatlas ingest        # builds ~/.pantryatlas/recipes.db
-pantryatlas pull-model    # downloads to ~/.cache/pantryatlas/bge-m3/
+python -m pantryatlas.navigator.ingest   # builds ~/.pantryatlas/recipes.db
 ```
+
+The bge-m3 model lazy-downloads on first embed call; on the robot it should
+already be present at `~/.cache/pantryatlas/bge-m3/onnx/model_int8.onnx`.
 
 ### Push `feat/sd-image` to origin FIRST
 
@@ -147,11 +149,13 @@ robot card) and boot a Pi 5:
 1. Flash with [Raspberry Pi Imager](https://www.raspberrypi.com/software/) →
    *Use custom image* → select `dist/pantryatlas-v0.2.0.img.xz`.
 2. Insert into a Pi 5, power on, wait ~60 s.
-3. From any device on the same LAN:
+3. Open `http://pantryatlas.local` — you should see the PantryAtlas web UI (HTML),
+   NOT a `{"status":"frontend not built"}` JSON placeholder.
+   From a shell:
    ```
-   curl http://pantryatlas.local/
+   curl -fs http://pantryatlas.local/ | grep -qi '<html'
    ```
-   A `200 OK` with the PantryAtlas navigator HTML is the gate.
+   A successful `grep` (exit 0) is the gate.
 
 **No interactive login by default.** The appliance is web-UI only; no desktop
 user is created.  If you need SSH access (e.g. for debugging), add a user via

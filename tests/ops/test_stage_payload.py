@@ -24,11 +24,11 @@ def test_aborts_when_db_missing(tmp_path):
 
 def test_stages_payload_when_present(tmp_path):
     data = tmp_path / "data"
-    cache = tmp_path / "cache" / "bge-m3"
+    cache = tmp_path / "cache" / "bge-m3" / "onnx"
     data.mkdir(parents=True)
     (data / "recipes.db").write_bytes(b"db")
     cache.mkdir(parents=True)
-    (cache / "model").write_bytes(b"m")
+    (cache / "model_int8.onnx").write_bytes(b"m")
     env = {
         **os.environ,
         "PANTRYATLAS_DATA_DIR": str(data),
@@ -41,4 +41,4 @@ def test_stages_payload_when_present(tmp_path):
     )
     assert r.returncode == 0, r.stderr
     assert (stage / "recipes.db").exists()
-    assert (stage / "bge-m3" / "model").exists()
+    assert (stage / "bge-m3" / "onnx" / "model_int8.onnx").exists()

@@ -46,10 +46,11 @@ PA_DATA="${PA_HOME}/.pantryatlas"
 PA_CACHE="${PA_HOME}/.cache/pantryatlas"
 PA_REPO_URL="https://github.com/PantryAtlas/pantryatlas.git"
 
-# Only the lean service set is enabled — mirrors UNITS_TO_ENABLE in
-# pantryatlas/ops/image_build.py. pantryatlas-gemma is installed but NOT enabled.
+# Only the lean service set is installed and enabled — mirrors UNITS_TO_ENABLE in
+# pantryatlas/ops/image_build.py. pantryatlas-gemma is NOT installed or enabled in
+# the lean image — full pi-bootstrap installs it.
 PA_UNITS_ENABLE=( pantryatlas-mem-monitor pantryatlas-embeddings pantryatlas-navigator )
-PA_UNITS_ALL=( pantryatlas-mem-monitor pantryatlas-embeddings pantryatlas-gemma pantryatlas-navigator )
+PA_UNITS_ALL=( pantryatlas-mem-monitor pantryatlas-embeddings pantryatlas-navigator )
 
 loadparams
 
@@ -157,7 +158,8 @@ then
     python3 -m venv "$PA_VENV"
     "$PA_VENV/bin/pip" install --upgrade pip
     # Runtime extras only — NO [dev].
-    "$PA_VENV/bin/pip" install "$PA_REPO"
+    # editable: navigator resolves web/dist via __file__, which must point at the repo, not site-packages
+    "$PA_VENV/bin/pip" install -e "$PA_REPO"
 
     logtoboth "> Plugin $pfx: Place baked payload from $INSTAGE"
     mkdir -p "$PA_DATA" "$PA_CACHE"

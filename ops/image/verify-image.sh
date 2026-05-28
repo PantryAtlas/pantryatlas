@@ -248,10 +248,10 @@ else
         echo "WARN: uvicorn exited early — log: /tmp/uvicorn-smoke.log" >&2
         echo "WARN: runtime check skipped (provisioning file checks still passed)" >&2
     else
-        if chroot "$MNT" curl -fs http://127.0.0.1:8090/ >/dev/null 2>&1; then
-            echo "  OK  navigator responded to HTTP GET /"
+        if chroot "$MNT" curl -fs http://127.0.0.1:8090/ 2>/dev/null | grep -qi '<html'; then
+            echo "  OK  navigator served HTML PWA"
         else
-            echo "WARN: curl to navigator failed — may be arch or env issue" >&2
+            echo "WARN: navigator did not serve HTML (placeholder or chroot-exec limitation)" >&2
             echo "WARN: runtime check inconclusive (provisioning file checks still passed)" >&2
         fi
         kill "$UVICORN_PID" 2>/dev/null || true

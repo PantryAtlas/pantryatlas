@@ -19,7 +19,7 @@ MODEL="$CACHE_DIR/bge-m3"
 WEB_DIST="$REPO_ROOT/web/dist"
 
 [ -f "$DB" ] || { echo "ERROR: missing recipes.db at $DB (run the ingest first)" >&2; exit 1; }
-[ -d "$MODEL" ] || { echo "ERROR: missing bge-m3 model at $MODEL (run embeddings once)" >&2; exit 1; }
+[ -f "$MODEL/onnx/model_int8.onnx" ] || { echo "ERROR: missing bge-m3 model file at $MODEL/onnx/model_int8.onnx (run embeddings once)" >&2; exit 1; }
 
 mkdir -p "$STAGE"
 cp -a "$DB" "$STAGE/recipes.db"
