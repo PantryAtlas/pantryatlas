@@ -89,7 +89,18 @@ if ! git fetch -q "$PA_REMOTE" "$COMMIT" 2>/dev/null; then
 fi
 
 # Working dir for the image + intermediate artifacts.
-WORK="$(mktemp -d /tmp/pa-image.XXXXXX)"
+# IMPORTANT: must be DISK-backed, not tmpfs. The base image decompresses to ~3 GB
+# and `sdm --extend` adds several more GB; on a Pi where /tmp is a RAM tmpfs, that
+# exhausts memory and the host OOM-reboots. Default to ./.build (gitignored) on
+# the repo's disk-backed filesystem. Override with BUILD_WORK_DIR=/path/on/disk.
+WORK_PARENT="${BUILD_WORK_DIR:-$REPO_ROOT/.build}"
+mkdir -p "$WORK_PARENT"
+if df --output=fstype "$WORK_PARENT" | tail -1 | grep -q tmpfs; then
+    echo "ERROR: build work dir '$WORK_PARENT' is on tmpfs (RAM) — multi-GB image work will OOM the host." >&2
+    echo "       Set BUILD_WORK_DIR to a path on a disk-backed filesystem." >&2
+    exit 1
+fi
+WORK="$(mktemp -d "${WORK_PARENT}/pa-image.XXXXXX")"
 trap 'echo "[build-image] cleaning up $WORK on exit"; rm -rf "$WORK"' EXIT
 STAGE="$(mktemp -d "${WORK}/stage.XXXXXX")"
 MANIFEST_DIR="${WORK}/manifest"
