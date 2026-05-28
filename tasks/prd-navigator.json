@@ -271,13 +271,34 @@
       "notes": ""
     },
     {
+      "id": "T-014",
+      "title": "Gemma 4 vision endpoint for shelf-photo parsing",
+      "description": "Add POST /navigator/vision/parse-shelf to the FastAPI server. Accepts multipart image upload (JPEG/PNG, ≤8MB), calls Gemma 4 multimodal variant via pantryatlas.gemma.GemmaClient (extended for vision), returns JSON {detected: [{label: str, confidence: float}, ...]}. Includes image preprocessing (resize to model input, EXIF rotate), prompt template requesting structured JSON output, parse loop with repair fallback (relaxed JSON + regex rescue). Model: same Gemma 4 E4B GGUF as text path if vision-capable; otherwise pin a vision variant in docs/gemma4-verified-specs.md. Surfaces in DESIGN.md Section B photo-review sheet.",
+      "acceptanceCriteria": [
+        "File `/home/craigm26/pantryatlas/pantryatlas/navigator/vision.py` exists with function `parse_shelf(image_bytes: bytes, gemma_client) -> list[DetectedIngredient]`",
+        "File `/home/craigm26/pantryatlas/pantryatlas/gemma/client.py` has new method `vision_generate(image_bytes: bytes, prompt: str, strict: bool = False) -> str` (or extends `generate()` with optional image param)",
+        "FastAPI route POST /navigator/vision/parse-shelf registered in `pantryatlas/navigator/server.py`",
+        "Run `curl -s -X POST -F image=@tests/fixtures/test-shelf.jpg http://localhost:8000/navigator/vision/parse-shelf | python3 -m json.tool` - prints valid JSON with `detected` array containing ≥1 item",
+        "Test fixture `tests/fixtures/test-shelf.jpg` exists (a photo of 3-5 obvious vegetables on a counter; ≤500KB)",
+        "Test `tests/navigator/test_vision.py` exists with: (a) mock-gemma test asserting JSON parse, (b) integration test marked pi_integration that hits real Gemma and asserts ≥1 detection on the fixture",
+        "Run `pytest tests/navigator/test_vision.py -m 'not pi_integration' -q` - exits 0",
+        "Run `pytest tests/ -m 'not pi_integration' -q` - exits 0 (no regressions across 102+ tests)",
+        "Endpoint returns 503 with body `{error: 'vision_unavailable'}` when Gemma vision model is not loaded (graceful fallback so navigator UI can show 'vision not configured' state)",
+        "Run `ruff check pantryatlas/navigator/vision.py pantryatlas/gemma/client.py` - exits 0",
+        "docs/gemma4-verified-specs.md updated with vision model pin (URL + SHA256) and the empirically-measured latency on Pi 5 for a 1024×768 input"
+      ],
+      "priority": 9.5,
+      "passes": false,
+      "notes": "Per operator pivot 2026-05-27 — camera-input flow in web/design/DESIGN.md Section B depends on this endpoint. Ships with v0.2.0. Spec covered in DESIGN.md commit dcbd09c."
+    },
+    {
       "id": "T-013",
       "title": "Cut v0.2.0 release (version bump, CHANGELOG, tag, push, issue #1 update)",
       "description": "Bump pantryatlas version 0.1.0 → 0.2.0, write CHANGELOG entry covering all 14 navigator tasks, merge feat/navigator-v0.2.0 → main, tag v0.2.0, push, ensure CI green, comment on PantryAtlas/pantryatlas#1 checking off the navigator item.",
       "acceptanceCriteria": [
         "Run `grep -E '^version = \"0.2.0\"$' pyproject.toml` - exits 0",
         "Run `grep -E '^## \\[0.2.0\\] - 20[0-9]{2}-[0-1][0-9]-[0-3][0-9]' CHANGELOG.md` - exits 0",
-        "CHANGELOG [0.2.0] section enumerates T-001 through T-013 (plus T-004B) — `grep -c 'T-00[1-9]\\|T-01[0-3]\\|T-004B' CHANGELOG.md` - prints integer ≥ 14",
+        "CHANGELOG [0.2.0] section enumerates T-001 through T-013 (plus T-004B and T-014) — `grep -c 'T-00[1-9]\\|T-01[0-4]\\|T-004B' CHANGELOG.md` - prints integer ≥ 15",
         "Run `git tag -l v0.2.0` - prints `v0.2.0`",
         "Run `git -C /home/craigm26/pantryatlas status --porcelain` - prints empty",
         "Run `git ls-remote --tags origin v0.2.0` - exits 0 (tag pushed)",
