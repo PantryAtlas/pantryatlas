@@ -14,6 +14,9 @@ bash ~/pantryatlas/ops/pi-bootstrap.sh
 # ~30 min later: "BOOTSTRAP COMPLETE"
 ```
 
+> Bootstrap now also downloads the prebuilt recipe database (~227 MB, sha256-verified)
+> into `~/.pantryatlas/recipes.db` — no multi-hour local ingest required.
+
 Then in Python:
 
 ```python

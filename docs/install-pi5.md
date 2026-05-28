@@ -71,6 +71,7 @@ The script will:
 3. Clone and build llama.cpp with ARM64 optimizations
 4. Download the Gemma 4 E4B model weights (~2GB)
 5. Install pantryatlas in editable mode
+6. Download + sha256-verify the prebuilt recipe DB (~227 MB) to `~/.pantryatlas/recipes.db`
 
 Expected time: **20–30 minutes**. You'll see progress like:
 
@@ -134,6 +135,12 @@ git clone https://github.com/pantryatlas/pantryatlas.git ~/pantryatlas
    EOF
    ```
    You should see a similarity close to 0.95 (tomato and tomate are the same word in Spanish).
+
+5. **Check the recipe DB**:
+   ```bash
+   python3 -c "import sqlite3; print(sqlite3.connect('$HOME/.pantryatlas/recipes.db').execute('SELECT COUNT(*) FROM recipes_meta').fetchone()[0], 'recipes')"
+   ```
+   Should print `49965 recipes` (matching the published manifest).
 
 ## Persistent setup (optional)
 
