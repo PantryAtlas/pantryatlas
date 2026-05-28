@@ -1,0 +1,17 @@
+{
+  "name": "pantryatlas-docs",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "sync": "astro sync"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.39.2",
+    "astro": "~6.3.8",
+    "sharp": "^0.34.5"
+  }
+}

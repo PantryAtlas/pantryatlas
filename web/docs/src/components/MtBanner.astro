@@ -1,0 +1,46 @@
+---
+import Default from '@astrojs/starlight/components/Banner.astro';
+
+// The machine-translated badge text is localized here, keyed by Starlight's
+// locale, rather than via an i18n collection file. Reason: Astro keys i18n
+// files by a lowercased tag (`zh-cn`) while Starlight looks them up by `lang`
+// (`zh-CN`), so a custom key never resolves for region-subtagged locales. The
+// locale from `starlightRoute` is reliable for all locales, so a small map here
+// is the single source of truth for this one component-specific string.
+const MT_BADGE_TEXT: Record<string, string> = {
+  es: 'Traducción automática — ayúdanos a mejorar esta página',
+  fr: 'Traduction automatique — aidez-nous à améliorer cette page',
+  ar: 'ترجمة آلية — ساعدنا في تحسين هذه الصفحة',
+  'zh-cn': '机器翻译 — 帮助我们改进此页面',
+};
+const DEFAULT_MT_BADGE_TEXT = 'Machine-translated — help us improve this page';
+
+const { entry, editUrl, locale } = Astro.locals.starlightRoute;
+const isMachine = entry.data.translationStatus === 'machine';
+const text = (locale && MT_BADGE_TEXT[locale]) || DEFAULT_MT_BADGE_TEXT;
+---
+
+{isMachine && (
+  <div class="mt-banner" dir="auto">
+    <span>{text}</span>
+    {editUrl && <a href={editUrl.href}>↗</a>}
+  </div>
+)}
+
+{/* Preserve any normal frontmatter banner below ours */}
+<Default><slot /></Default>
+
+<style>
+  .mt-banner {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    justify-content: center;
+    padding: 0.4rem 0.75rem;
+    font-size: var(--sl-text-xs);
+    background: var(--sl-color-blue-low, var(--sl-color-gray-6));
+    color: var(--sl-color-blue-high, var(--sl-color-white));
+    border-bottom: 1px solid var(--sl-color-hairline);
+  }
+  .mt-banner a { color: inherit; text-decoration: underline; }
+</style>

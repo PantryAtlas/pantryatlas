@@ -1,0 +1,73 @@
+/*
+ * PantryAtlas Docs — cool-Gemini design tokens → Starlight CSS variables.
+ *
+ * Light mode is primary (`:root` override outranks Starlight's layered
+ * `:root[data-theme='light']` because customCss runs unlayered).
+ * Dark mode uses `[data-theme='dark']` to match Starlight's toggle attribute.
+ *
+ * Variables verified against @astrojs/starlight 0.39.2 props.css:
+ *   KEPT: --sl-font, --sl-color-accent-low/accent/accent-high,
+ *         --sl-color-white, --sl-color-gray-1..7, --sl-color-bg,
+ *         --sl-color-bg-nav, --sl-color-bg-sidebar,
+ *         --sl-color-blue-low, --sl-color-blue-high
+ *   DROPPED: --sl-border-radius (not read by Starlight — would be a no-op)
+ */
+
+:root {
+  /* Typography: self-hosted DM Sans for Latin; system stack covers AR/ZH */
+  --sl-font: 'DM Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  /* Accent ramp — cool-Gemini blue (#1a73e8) */
+  --sl-color-accent-low: #d8e2ff;
+  --sl-color-accent: #1a73e8;
+  --sl-color-accent-high: #00184a;
+
+  /*
+   * --sl-color-white is Starlight's "text on background" token (not the fill),
+   * so setting it to a dark value here makes body text near-black in light mode.
+   */
+  --sl-color-white: #1a1b22;
+  --sl-color-gray-1: #2f3036;
+  --sl-color-gray-2: #44464e;
+  --sl-color-gray-3: #74767e;
+  --sl-color-gray-4: #c6c8d3;
+  --sl-color-gray-5: #e0e3ee;
+  --sl-color-gray-6: #eceef7;
+  --sl-color-gray-7: #f4f5fb;
+
+  /* Surfaces (light-first) */
+  --sl-color-bg: #fcfcff;
+  --sl-color-bg-nav: #f4f5fb;
+  --sl-color-bg-sidebar: #fcfcff;
+
+  /*
+   * MT badge (MtBanner.astro) references --sl-color-blue-low/high.
+   * Override them to mirror the accent ramp so the badge reads as branded.
+   * Light: pale-blue chip (#d8e2ff) + dark-blue text (#00184a).
+   */
+  --sl-color-blue-low: #d8e2ff;
+  --sl-color-blue-high: #00184a;
+}
+
+/* Dark mode → deep slate palette */
+:root[data-theme='dark'] {
+  --sl-color-accent-low: #00295c;
+  --sl-color-accent: #4285f4;
+  --sl-color-accent-high: #d8e2ff;
+  --sl-color-white: #eef0f9;
+  --sl-color-bg: #111319;
+  --sl-color-bg-nav: #181b22;
+  --sl-color-bg-sidebar: #111319;
+
+  /*
+   * MT badge dark: inverted — deep-blue chip background + light-blue text.
+   */
+  --sl-color-blue-low: #00295c;
+  --sl-color-blue-high: #d8e2ff;
+}
+
+/* Gradient on the active sidebar item */
+.sidebar a[aria-current='page'] {
+  background-image: linear-gradient(135deg, #1a73e8, #9b72cb);
+  color: #ffffff;
+}
