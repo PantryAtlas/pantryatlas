@@ -73,15 +73,14 @@ done
 # inside the nspawn container. Fail fast on the HOST if the pinned commit is not
 # yet reachable on the remote — otherwise the build dies deep in phase 1 (after
 # apt + venv + pip have already run, ~20 min wasted).
-if ! git ls-remote --exit-code "$PA_REMOTE" "$COMMIT" >/dev/null 2>&1 \
-   && ! git fetch -q "$PA_REMOTE" "$COMMIT" 2>/dev/null; then
-    echo "ERROR: commit $COMMIT is not reachable on $PA_REMOTE." >&2
-    echo "       Push branch feat/sd-image (or merge to main) before building." >&2
+if ! git fetch -q "$PA_REMOTE" "$COMMIT" 2>/dev/null; then
+    echo "ERROR: commit $COMMIT is not reachable on $PA_REMOTE — push feat/sd-image first" >&2
     exit 1
 fi
 
 # Working dir for the image + intermediate artifacts.
 WORK="$(mktemp -d /tmp/pa-image.XXXXXX)"
+trap 'echo "[build-image] cleaning up $WORK on exit"; rm -rf "$WORK"' EXIT
 STAGE="$(mktemp -d "${WORK}/stage.XXXXXX")"
 MANIFEST_DIR="${WORK}/manifest"
 mkdir -p "$MANIFEST_DIR"
@@ -150,7 +149,15 @@ PYTHONPATH="$REPO_ROOT" python3 -m pantryatlas.ops.image_build \
     --built-at "$BUILT_AT" \
     --out-dir "$MANIFEST_DIR"
 
-# --- 11. report next step ----------------------------------------------------
+# --- 11. move final artifacts outside $WORK so the EXIT trap doesn't delete them
+OUT_DIR="$REPO_ROOT/dist"
+mkdir -p "$OUT_DIR"
+mv "$IMG_XZ" "$OUT_DIR/"
+IMG_XZ="$OUT_DIR/$(basename "$IMG_XZ")"
+mv "$MANIFEST_DIR" "$OUT_DIR/manifest-${VERSION}"
+MANIFEST_DIR="$OUT_DIR/manifest-${VERSION}"
+
+# --- 12. report next step ----------------------------------------------------
 echo
 echo "[build-image] DONE"
 echo "  image:        $IMG_XZ"

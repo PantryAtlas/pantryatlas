@@ -1,4 +1,5 @@
 #!/bin/bash
+# No `set -e`: sdm's sourced readparams aren't errexit-safe. Critical steps use explicit `|| exit 1`.
 # sdm custom plugin — PantryAtlas lean SD image provisioning.
 #
 # Modeled on sdm's Example-Plugin (Docs/Example-Plugin.md) and the plugin API in
@@ -25,11 +26,11 @@
 #   --plugin /abs/path/sdm-plugin-pantryatlas:"stagedir=...|commit=..."
 
 function loadparams() {
-    source $SDMPT/etc/sdm/sdm-readparams
+    source "$SDMPT/etc/sdm/sdm-readparams"
 }
 
 phase=$1
-pfx="$(basename $0)"
+pfx="$(basename "$0")"
 args="$2"
 vldargs="|stagedir|commit|"
 
@@ -122,14 +123,14 @@ then
 
     logtoboth "> Plugin $pfx: apt install runtime deps"
     export DEBIAN_FRONTEND=noninteractive
-    apt-get update
+    apt-get update || exit 1
     # Runtime only — NO build-essential/cmake/llama.cpp/nodejs. git + ca-certificates
     # + python3-pip are needed to clone the repo and build the venv.
     apt-get install -y --no-install-recommends \
         python3-venv python3-dev python3-pip \
         git ca-certificates \
         sqlite3 libsqlite3-0 \
-        avahi-daemon nftables
+        avahi-daemon nftables || exit 1
 
     logtoboth "> Plugin $pfx: Create system user/group $PA_USER"
     if ! getent group "$PA_USER" >/dev/null; then
