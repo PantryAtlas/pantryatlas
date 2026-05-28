@@ -145,6 +145,11 @@ web/coverage/
 web/design/stitch-orchestration.log
 web/design/stitch-orchestration*.log
 web/design/screens/*.html
+# Base64-encoded transmission scratch from agy paste-and-run workflows
+# (DESIGN.md.base64, MARKETING.md.base64, *_B64.txt, etc. — never commit)
+**/*.base64
+**/*.base64.*
+**/*_B64.txt
 
 # Secrets / credentials / MCP configs — defensive, should never appear in this
 # repo but belt-and-suspenders. Antigravity's mcp_config.json lives under
