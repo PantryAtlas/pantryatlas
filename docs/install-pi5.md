@@ -70,8 +70,8 @@ The script will:
 2. Create a Python venv at `~/pantryatlas/venv`
 3. Clone and build llama.cpp with ARM64 optimizations
 4. Download the Gemma 4 E4B model weights (~2GB)
-5. Install pantryatlas in editable mode
-6. Download + sha256-verify the prebuilt recipe DB (~227 MB) to `~/.pantryatlas/recipes.db`
+5. Download + sha256-verify the prebuilt recipe DB (~227 MB) to `~/.pantryatlas/recipes.db`
+6. Install pantryatlas in editable mode
 
 Expected time: **20–30 minutes**. You'll see progress like:
 
