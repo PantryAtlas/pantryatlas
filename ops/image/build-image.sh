@@ -49,6 +49,16 @@ BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 # Public remote the plugin clones from inside the image; must contain $COMMIT.
 PA_REMOTE="https://github.com/PantryAtlas/pantryatlas.git"
 
+# The baked artifacts (recipes.db, bge-m3) live in the INVOKING user's home, but
+# this script runs as root under sudo ($HOME=/root). Resolve the real source home
+# from SUDO_USER so stage-payload.sh finds them. Override via the env vars directly.
+if [ -n "${SUDO_USER:-}" ]; then
+    SRC_HOME="$(getent passwd "$SUDO_USER" | cut -d: -f6)"
+fi
+SRC_HOME="${SRC_HOME:-$HOME}"
+export PANTRYATLAS_DATA_DIR="${PANTRYATLAS_DATA_DIR:-$SRC_HOME/.pantryatlas}"
+export PANTRYATLAS_CACHE_DIR="${PANTRYATLAS_CACHE_DIR:-$SRC_HOME/.cache/pantryatlas}"
+
 # --- 2. df guard: need >= 10 GB free on / ------------------------------------
 FREE_KB="$(df --output=avail -k / | tail -1 | tr -d ' ')"
 if [ "$FREE_KB" -lt $((10 * 1024 * 1024)) ]; then
