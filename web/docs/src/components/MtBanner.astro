@@ -1,13 +1,23 @@
 ---
 import Default from '@astrojs/starlight/components/Banner.astro';
-const { entry, editUrl } = Astro.locals.starlightRoute;
+
+// The machine-translated badge text is localized here, keyed by Starlight's
+// locale, rather than via an i18n collection file. Reason: Astro keys i18n
+// files by a lowercased tag (`zh-cn`) while Starlight looks them up by `lang`
+// (`zh-CN`), so a custom key never resolves for region-subtagged locales. The
+// locale from `starlightRoute` is reliable for all locales, so a small map here
+// is the single source of truth for this one component-specific string.
+const MT_BADGE_TEXT: Record<string, string> = {
+  es: 'Traducción automática — ayúdanos a mejorar esta página',
+  fr: 'Traduction automatique — aidez-nous à améliorer cette page',
+  ar: 'ترجمة آلية — ساعدنا في تحسين هذه الصفحة',
+  'zh-cn': '机器翻译 — 帮助我们改进此页面',
+};
+const DEFAULT_MT_BADGE_TEXT = 'Machine-translated — help us improve this page';
+
+const { entry, editUrl, locale } = Astro.locals.starlightRoute;
 const isMachine = entry.data.translationStatus === 'machine';
-// Use t.exists() to check if the custom key is registered for this locale,
-// because i18next returns the key string (not undefined) for missing keys,
-// so nullish coalescing (??) would never fall back to our hardcoded English.
-const text = Astro.locals.t.exists('mtBanner.text')
-  ? Astro.locals.t('mtBanner.text')
-  : 'Machine-translated — help us improve this page';
+const text = (locale && MT_BADGE_TEXT[locale]) || DEFAULT_MT_BADGE_TEXT;
 ---
 
 {isMachine && (

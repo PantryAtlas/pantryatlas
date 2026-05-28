@@ -14,12 +14,5 @@ export const collections = {
       }),
     }),
   }),
-  i18n: defineCollection({
-    loader: i18nLoader(),
-    schema: i18nSchema({
-      // Custom UI string consumed by MtBanner (Task 6). Without this extend,
-      // i18nSchema rejects unknown keys in the locale JSON files.
-      extend: z.object({ 'mtBanner.text': z.string().optional() }),
-    }),
-  }),
+  i18n: defineCollection({ loader: i18nLoader(), schema: i18nSchema() }),
 };
