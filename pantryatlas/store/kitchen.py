@@ -265,3 +265,65 @@ class KitchenStore:
         self._log_event(canonical_name, "observe", source)
         self._conn.commit()
         return self.get_item(canonical_name)
+
+    def add_cook_event(self, *, dish_name: str, consumed: list[dict[str, Any]],
+                       recipe_id: str | None = None, servings: float | None = None,
+                       photo_path: str | None = None, rating: int | None = None,
+                       notes: str | None = None, source: str = "tap-to-cook") -> dict[str, Any]:
+        """Atomically record a cook event and soft-decrement consumed on-hand items."""
+        on_hand = {
+            r[0]
+            for r in self._conn.execute(
+                f"SELECT canonical_name FROM pantry_items "
+                f"WHERE state IN ({','.join('?' * len(_ON_HAND_STATES))})",
+                _ON_HAND_STATES,
+            ).fetchall()
+        }
+        matched, unmatched = [], []
+        try:
+            cur = self._conn.execute(
+                """INSERT INTO cook_events
+                   (recipe_id, dish_name, servings, cooked_at, photo_path, rating, notes,
+                    consumed_json, source)
+                   VALUES (?,?,?,?,?,?,?,?,?)""",
+                (recipe_id, dish_name, servings, _now_iso(), photo_path, rating, notes,
+                 json.dumps(consumed), source),
+            )
+            event_id = cur.lastrowid
+            for c in consumed:
+                name = c["canonical_name"]
+                if name in on_hand:
+                    matched.append(name)
+                    state_row = self._conn.execute(
+                        "SELECT state FROM pantry_items WHERE canonical_name=?", (name,)
+                    ).fetchone()
+                    new_state, new_conf = self._next_state(state_row[0], "cook")
+                    self._conn.execute(
+                        "UPDATE pantry_items SET state=?, confidence=?, updated_at=? "
+                        "WHERE canonical_name=?",
+                        (new_state, new_conf, _now_iso(), name),
+                    )
+                    self._log_event(name, "consume", source, {"cook_event_id": event_id})
+                else:
+                    unmatched.append(name)
+            self._conn.commit()
+        except Exception:
+            self._conn.rollback()
+            raise
+        return {"id": event_id, "dish_name": dish_name, "matched": matched, "unmatched": unmatched}
+
+    @staticmethod
+    def _cook_row_to_dict(row: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "id": row["id"], "recipe_id": row["recipe_id"], "dish_name": row["dish_name"],
+            "servings": row["servings"], "cooked_at": row["cooked_at"],
+            "photo_path": row["photo_path"], "rating": row["rating"], "notes": row["notes"],
+            "consumed": json.loads(row["consumed_json"]) if row["consumed_json"] else [],
+            "source": row["source"],
+        }
+
+    def list_meals(self, limit: int = 50) -> list[dict[str, Any]]:
+        rows = self._fetchall(
+            "SELECT * FROM cook_events ORDER BY id DESC LIMIT ?", (limit,)
+        )
+        return [self._cook_row_to_dict(r) for r in rows]

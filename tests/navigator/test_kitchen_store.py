@@ -145,3 +145,43 @@ def test_restore_item(tmp_path):
     last = store._conn.execute(
         "SELECT change_type FROM inventory_events ORDER BY id DESC LIMIT 1").fetchone()[0]
     assert last == "observe"
+
+
+# ---------------------------------------------------------------------------
+# Task 4: cook events + soft-decrement + meals
+# ---------------------------------------------------------------------------
+
+def test_cook_event_logs_and_decrements(tmp_path):
+    store = KitchenStore(tmp_path / "kitchen.db")
+    for n in ("garlic", "tomato", "basil"):
+        store.add_item(Ing(canonical_name=n, raw_text=n))
+    event = store.add_cook_event(
+        dish_name="Pasta al pomodoro", servings=2, recipe_id="r1",
+        consumed=[{"canonical_name": "garlic", "coarse_amount": "cook"},
+                  {"canonical_name": "tomato", "coarse_amount": "cook"},
+                  {"canonical_name": "ghost", "coarse_amount": "cook"}],  # not on hand
+    )
+    assert event["dish_name"] == "Pasta al pomodoro"
+    assert event["id"] >= 1
+    assert event["matched"] == ["garlic", "tomato"]
+    assert event["unmatched"] == ["ghost"]
+    # garlic + tomato dropped one notch; basil untouched
+    items = {i["canonical_name"]: i for i in store.list_items()}
+    assert items["garlic"]["state"] == "low"
+    assert items["tomato"]["state"] == "low"
+    assert items["basil"]["state"] == "present"
+
+
+def test_cook_event_with_no_matches_still_logs(tmp_path):
+    store = KitchenStore(tmp_path / "kitchen.db")
+    event = store.add_cook_event(dish_name="Mystery stew", consumed=[])
+    assert event["id"] >= 1
+    assert store.list_meals()[0]["dish_name"] == "Mystery stew"
+
+
+def test_list_meals_newest_first(tmp_path):
+    store = KitchenStore(tmp_path / "kitchen.db")
+    store.add_cook_event(dish_name="First", consumed=[])
+    store.add_cook_event(dish_name="Second", consumed=[])
+    meals = store.list_meals(limit=10)
+    assert [m["dish_name"] for m in meals] == ["Second", "First"]
