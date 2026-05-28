@@ -24,3 +24,16 @@ def test_stage_db_download_skips_when_stamp_present(tmp_path):
     r = subprocess.run(["bash", "-c", cmd], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     assert not data.exists()  # skipped — no fetch attempted
+
+
+def test_stage_db_download_errors_on_unset_sha(tmp_path):
+    stamps = tmp_path / "stamps"
+    stamps.mkdir()
+    cmd = (
+        f'export STAMPS_DIR="{stamps}"; '
+        f'source "{SCRIPT}"; '
+        f"stage_db_download"
+    )
+    r = subprocess.run(["bash", "-c", cmd], capture_output=True, text=True)
+    assert r.returncode == 3
+    assert "REPLACE_AFTER_FIRST_PUBLISH" in r.stderr

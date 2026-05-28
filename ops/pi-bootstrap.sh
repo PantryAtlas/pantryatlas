@@ -139,8 +139,8 @@ stage_db_download() {
         return 0
     fi
     if [ "$RECIPES_DB_SHA256" = "REPLACE_AFTER_FIRST_PUBLISH" ]; then
-        echo "ERROR: RECIPES_DB_SHA256 not set — run ops/release/publish-db.sh and update the pins" >&2
-        exit 3
+        echo "ERROR: RECIPES_DB_SHA256 is still REPLACE_AFTER_FIRST_PUBLISH — run ops/release/publish-db.sh and update the pins" >&2
+        return 3
     fi
     mkdir -p "$PANTRYATLAS_DATA_DIR"
     log "db download: fetching prebuilt recipes.db..."
@@ -205,6 +205,7 @@ main() {
 
     log "Venv:           $PANTRYATLAS_VENV"
     log "Gemma 4 GGUF:   $MODELS_DIR/gemma-4-E4B-it-Q4_K_M.gguf"
+    log "Recipes DB:     $PANTRYATLAS_DATA_DIR/recipes.db"
     log "llama.cpp:      $LLAMA_CPP_DIR/build"
     log "Next:           T-010 will use these via GemmaRunner"
     log "BOOTSTRAP COMPLETE"
