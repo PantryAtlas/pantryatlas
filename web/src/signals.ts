@@ -209,10 +209,34 @@ export const recipeSectionLabel = computed(() =>
 
 export type RecipeLoadState = 'idle' | 'loading' | 'done'
 
+// Phase 2 of the instant-then-refine flow: the live re-ordering pass.
+//  idle     — no refine in flight (e.g. no results yet)
+//  refining — /refine in flight; cards still show coverage order
+//  refined  — refine applied; ordering has settled with real substitution
+//  offline  — refine unavailable (offline / error); coverage order stands
+export type RefineState = 'idle' | 'refining' | 'refined' | 'offline'
+
 export const recipes = signal<RankedRecipe[]>([])
 export const recipeLoadState = signal<RecipeLoadState>('idle')
+export const refineState = signal<RefineState>('idle')
+
+/** Stable identity for a ranked recipe — used for keys and the swaps cache. */
+export function recipeKey(r: RankedRecipe): string {
+  return r.recipe.title + '|' + r.recipe.ingredients.join(',')
+}
+
+// In-flight refine controller; aborted when the pantry changes mid-refine.
+let _refineAbort: AbortController | null = null
 
 export async function fetchRecipes(pantryItems: PantryItem[], currentMode: Mode) {
+  // A new pantry invalidates any in-flight refine and all cached/in-flight swaps
+  // (a swap resolving after this point would be against the stale pantry).
+  _refineAbort?.abort()
+  _refineAbort = null
+  for (const c of _swapAborts.values()) c.abort()
+  _swapAborts.clear()
+  recipeSwaps.value = {}
+  refineState.value = 'idle'
   recipeLoadState.value = 'loading'
   try {
     const res = await fetch('/navigator/recipes/from-pantry', {
@@ -224,8 +248,11 @@ export async function fetchRecipes(pantryItems: PantryItem[], currentMode: Mode)
       }),
     })
     if (res.ok) {
-      recipes.value = await res.json()
+      const instant: RankedRecipe[] = await res.json()
+      recipes.value = instant
       recipeLoadState.value = 'done'
+      // Phase 2: settle the ordering with real substitution scores.
+      if (instant.length > 0) void refineRecipes(instant, currentMode)
     } else {
       recipes.value = []
       recipeLoadState.value = 'done'
@@ -233,6 +260,105 @@ export async function fetchRecipes(pantryItems: PantryItem[], currentMode: Mode)
   } catch {
     recipes.value = []
     recipeLoadState.value = 'done'
+  }
+}
+
+/**
+ * Refine the instant (coverage-ranked) results with real substitution scores.
+ * Sends the painted recipes back to the server, which re-ranks them. Because
+ * fast mode was optimistic, refining can only lower scores — cards converge
+ * downward into a stable settle.
+ */
+async function refineRecipes(instant: RankedRecipe[], currentMode: Mode) {
+  if (!navigator.onLine) {
+    refineState.value = 'offline'
+    return
+  }
+  const controller = new AbortController()
+  _refineAbort = controller
+  refineState.value = 'refining'
+  try {
+    const res = await fetch('/navigator/recipes/from-pantry/refine', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(instant.map((r) => r.recipe)),
+      signal: controller.signal,
+    })
+    if (controller.signal.aborted || _refineAbort !== controller) return
+    if (res.ok) {
+      recipes.value = await res.json()
+      refineState.value = 'refined'
+    } else {
+      // Server hiccup — keep coverage order, mark settled so the chip clears.
+      refineState.value = 'refined'
+    }
+  } catch (err) {
+    if ((err as Error)?.name === 'AbortError') return // superseded by a newer pantry
+    refineState.value = 'offline'
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Smart swaps — lazy per-recipe substitution suggestions, fetched on expand
+// ---------------------------------------------------------------------------
+
+export interface SwapSuggestion {
+  missing: string
+  best_swap: string | null
+  similarity: number
+  reason: string | null
+}
+
+export interface SwapEntry {
+  state: 'loading' | 'done' | 'offline' | 'error'
+  swaps?: SwapSuggestion[]
+}
+
+// Keyed by recipeKey(); cleared whenever the pantry changes (see fetchRecipes).
+export const recipeSwaps = signal<Record<string, SwapEntry>>({})
+
+const _swapAborts = new Map<string, AbortController>()
+
+/**
+ * Fetch swap suggestions for one recipe's missing ingredients. Idempotent per
+ * recipe key while a result is cached; embeds only this recipe's missing items
+ * server-side, so it is fast. No-op offline (renders "unavailable offline").
+ */
+export async function fetchSwaps(r: RankedRecipe) {
+  const key = recipeKey(r)
+  const existing = recipeSwaps.value[key]
+  if (existing && existing.state !== 'error') return // already loading/done/offline
+
+  if (!navigator.onLine) {
+    recipeSwaps.value = { ...recipeSwaps.value, [key]: { state: 'offline' } }
+    return
+  }
+
+  _swapAborts.get(key)?.abort()
+  const controller = new AbortController()
+  _swapAborts.set(key, controller)
+  recipeSwaps.value = { ...recipeSwaps.value, [key]: { state: 'loading' } }
+
+  try {
+    const res = await fetch('/navigator/recipes/swaps', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ingredients: r.recipe.ingredients }),
+      signal: controller.signal,
+    })
+    if (controller.signal.aborted) return
+    if (res.ok) {
+      const data = await res.json()
+      recipeSwaps.value = {
+        ...recipeSwaps.value,
+        [key]: { state: 'done', swaps: data.swaps as SwapSuggestion[] },
+      }
+    } else {
+      recipeSwaps.value = { ...recipeSwaps.value, [key]: { state: 'error' } }
+    }
+  } catch (err) {
+    if ((err as Error)?.name === 'AbortError') return
+    recipeSwaps.value = { ...recipeSwaps.value, [key]: { state: 'offline' } }
   }
 }
 

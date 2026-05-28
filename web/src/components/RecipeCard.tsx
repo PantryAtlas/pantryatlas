@@ -1,6 +1,7 @@
 import { h, Fragment } from 'preact'
-import { useState } from 'preact/hooks'
+import { useEffect, useState } from 'preact/hooks'
 import { CoverageRing } from './CoverageRing'
+import { fetchSwaps, recipeSwaps, recipeKey, type SwapSuggestion } from '../signals'
 
 /**
  * RecipeCard — collapsible recipe card with inline expansion.
@@ -143,6 +144,33 @@ export function RecipeCard({ ranked, animDelay = 0 }: RecipeCardProps) {
   const missingCount = missing.length
   const cookMin = recipe.cook_time_min ?? 30
   const missingHalf = total > 0 && missingCount >= total / 2
+
+  // Lazy smart-swaps: fetch only when the card is expanded and only if there
+  // are missing ingredients to swap (reading recipeSwaps.value subscribes here).
+  const key = recipeKey(ranked)
+  const swapEntry = recipeSwaps.value[key]
+  // Re-fire when the cache entry's state changes (incl. cleared → undefined on
+  // a pantry mutation), so swaps recover instead of sticking on "finding…".
+  useEffect(() => {
+    if (expanded && missingCount > 0) fetchSwaps(ranked)
+  }, [expanded, key, missingCount, swapEntry?.state])
+
+  // Map missing-ingredient → its swap suggestion for quick lookup in the list.
+  const swapByMissing: Record<string, SwapSuggestion> = {}
+  if (swapEntry?.state === 'done' && swapEntry.swaps) {
+    for (const s of swapEntry.swaps) swapByMissing[s.missing] = s
+  }
+  const swapLineFor = (ing: string): string | null => {
+    if (missing.indexOf(ing) === -1) return null
+    if (!swapEntry || swapEntry.state === 'loading') return 'finding a swap…'
+    if (swapEntry.state === 'offline') return 'swaps unavailable offline'
+    if (swapEntry.state === 'error') return null
+    const s = swapByMissing[ing]
+    if (!s) return null
+    if (s.best_swap) return `try ${s.best_swap} · ${Math.round(s.similarity * 100)}% match`
+    if (s.reason === 'no_pantry') return null
+    return 'no close swap in your pantry'
+  }
 
   // Single chip label
   const chipLabel = missingCount === 0
@@ -378,13 +406,17 @@ export function RecipeCard({ ranked, animDelay = 0 }: RecipeCardProps) {
               <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {recipe.ingredients.map((ing) => {
                   const inPantry = !missing.includes(ing)
+                  const swapLine = inPantry ? null : swapLineFor(ing)
+                  const hasSwap =
+                    swapEntry?.state === 'done' && swapByMissing[ing]?.best_swap != null
                   return (
                     <li
                       key={ing}
+                      data-ingredient={ing}
                       style={{
                         display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
+                        flexDirection: 'column',
+                        gap: '2px',
                         fontFamily: 'var(--font)',
                         fontSize: 'var(--md-sys-typescale-body-large-size)',
                         color: inPantry
@@ -392,8 +424,25 @@ export function RecipeCard({ ranked, animDelay = 0 }: RecipeCardProps) {
                           : 'var(--md-sys-color-on-surface-variant)',
                       }}
                     >
-                      {inPantry ? <CheckCircleIcon /> : <CircleIcon />}
-                      <span style={{ textDecoration: inPantry ? 'none' : 'none' }}>{ing}</span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        {inPantry ? <CheckCircleIcon /> : <CircleIcon />}
+                        <span>{ing}</span>
+                      </span>
+                      {swapLine && (
+                        <span
+                          data-swap-line={hasSwap ? 'match' : 'none'}
+                          style={{
+                            marginLeft: '30px',
+                            fontSize: 'var(--md-sys-typescale-label-medium-size)',
+                            fontWeight: 'var(--md-sys-typescale-label-medium-weight)',
+                            color: hasSwap
+                              ? 'var(--md-sys-color-primary)'
+                              : 'var(--md-sys-color-on-surface-variant)',
+                          }}
+                        >
+                          ↳ {swapLine}
+                        </span>
+                      )}
                     </li>
                   )
                 })}

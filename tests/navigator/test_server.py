@@ -19,18 +19,14 @@ from __future__ import annotations
 
 import hashlib
 import importlib
-import json
 import sys
-from collections.abc import Callable
-from datetime import date
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
-from pantryatlas.pantry.models import Ingredient, Pantry
+from pantryatlas.pantry.models import Ingredient
 from pantryatlas.store.recipes import Recipe, RecipeStore
 
 # ---------------------------------------------------------------------------
@@ -387,6 +383,9 @@ def test_post_recipes_from_pantry_returns_results(client: TestClient) -> None:
     assert "missing" in first
     assert isinstance(first["score"], float)
     assert 0.0 <= first["score"] <= 1.0
+    # RecipeNLG is CC-BY-NC-4.0 — every result must carry source attribution.
+    assert "source" in first
+    assert "RecipeNLG" in first["source"]
 
 
 def test_post_recipes_from_pantry_empty_pantry(client: TestClient) -> None:
@@ -413,6 +412,103 @@ def test_post_recipes_from_pantry_sorted_descending(client: TestClient) -> None:
     if len(results) >= 2:
         scores = [r["score"] for r in results]
         assert scores == sorted(scores, reverse=True)
+
+
+def test_from_pantry_is_fast_mode(client: TestClient) -> None:
+    """Instant from-pantry runs in fast mode → substitution_penalty is 0 (optimistic)."""
+    client.put(
+        "/navigator/pantry",
+        json=[
+            {"canonical_name": "garlic", "raw_text": "garlic"},
+            {"canonical_name": "tomato", "raw_text": "tomato"},
+        ],
+    )
+    results = client.post("/navigator/recipes/from-pantry").json()
+    assert len(results) >= 1
+    assert all(r["substitution_penalty"] == 0.0 for r in results)
+
+
+# ---------------------------------------------------------------------------
+# POST /navigator/recipes/from-pantry/refine
+# ---------------------------------------------------------------------------
+
+
+def test_refine_recomputes_substitution(client: TestClient) -> None:
+    """Refine recomputes real substitution penalties on the client-sent recipes."""
+    client.put(
+        "/navigator/pantry",
+        json=[
+            {"canonical_name": "garlic", "raw_text": "garlic"},
+            {"canonical_name": "tomato", "raw_text": "tomato"},
+        ],
+    )
+    instant = client.post("/navigator/recipes/from-pantry").json()
+    assert len(instant) >= 1
+    top = [r["recipe"] for r in instant[:5]]
+
+    resp = client.post("/navigator/recipes/from-pantry/refine", json=top)
+    assert resp.status_code == 200
+    refined = resp.json()
+    assert len(refined) == len(top)
+    for r in refined:
+        assert "source" in r and "RecipeNLG" in r["source"]
+        assert 0.0 <= r["substitution_penalty"] <= 1.0
+    # Seeded candidates are missing 'basil' (pantry has only garlic+tomato), so
+    # at least one refined recipe must have a non-zero substitution penalty.
+    assert any(r["substitution_penalty"] > 0.0 for r in refined)
+    # Refining can only lower scores (fast mode was optimistic).
+    assert all(0.0 <= r["score"] <= 1.0 for r in refined)
+
+
+def test_refine_empty_body(client: TestClient) -> None:
+    """Refine with an empty recipe list returns an empty list, not a 500."""
+    resp = client.post("/navigator/recipes/from-pantry/refine", json=[])
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
+# ---------------------------------------------------------------------------
+# POST /navigator/recipes/swaps
+# ---------------------------------------------------------------------------
+
+
+def test_swaps_returns_suggestions_for_missing(client: TestClient) -> None:
+    """Swaps returns one entry per MISSING ingredient with a consistent shape."""
+    client.put(
+        "/navigator/pantry",
+        json=[
+            {"canonical_name": "garlic", "raw_text": "garlic"},
+            {"canonical_name": "tomato", "raw_text": "tomato"},
+            {"canonical_name": "onion", "raw_text": "onion"},
+        ],
+    )
+    resp = client.post(
+        "/navigator/recipes/swaps",
+        json={"ingredients": ["garlic", "tomato", "basil", "mystery_xyz"]},
+    )
+    assert resp.status_code == 200
+    swaps = resp.json()["swaps"]
+    # Only the two missing ingredients (basil, mystery_xyz) get swap entries.
+    assert {s["missing"] for s in swaps} == {"basil", "mystery_xyz"}
+    for s in swaps:
+        assert set(s.keys()) == {"missing", "best_swap", "similarity", "reason"}
+        assert 0.0 <= s["similarity"] <= 1.0
+        # Invariant: a suggestion exists iff there is no failure reason.
+        assert (s["best_swap"] is None) == (s["reason"] is not None)
+        if s["best_swap"] is not None:
+            assert s["similarity"] >= 0.5
+
+
+def test_swaps_no_pantry(client: TestClient) -> None:
+    """With an empty pantry, every missing ingredient reports no_pantry."""
+    resp = client.post(
+        "/navigator/recipes/swaps",
+        json={"ingredients": ["basil", "thyme"]},
+    )
+    assert resp.status_code == 200
+    swaps = resp.json()["swaps"]
+    assert len(swaps) == 2
+    assert all(s["best_swap"] is None and s["reason"] == "no_pantry" for s in swaps)
 
 
 # ---------------------------------------------------------------------------

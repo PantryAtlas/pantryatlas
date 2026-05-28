@@ -13,6 +13,8 @@ import {
   fetchRecipes,
   recipes,
   recipeLoadState,
+  refineState,
+  recipeKey,
   deleteItem,
   addItem,
   addInputValue,
@@ -900,16 +902,21 @@ function PantryEmptyState() {
 function RecipesSection() {
   const ranked = recipes.value
   const loadState = recipeLoadState.value
+  const refine = refineState.value
   const label = recipeSectionLabel.value
 
   return (
-    <section aria-label={label}>
+    <section aria-label={label} data-refine-state={refine}>
       {/* Section label — replaced by convergence spinner while loading */}
       {loadState === 'loading' ? (
         <RecipeConvergenceState />
       ) : (
         <p
           style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            flexWrap: 'wrap',
             fontFamily: 'var(--font)',
             fontSize: 'var(--md-sys-typescale-label-medium-size)',
             fontWeight: 'var(--md-sys-typescale-label-medium-weight)',
@@ -920,9 +927,10 @@ function RecipesSection() {
           aria-live="polite"
           aria-atomic="true"
         >
-          {ranked.length > 0
-            ? `${label} · ${ranked.length} found`
-            : label}
+          <span>
+            {ranked.length > 0 ? `${label} · ${ranked.length} found` : label}
+          </span>
+          {ranked.length > 0 && <RefineChip state={refine} />}
         </p>
       )}
 
@@ -939,8 +947,10 @@ function RecipesSection() {
           {ranked.map((r, i) => {
             // Max 6 staggered (60ms each), then batch (no delay)
             const delay = i < 6 ? i * 60 : 0
+            // Stable key by recipe identity so refine re-ordering MOVES nodes
+            // (preserving expand state) instead of recreating them.
             return (
-              <RecipeCard key={r.recipe.title + i} ranked={r} animDelay={delay} />
+              <RecipeCard key={recipeKey(r)} ranked={r} animDelay={delay} />
             )
           })}
         </ul>
@@ -952,6 +962,69 @@ function RecipesSection() {
       )}
     </section>
   )
+}
+
+// ---------------------------------------------------------------------------
+// Refine chip — subtle "refining…" / "offline" indicator beside the section label
+// ---------------------------------------------------------------------------
+
+function RefineChip({ state }: { state: typeof refineState.value }) {
+  if (state === 'refining') {
+    return (
+      <span
+        data-refine-chip="refining"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
+          padding: '2px 10px',
+          borderRadius: 'var(--md-sys-shape-corner-full)',
+          background: 'var(--md-sys-color-primary-container)',
+          color: 'var(--md-sys-color-on-primary-container)',
+          fontSize: 'var(--md-sys-typescale-label-small-size)',
+          fontWeight: 'var(--md-sys-typescale-label-small-weight)',
+        }}
+      >
+        <style>{`
+          @keyframes refine-pulse { 0%,100% { opacity: 0.35 } 50% { opacity: 1 } }
+          @media (prefers-reduced-motion: reduce) {
+            @keyframes refine-pulse { 0%,100% { opacity: 0.7 } }
+          }
+        `}</style>
+        <span
+          aria-hidden="true"
+          style={{
+            width: '6px',
+            height: '6px',
+            borderRadius: 'var(--md-sys-shape-corner-full)',
+            background: 'currentColor',
+            animation: 'refine-pulse 1.1s ease-in-out infinite',
+          }}
+        />
+        refining…
+      </span>
+    )
+  }
+  if (state === 'offline') {
+    return (
+      <span
+        data-refine-chip="offline"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          padding: '2px 10px',
+          borderRadius: 'var(--md-sys-shape-corner-full)',
+          background: 'var(--md-sys-color-surface-container-highest)',
+          color: 'var(--md-sys-color-on-surface-variant)',
+          fontSize: 'var(--md-sys-typescale-label-small-size)',
+          fontWeight: 'var(--md-sys-typescale-label-small-weight)',
+        }}
+      >
+        offline · coverage order
+      </span>
+    )
+  }
+  return null
 }
 
 // ---------------------------------------------------------------------------

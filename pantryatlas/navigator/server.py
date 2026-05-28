@@ -50,12 +50,17 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from pantryatlas.navigator.ranking import RankedRecipe, rank_recipes
+from pantryatlas.navigator.ranking import RankedRecipe, compute_swaps, rank_recipes
 from pantryatlas.pantry.models import Ingredient, Pantry, Quantity
 from pantryatlas.store.recipes import RecipeStore
 
 if TYPE_CHECKING:
     from pantryatlas.gemma.client import GemmaClient
+
+# Recipe corpus attribution. RecipeNLG is distributed CC-BY-NC-4.0, so every
+# recipe surfaced by the API carries this so downstream consumers (and the
+# PWA) can honour the licence without hardcoding it client-side.
+RECIPE_SOURCE_ATTRIBUTION = "RecipeNLG (CC-BY-NC-4.0)"
 
 # ---------------------------------------------------------------------------
 # Pydantic wire models
@@ -88,6 +93,24 @@ class ResolveIn(BaseModel):
     """Body for POST /navigator/pantry/resolve."""
 
     raw: str
+
+
+class RecipeIn(BaseModel):
+    """A recipe the client already holds (from the instant from-pantry paint).
+
+    Sent back to /recipes/from-pantry/refine so the server can compute the real
+    substitution penalty without re-querying the store.
+    """
+
+    title: str = ""
+    ingredients: list[str] = []
+    instructions: list[str] = []
+
+
+class SwapsIn(BaseModel):
+    """Body for POST /navigator/recipes/swaps — one recipe's ingredient list."""
+
+    ingredients: list[str]
 
 
 # ---------------------------------------------------------------------------
@@ -358,14 +381,16 @@ def create_app(
 
     @app.post("/navigator/recipes/from-pantry")
     def post_recipes_from_pantry(cuisine: str | None = None) -> list[dict[str, Any]]:
-        """Pre-filter candidate recipes from the store and rank them.
+        """Instant pantry → recipes: coverage-ranked, NO embedding (fast mode).
 
         Pre-filter strategy: text-overlap against recipes_meta.ingredients_json.
         Any recipe whose ingredients list shares at least one canonical name with
-        the current pantry is included as a candidate.  This avoids embedding at
-        pre-filter time and is trivially testable.
-
-        Candidates are then ranked via rank_recipes() using the injected embed_fn.
+        the current pantry is a candidate.  Ranking runs in **fast mode**
+        (coverage + expiration + cultural fit only, ``substitution_penalty=0``),
+        so this returns well under the embedding budget even for tens of
+        thousands of candidates.  The client then calls
+        ``/recipes/from-pantry/refine`` to settle the ordering with real
+        substitution scores.
         """
         pantry = _load_pantry(app.state.pantry_path)
         canonical_names = [ing.canonical_name for ing in pantry]
@@ -379,22 +404,57 @@ def create_app(
         ranked: list[RankedRecipe] = rank_recipes(
             pantry,
             candidates,
-            app.state.embed_fn,
             cuisine=cuisine,
+            compute_substitution=False,
         )
 
-        return [
-            {
-                "recipe": r.recipe,
-                "score": r.score,
-                "coverage": r.coverage,
-                "missing": r.missing,
-                "expiration_urgency": r.expiration_urgency,
-                "substitution_penalty": r.substitution_penalty,
-                "cultural_fit": r.cultural_fit,
-            }
-            for r in ranked
+        return [_ranked_to_dict(r) for r in ranked]
+
+    @app.post("/navigator/recipes/from-pantry/refine")
+    def post_recipes_refine(
+        recipes: list[RecipeIn], cuisine: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Refine the instant results with real (embedding-based) substitution.
+
+        The client sends back the top-N recipes it already painted; the server
+        recomputes their substitution penalty against the *current* pantry and
+        returns them re-ranked.  Because fast mode was optimistic
+        (``substitution_penalty=0``), refining can only lower scores, so cards
+        converge downward — a stable settle animation.
+
+        Only the unique missing ingredients across the ≤N supplied recipes are
+        embedded, in a single batch.
+        """
+        pantry = _load_pantry(app.state.pantry_path)
+        candidates = [
+            {"title": r.title, "ingredients": r.ingredients, "instructions": r.instructions}
+            for r in recipes
         ]
+        if not candidates:
+            return []
+
+        ranked = rank_recipes(
+            pantry,
+            candidates,
+            app.state.embed_fn,
+            k=len(candidates),
+            cuisine=cuisine,
+            compute_substitution=True,
+        )
+        return [_ranked_to_dict(r) for r in ranked]
+
+    @app.post("/navigator/recipes/swaps")
+    def post_recipes_swaps(body: SwapsIn) -> dict[str, Any]:
+        """Suggest pantry swaps for one recipe's missing ingredients.
+
+        Fired when the user expands a recipe card.  Embeds only that recipe's
+        missing ingredients (typically 2-5) against the current pantry, so it is
+        fast.  Returns ``{"swaps":[{missing,best_swap,similarity,reason}, ...]}``;
+        ``best_swap`` is ``None`` when no pantry item clears the similarity floor.
+        """
+        pantry = _load_pantry(app.state.pantry_path)
+        swaps = compute_swaps(body.ingredients, pantry, app.state.embed_fn)
+        return {"swaps": swaps}
 
     # ------------------------------------------------------------------
     # Vision — shelf photo parsing
@@ -464,6 +524,20 @@ def create_app(
         }
 
     return app
+
+
+def _ranked_to_dict(r: RankedRecipe) -> dict[str, Any]:
+    """Serialise a RankedRecipe to the API wire shape (with source attribution)."""
+    return {
+        "recipe": r.recipe,
+        "score": r.score,
+        "coverage": r.coverage,
+        "missing": r.missing,
+        "expiration_urgency": r.expiration_urgency,
+        "substitution_penalty": r.substitution_penalty,
+        "cultural_fit": r.cultural_fit,
+        "source": RECIPE_SOURCE_ATTRIBUTION,
+    }
 
 
 # ---------------------------------------------------------------------------

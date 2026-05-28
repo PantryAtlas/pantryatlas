@@ -199,12 +199,35 @@ class RecipeStore:
         row = self._conn.execute("SELECT COUNT(*) FROM recipes_meta").fetchone()
         return row[0] if row else 0
 
+    @staticmethod
+    def _split_steps(text: str | None) -> list[str]:
+        """Split a stored instruction blob into a list of step strings.
+
+        RecipeNLG directions are stored as one string with steps on separate
+        lines, each typically prefixed with ``- ``.  The navigator UI renders
+        instructions as a list, so normalise to ``list[str]`` here (the single
+        point where store rows enter the recipe-ranking pipeline).
+        """
+        if not text:
+            return []
+        steps: list[str] = []
+        for raw_line in text.split("\n"):
+            line = raw_line.strip()
+            if line.startswith("- "):
+                line = line[2:].strip()
+            elif line.startswith("-"):
+                line = line[1:].strip()
+            if line:
+                steps.append(line)
+        return steps
+
     def iter_overlapping(self, canonical_names: list[str]) -> list[dict]:
         """Return recipe dicts whose ingredients_json overlaps any canonical name.
 
         Scans recipes_meta.ingredients_json in Python (no vec search) — suitable
         for the text-overlap pre-filter step in POST /navigator/recipes/from-pantry.
-        Returns list of {title, ingredients, instructions} dicts.
+        Returns list of ``{title, ingredients, instructions}`` dicts, where
+        ``instructions`` is a ``list[str]`` of steps.
         """
         if not canonical_names:
             return []
@@ -222,7 +245,7 @@ class RecipeStore:
                     {
                         "title": title,
                         "ingredients": ings,
-                        "instructions": instructions or "",
+                        "instructions": self._split_steps(instructions),
                     }
                 )
         return results

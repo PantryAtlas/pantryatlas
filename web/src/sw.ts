@@ -83,16 +83,28 @@ self.addEventListener('fetch', (event: FetchEvent) => {
   const pathname = url.pathname;
 
   // ── Strategy 1: stale-while-revalidate — /navigator/recipes/from-pantry ──
-  // POST requests can't be cached directly by Cache API; we use a synthetic
-  // GET key derived from the URL so cache.match/put work normally.
-  // The recipes result cache is capped at RECIPES_CACHE_MAX entries.
-  if (pathname.startsWith('/navigator/recipes/from-pantry')) {
+  // Only the INSTANT coverage-ranked call is cached (exact path match). The
+  // refine and swaps calls are deliberately NetworkOnly: they are live,
+  // pantry-dependent enrichments that must never serve a stale result. They
+  // fall through to the default (no respondWith) below → straight to network,
+  // and degrade gracefully offline (the signals layer marks them offline).
+  // POST bodies can't be cached by the Cache API directly, so we key on a
+  // synthetic GET derived from the URL + body. Capped at RECIPES_CACHE_MAX.
+  if (pathname === '/navigator/recipes/from-pantry') {
     if (request.method === 'POST') {
       event.respondWith(staleWhileRevalidateRecipes(request));
       return;
     }
     // Ignore other methods for this path
     return;
+  }
+
+  // Network-only (no caching) for the live enrichment endpoints.
+  if (
+    pathname === '/navigator/recipes/from-pantry/refine' ||
+    pathname === '/navigator/recipes/swaps'
+  ) {
+    return; // no respondWith → browser handles via network
   }
 
   // Only handle GET from here on

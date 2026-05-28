@@ -122,53 +122,57 @@ def _compute_expiration_urgency(
     return consumed_expiring / len(expiring)
 
 
-def _compute_substitution_penalty(
-    missing: list[str],
-    pantry: Pantry,
-    embed_fn: Callable[[list[str]], np.ndarray],
-) -> float:
-    """Return substitution penalty in [0, 1].
+def _unit(matrix: np.ndarray) -> np.ndarray:
+    """L2-normalise rows; guard against zero-norm rows."""
+    norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+    norms = np.where(norms < 1e-9, 1.0, norms)
+    return matrix / norms
 
-    For each missing ingredient, compute the maximum cosine similarity to any
-    pantry item.  penalty_i = 1 - max_cosine.  Average over all missing.
-    0.0 when nothing is missing.
+
+def _substitute_matches(
+    missing_unique: list[str],
+    pantry_names: list[str],
+    embed_fn: Callable[[list[str]], np.ndarray],
+) -> dict[str, tuple[str, float]]:
+    """Return ``{missing_text: (best_pantry_name, cosine)}`` for each missing item.
+
+    Embeds all unique missing items plus the pantry names in a SINGLE batched
+    ``embed_fn`` call (the embedding model is the slow part on Pi — ~16 short
+    strings/sec — so one call instead of one-per-recipe is the whole game).
+    ``cosine`` is the raw best-match similarity (callers clamp/threshold).
+    Returns an empty dict when there is nothing to match.
+    """
+    if not missing_unique or not pantry_names:
+        return {}
+
+    all_embs = embed_fn(missing_unique + pantry_names)
+    missing_embs = _unit(all_embs[: len(missing_unique)])
+    pantry_embs = _unit(all_embs[len(missing_unique) :])
+
+    cosine_matrix = missing_embs @ pantry_embs.T  # (|missing|, |pantry|)
+
+    out: dict[str, tuple[str, float]] = {}
+    for i, text in enumerate(missing_unique):
+        j = int(np.argmax(cosine_matrix[i]))
+        out[text] = (pantry_names[j], float(cosine_matrix[i][j]))
+    return out
+
+
+def _penalty_from_matches(
+    missing: list[str],
+    pantry_names: list[str],
+    matches: dict[str, tuple[str, float]],
+) -> float:
+    """Mean (1 - clamped best-cosine) across a recipe's missing ingredients.
+
+    0.0 when nothing is missing; 1.0 when the pantry is empty (no substitutes).
     """
     if not missing:
         return 0.0
-
-    pantry_names = [ing.canonical_name for ing in pantry]
     if not pantry_names:
-        # Empty pantry → no substitutes possible → full penalty
         return 1.0
-
-    # Embed all texts in one batch for efficiency
-    all_texts = missing + pantry_names
-    all_embs = embed_fn(all_texts)  # shape (len(missing) + len(pantry_names), D)
-
-    missing_embs = all_embs[: len(missing)]         # (|missing|, D)
-    pantry_embs = all_embs[len(missing) :]           # (|pantry|, D)
-
-    # L2-normalise (embed_fn should already return unit vectors, but guard)
-    def _unit(matrix: np.ndarray) -> np.ndarray:
-        norms = np.linalg.norm(matrix, axis=1, keepdims=True)
-        norms = np.where(norms < 1e-9, 1.0, norms)
-        return matrix / norms
-
-    missing_embs = _unit(missing_embs)
-    pantry_embs = _unit(pantry_embs)
-
-    # Cosine matrix: (|missing|, |pantry|) via matmul (both unit-normed)
-    cosine_matrix = missing_embs @ pantry_embs.T  # (|missing|, |pantry|)
-
-    # Max cosine for each missing ingredient (nearest pantry substitute)
-    max_cosines = cosine_matrix.max(axis=1)  # (|missing|,)
-
-    # Clamp to [0, 1] (cosines should be in [-1, 1]; negative → no sub)
-    max_cosines = np.clip(max_cosines, 0.0, 1.0)
-
-    # penalty_i = 1 - max_cosine_i; average across missing
-    penalties = 1.0 - max_cosines
-    return float(np.mean(penalties))
+    sims = [min(max(matches[m][1], 0.0), 1.0) for m in missing]
+    return float(np.mean([1.0 - s for s in sims]))
 
 
 def _compute_cultural_fit(recipe: dict[str, Any], cuisine: str | None) -> float:
@@ -186,60 +190,81 @@ def _compute_cultural_fit(recipe: dict[str, Any], cuisine: str | None) -> float:
 def rank_recipes(
     pantry: Pantry,
     candidate_recipes: list[dict[str, Any]],
-    embed_fn: Callable[[list[str]], np.ndarray],
+    embed_fn: Callable[[list[str]], np.ndarray] | None = None,
     k: int = 20,
     *,
     cuisine: str | None = None,
     expiry_window_days: int = _EXPIRY_WINDOW_DAYS,
+    compute_substitution: bool = True,
 ) -> list[RankedRecipe]:
     """Score and rank candidate recipes against the current pantry.
+
+    Two operating modes drive the navigator's instant-then-refine UX:
+
+    - ``compute_substitution=False`` (**fast mode**): scores coverage,
+      expiration and cultural fit only — no embedding, so it returns instantly
+      even for tens of thousands of candidates.  ``substitution_penalty`` is set
+      to ``0.0`` (optimistic), which means the substitution term contributes a
+      constant ``0.20`` to every score and therefore does not affect ordering.
+      ``embed_fn`` may be ``None`` here.
+    - ``compute_substitution=True`` (**refine mode**): additionally embeds every
+      unique missing ingredient across the candidate set in a SINGLE batched
+      ``embed_fn`` call and computes the real substitution penalty.  Because the
+      fast mode was optimistic, refining can only ever *lower* scores, so cards
+      converge downward — a stable settle animation on the client.
 
     Args:
         pantry: The caller's in-memory ``Pantry`` (with optional expiry dates).
         candidate_recipes: List of recipe dicts (keys: title, ingredients, instructions).
-            Recipes come pre-filtered from the sqlite-vec layer (T-004); this
-            function is responsible for fine-grained scoring only.
         embed_fn: Embedding callable mirroring ``pantryatlas.embeddings.embed``.
-            Signature: ``(list[str]) → np.ndarray`` shape ``(N, D)``, L2-normalised.
-            Injected to avoid loading the ONNX model in unit tests.
+            Required when ``compute_substitution=True``; ignored otherwise.
         k: Maximum number of results to return (default 20).
-        cuisine: Optional cuisine filter string (e.g. ``'italian'``).  When set,
-            recipes whose title contains this string receive cultural_fit=1.0.
+        cuisine: Optional cuisine filter string (e.g. ``'italian'``).
         expiry_window_days: Look-ahead window for expiration urgency (default 7).
+        compute_substitution: Whether to compute the embedding-based substitution
+            penalty (refine mode) or skip it (fast mode).
 
     Returns:
         List of :class:`RankedRecipe` sorted descending by score, at most ``k`` items.
     """
     if not candidate_recipes:
         return []
+    if compute_substitution and embed_fn is None:
+        raise ValueError("embed_fn is required when compute_substitution=True")
 
-    ranked: list[RankedRecipe] = []
+    pantry_names = [ing.canonical_name for ing in pantry]
 
+    # Pass 1 — cheap signals (no embedding): coverage, expiration, cultural fit.
+    prelim: list[tuple[dict[str, Any], float, list[str], float, float]] = []
     for recipe in candidate_recipes:
         ingredients: list[str] = recipe.get("ingredients", [])
-
-        # --- coverage ---
         coverage, missing = _compute_coverage(ingredients, pantry)
-
-        # --- expiration urgency ---
         expiration_urgency = _compute_expiration_urgency(
             ingredients, pantry, expiry_window_days
         )
-
-        # --- substitution penalty ---
-        substitution_penalty = _compute_substitution_penalty(missing, pantry, embed_fn)
-
-        # --- cultural fit ---
         cultural_fit = _compute_cultural_fit(recipe, cuisine)
+        prelim.append((recipe, coverage, missing, expiration_urgency, cultural_fit))
 
-        # --- weighted score ---
+    # Pass 2 — substitution (refine mode only): one batched embedding call for
+    # all unique missing ingredients across the whole candidate set.
+    matches: dict[str, tuple[str, float]] = {}
+    if compute_substitution and pantry_names:
+        unique_missing = sorted({m for (_, _, missing, _, _) in prelim for m in missing})
+        matches = _substitute_matches(unique_missing, pantry_names, embed_fn)  # type: ignore[arg-type]
+
+    ranked: list[RankedRecipe] = []
+    for recipe, coverage, missing, expiration_urgency, cultural_fit in prelim:
+        substitution_penalty = (
+            _penalty_from_matches(missing, pantry_names, matches)
+            if compute_substitution
+            else 0.0
+        )
         score = (
             _W_COVERAGE * coverage
             + _W_EXPIRY * expiration_urgency
             + _W_SUBSTITUTION * (1.0 - substitution_penalty)
             + _W_CULTURAL * cultural_fit
         )
-
         ranked.append(
             RankedRecipe(
                 recipe=recipe,
@@ -252,7 +277,62 @@ def rank_recipes(
             )
         )
 
-    # Sort descending by score
     ranked.sort(key=lambda r: r.score, reverse=True)
-
     return ranked[:k]
+
+
+# Minimum cosine similarity for a pantry item to be offered as a swap. Below
+# this, the UX shows "no close swap" rather than a misleading suggestion.
+SWAP_SIMILARITY_FLOOR: float = 0.5
+
+
+def compute_swaps(
+    recipe_ingredients: list[str],
+    pantry: Pantry,
+    embed_fn: Callable[[list[str]], np.ndarray],
+    *,
+    sim_floor: float = SWAP_SIMILARITY_FLOOR,
+) -> list[dict[str, Any]]:
+    """Suggest pantry swaps for a single recipe's missing ingredients.
+
+    For each missing ingredient (in recipe order, de-duplicated), find the
+    closest pantry item by embedding cosine.  When the best match clears
+    ``sim_floor`` it is offered as ``best_swap`` with its ``similarity``;
+    otherwise ``best_swap`` is ``None`` and ``reason`` is ``"no_close_match"``.
+
+    Returns a list of ``{"missing", "best_swap", "similarity", "reason"}`` dicts.
+    """
+    pantry_names = [ing.canonical_name for ing in pantry]
+    seen: set[str] = set()
+    missing_ordered: list[str] = []
+    for ing in recipe_ingredients:
+        if ing not in pantry and ing not in seen:
+            seen.add(ing)
+            missing_ordered.append(ing)
+
+    matches = _substitute_matches(missing_ordered, pantry_names, embed_fn)
+
+    swaps: list[dict[str, Any]] = []
+    for ing in missing_ordered:
+        match = matches.get(ing)
+        if match is None:
+            swaps.append(
+                {"missing": ing, "best_swap": None, "similarity": 0.0, "reason": "no_pantry"}
+            )
+            continue
+        name, cosine = match
+        similarity = min(max(cosine, 0.0), 1.0)
+        if similarity >= sim_floor:
+            swaps.append(
+                {"missing": ing, "best_swap": name, "similarity": similarity, "reason": None}
+            )
+        else:
+            swaps.append(
+                {
+                    "missing": ing,
+                    "best_swap": None,
+                    "similarity": similarity,
+                    "reason": "no_close_match",
+                }
+            )
+    return swaps

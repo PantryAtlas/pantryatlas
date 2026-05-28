@@ -8,13 +8,20 @@ Seeded pantry: garlic (expires tomorrow) + kale (expires today = error-container
 Canned recipes: two realistic RecipeNLG-shaped ranked results for screenshot testing.
 """
 from __future__ import annotations
+import asyncio
 import json
+import os
 from datetime import date, timedelta
 from pathlib import Path
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+
+# Artificial delay (seconds) on /refine so the "refining…" chip is visible long
+# enough to screenshot. Only affects this mock — the real backend has no delay.
+REFINE_DELAY_S = float(os.environ.get("MOCK_REFINE_DELAY_S", "1.2"))
 
 app = FastAPI()
 
@@ -202,37 +209,128 @@ CANNED_RECIPES = [
 ]
 
 
-@app.post("/navigator/recipes/from-pantry")
-async def post_recipes_from_pantry(request: Request):
-    """Return canned ranked recipes filtered by pantry overlap."""
-    try:
-        body = await request.json()
-    except Exception:
-        body = {}
-
-    pantry_names = set(it["canonical_name"] for it in PANTRY)
-
-    # Filter: only return recipes that share at least one ingredient with pantry
-    # If pantry is empty, return empty list
-    if not pantry_names:
-        return []
-
+def _overlap_results(pantry_names: set[str]) -> list[dict]:
+    """Canned recipes overlapping the pantry, with missing/coverage recomputed."""
     results = []
     for r in CANNED_RECIPES:
         recipe_ings = set(r["recipe"]["ingredients"])
         if recipe_ings & pantry_names:
-            # Recompute present/missing based on actual pantry state
             missing = [ing for ing in r["recipe"]["ingredients"] if ing not in pantry_names]
             total = len(r["recipe"]["ingredients"])
             present = total - len(missing)
             coverage = present / total if total > 0 else 0.0
-            results.append({
-                **r,
-                "missing": missing,
-                "coverage": coverage,
-            })
-
+            results.append({**r, "missing": missing, "coverage": coverage})
     return results
+
+
+def _score(cov: float, exp: float, penalty: float, cult: float) -> float:
+    return 0.50 * cov + 0.20 * exp + 0.20 * (1.0 - penalty) + 0.10 * cult
+
+
+@app.post("/navigator/recipes/from-pantry")
+async def post_recipes_from_pantry(request: Request):
+    """INSTANT fast mode: coverage-ranked, substitution_penalty=0 (optimistic)."""
+    try:
+        await request.json()
+    except Exception:
+        pass
+
+    pantry_names = set(it["canonical_name"] for it in PANTRY)
+    if not pantry_names:
+        return []
+
+    results = []
+    for r in _overlap_results(pantry_names):
+        cov = r["coverage"]
+        results.append({
+            **r,
+            "substitution_penalty": 0.0,
+            "score": _score(cov, r.get("expiration_urgency", 0.0), 0.0, 0.0),
+            "source": "RecipeNLG (CC-BY-NC-4.0)",
+        })
+    # Coverage order (fast mode): highest coverage first.
+    results.sort(key=lambda x: x["score"], reverse=True)
+    return results
+
+
+# Canned "real" substitution penalties used by /refine to settle the order.
+# Butternut's missing (nutmeg/chili) have no close pantry swap → high penalty →
+# it drops below Garlic Kale Stir-Fry, demonstrating the live re-order.
+_REFINE_PENALTY = {
+    "Butternut & Kale Stew": 0.55,
+    "Garlic Kale Stir-Fry": 0.12,
+    "Roasted Squash & Onion": 0.40,
+}
+
+
+@app.post("/navigator/recipes/from-pantry/refine")
+async def post_recipes_refine(request: Request):
+    """Re-rank the client-sent recipes with 'real' substitution penalties."""
+    if REFINE_DELAY_S > 0:
+        await asyncio.sleep(REFINE_DELAY_S)
+    try:
+        recipes = await request.json()
+    except Exception:
+        recipes = []
+    if not recipes:
+        return []
+
+    out = []
+    for rec in recipes:
+        title = rec.get("title", "")
+        ings = rec.get("ingredients", [])
+        pantry_names = set(it["canonical_name"] for it in PANTRY)
+        missing = [ing for ing in ings if ing not in pantry_names]
+        total = len(ings)
+        cov = (total - len(missing)) / total if total else 0.0
+        penalty = _REFINE_PENALTY.get(title, 0.25)
+        exp = 0.5 if "kale" in pantry_names and "kale" in ings else 0.0
+        out.append({
+            "recipe": rec,
+            "score": _score(cov, exp, penalty, 0.0),
+            "coverage": cov,
+            "missing": missing,
+            "expiration_urgency": exp,
+            "substitution_penalty": penalty,
+            "cultural_fit": 0.0,
+            "source": "RecipeNLG (CC-BY-NC-4.0)",
+        })
+    out.sort(key=lambda x: x["score"], reverse=True)
+    return out
+
+
+# Canned swap suggestions for the expanded-card demo (best_swap + no-match states).
+_SWAP_MAP = {
+    "soy sauce": {"best_swap": "salt", "similarity": 0.58, "reason": None},
+    "sesame oil": {"best_swap": "olive oil", "similarity": 0.81, "reason": None},
+    "vegetable broth": {"best_swap": "water", "similarity": 0.66, "reason": None},
+    "onion": {"best_swap": "garlic", "similarity": 0.74, "reason": None},
+}
+
+
+@app.post("/navigator/recipes/swaps")
+async def post_recipes_swaps(request: Request):
+    """Per-missing swap suggestions; unknown items report no close match."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    ings = body.get("ingredients", [])
+    pantry_names = set(it["canonical_name"] for it in PANTRY)
+    swaps = []
+    seen = set()
+    for ing in ings:
+        if ing in pantry_names or ing in seen:
+            continue
+        seen.add(ing)
+        hit = _SWAP_MAP.get(ing)
+        if hit:
+            swaps.append({"missing": ing, **hit})
+        else:
+            swaps.append(
+                {"missing": ing, "best_swap": None, "similarity": 0.31, "reason": "no_close_match"}
+            )
+    return {"swaps": swaps}
 
 
 # /navigator/vision/parse-shelf → 404 (T-014 not yet built)
@@ -243,6 +341,12 @@ async def parse_shelf():
 @app.get("/navigator/health")
 def health():
     return {"status": "ok", "recipe_count": 0}
+
+# Serve the built PWA from the same origin (so no dev proxy is needed for
+# screenshots). Mounted last so the explicit /navigator/* routes win.
+_DIST = Path(__file__).parent / "dist"
+if _DIST.exists():
+    app.mount("/", StaticFiles(directory=str(_DIST), html=True), name="dist")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8099, log_level="warning")

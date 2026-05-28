@@ -239,30 +239,77 @@ Resolves raw text to a canonical ingredient name **without** modifying the pantr
 
 `POST /navigator/recipes/from-pantry`
 
-Pre-filters candidate recipes by text overlap against the current pantry, then ranks them using the weighted formula. Returns up to 20 results sorted descending by score.
+**Instant, fast mode.** Pre-filters candidate recipes by text overlap against the current pantry and ranks them by coverage + expiration + cultural fit only — **no embedding**, so it returns in ~1s even against a 50K-recipe store. `substitution_penalty` is `0.0` (optimistic) for every result. The client then calls `/refine` to settle the ordering with real substitution scores (see *The instant → refine → swaps flow* below).
 
 **Query parameter (optional):** `cuisine` — cuisine string (e.g. `italian`). When supplied, recipes whose title contains this string receive `cultural_fit = 1.0`.
 
-**Response:** array of ranked recipe objects:
+**Response:** array of ranked recipe objects (`instructions` is a list of step strings):
 ```json
 [
   {
     "recipe": {
       "title": "Butternut & Kale Stew",
       "ingredients": ["butternut squash", "kale", "garlic"],
-      "instructions": "..."
+      "instructions": ["Heat oil…", "Add squash…"]
     },
-    "score": 0.82,
+    "score": 0.74,
     "coverage": 0.83,
     "missing": ["garlic"],
     "expiration_urgency": 0.5,
-    "substitution_penalty": 0.22,
-    "cultural_fit": 0.0
+    "substitution_penalty": 0.0,
+    "cultural_fit": 0.0,
+    "source": "RecipeNLG (CC-BY-NC-4.0)"
   }
 ]
 ```
 
 Returns an empty array when no pantry items overlap any recipe in the store.
+
+---
+
+`POST /navigator/recipes/from-pantry/refine`
+
+**Settle the ordering with real substitution scores.** The client sends back the recipes it already painted; the server recomputes their substitution penalty against the *current* pantry (embedding only the unique missing ingredients across the supplied recipes, in one batch) and returns them re-ranked. Because fast mode was optimistic, refining can only *lower* scores — cards converge downward into a stable settle.
+
+**Request body:** a JSON array of recipe objects `{title, ingredients, instructions}` (the `recipe` field of each `/from-pantry` result).
+
+**Query parameter (optional):** `cuisine` — same as `/from-pantry`.
+
+**Response:** same ranked-recipe shape as `/from-pantry`, re-sorted, with real `substitution_penalty` values.
+
+---
+
+`POST /navigator/recipes/swaps`
+
+**Lazy per-recipe swap suggestions**, fired when a recipe card is expanded. Embeds only that recipe's missing ingredients (typically 2–5) against the current pantry, so it is fast.
+
+**Request body:**
+```json
+{ "ingredients": ["kale", "garlic", "soy sauce", "sesame oil"] }
+```
+
+**Response:** one entry per *missing* ingredient. `best_swap` is the closest pantry item when it clears the similarity floor (cosine ≥ 0.5), else `null` with a `reason`:
+```json
+{
+  "swaps": [
+    { "missing": "sesame oil", "best_swap": "olive oil", "similarity": 0.81, "reason": null },
+    { "missing": "soy sauce", "best_swap": null, "similarity": 0.31, "reason": "no_close_match" }
+  ]
+}
+```
+`reason` is `"no_close_match"` when nothing clears the floor, or `"no_pantry"` when the pantry is empty.
+
+---
+
+### The instant → refine → swaps flow
+
+The navigator splits the expensive substitution embedding out of the critical path so results feel instant and agentic:
+
+1. **Instant** — `/from-pantry` paints coverage-ranked cards in ~1s (no embedding).
+2. **Refine** — the client immediately calls `/refine` with those cards; the UI shows a subtle "refining…" chip and the top cards re-order as real substitution scores arrive (~1s). Scores only move *down*, so the settle is stable.
+3. **Swaps** — expanding a card calls `/swaps` for just that recipe's missing items, surfacing "try olive oil · 81% match" inline where the user decides to cook.
+
+`/refine` and `/swaps` are network-only (never cached by the service worker) and degrade gracefully offline: the instant coverage results stand, the chip reads "offline · coverage order", and expanded cards show "swaps unavailable offline".
 
 ---
 
@@ -299,6 +346,8 @@ expiration_urgency = (# expiring pantry items the recipe uses) / (# expiring pan
 
 **`(1 − substitution_penalty)` (weight 0.20)**
 For each ingredient the recipe requires that is **missing** from the pantry, the algorithm computes the maximum cosine similarity between that missing ingredient's embedding and every item currently in the pantry. `penalty_i = 1 − max_cosine`. The substitution penalty is the mean across all missing ingredients. A recipe where every missing ingredient has a close pantry substitute scores high on this term; a recipe requiring exotic items that have no pantry analog scores low.
+
+This is the only term that needs the embedding model. `rank_recipes(..., compute_substitution=False)` (**fast mode**, used by `/from-pantry`) skips it and sets `substitution_penalty = 0.0`; `compute_substitution=True` (**refine mode**, used by `/refine` and `/swaps`) embeds every unique missing ingredient across the candidate set in a *single* batched call, since the embedder is the slow part on a Pi (~16 short strings/sec).
 
 **`cultural_fit` (weight 0.10)**
 1.0 if the requested `cuisine` string (lowercased) appears in the recipe title (lowercased); 0.0 otherwise. Always 0.0 when no `cuisine` query parameter is supplied.
