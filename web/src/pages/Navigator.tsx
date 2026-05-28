@@ -1,5 +1,6 @@
 import { h, Fragment } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
+import { useSignalEffect } from '@preact/signals'
 import {
   mode,
   modeSwitcherOpen,
@@ -9,6 +10,9 @@ import {
   pantryCount,
   recipeSectionLabel,
   fetchPantry,
+  fetchRecipes,
+  recipes,
+  recipeLoadState,
   deleteItem,
   addInputValue,
   addState,
@@ -22,6 +26,7 @@ import {
 } from '../signals'
 import { ModeSwitcher } from '../components/ModeSwitcher'
 import { PhotoReviewSheet } from '../components/PhotoReviewSheet'
+import { RecipeCard } from '../components/RecipeCard'
 
 // ---------------------------------------------------------------------------
 // Debounce util
@@ -38,6 +43,22 @@ function debounce<T extends (...args: Parameters<T>) => void>(fn: T, ms: number)
 // Navigator — single scrolling screen
 // ---------------------------------------------------------------------------
 
+// Debounce returns a stable fn reference — used outside the component for recipe refetch
+function debounceRecipe<T extends (...args: Parameters<T>) => void>(fn: T, ms: number): T {
+  let timer: ReturnType<typeof setTimeout>
+  return ((...args: Parameters<T>) => {
+    clearTimeout(timer)
+    timer = setTimeout(() => fn(...args), ms)
+  }) as T
+}
+
+const _debouncedFetchRecipes = debounceRecipe(
+  (items: ReturnType<typeof pantry.value.slice>, m: typeof mode.value) => {
+    fetchRecipes(items, m)
+  },
+  600,
+)
+
 export function Navigator() {
   useEffect(() => {
     fetchPantry()
@@ -46,6 +67,14 @@ export function Navigator() {
       modeSwitcherOpen.value = true
     }
   }, [])
+
+  // Live-recompute recipes whenever pantry or mode changes (debounced 600ms).
+  // useSignalEffect auto-tracks the signals read inside (pantry.value, mode.value).
+  useSignalEffect(() => {
+    const items = pantry.value
+    const m = mode.value
+    _debouncedFetchRecipes(items, m)
+  })
 
   return (
     <Fragment>
@@ -90,8 +119,8 @@ export function Navigator() {
             }}
           />
 
-          {/* Section D placeholder — T-008 will replace this */}
-          <RecipesSectionPlaceholder />
+          {/* Section D: Recipes section (T-008) */}
+          <RecipesSection />
         </main>
       </div>
 
@@ -819,81 +848,181 @@ function PantryEmptyState() {
 }
 
 // ---------------------------------------------------------------------------
-// Section D placeholder — T-008 will replace this with RecipesSection
+// Section D: Recipe list — T-008
 // ---------------------------------------------------------------------------
 
-/**
- * RecipesSectionPlaceholder — intentionally exported so T-008 can swap it out.
- * T-008 should replace this export with a full <RecipesSection items={ranked} />.
- */
-export function RecipesSectionPlaceholder() {
+function RecipesSection() {
+  const ranked = recipes.value
+  const loadState = recipeLoadState.value
+  const label = recipeSectionLabel.value
+
   return (
-    <section aria-label="Recipes you can cook tonight">
+    <section aria-label={label}>
+      {/* Section label — replaced by convergence spinner while loading */}
+      {loadState === 'loading' ? (
+        <RecipeConvergenceState />
+      ) : (
+        <p
+          style={{
+            fontFamily: 'var(--font)',
+            fontSize: 'var(--md-sys-typescale-label-medium-size)',
+            fontWeight: 'var(--md-sys-typescale-label-medium-weight)',
+            lineHeight: 'var(--md-sys-typescale-label-medium-line-height)',
+            color: 'var(--md-sys-color-on-surface-variant)',
+            marginBottom: '16px',
+          }}
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {ranked.length > 0
+            ? `${label} · ${ranked.length} found`
+            : label}
+        </p>
+      )}
+
+      {/* Results */}
+      {loadState !== 'loading' && ranked.length > 0 && (
+        <ul
+          style={{
+            listStyle: 'none',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+          }}
+        >
+          {ranked.map((r, i) => {
+            // Max 6 staggered (60ms each), then batch (no delay)
+            const delay = i < 6 ? i * 60 : 0
+            return (
+              <RecipeCard key={r.recipe.title + i} ranked={r} animDelay={delay} />
+            )
+          })}
+        </ul>
+      )}
+
+      {/* Empty state — shown after first load returns zero results, or on idle */}
+      {loadState !== 'loading' && ranked.length === 0 && (
+        <RecipeEmptyState />
+      )}
+    </section>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Convergence state — centered radial-pulse vessel + "Finding what works..."
+// ---------------------------------------------------------------------------
+
+function RecipeConvergenceState() {
+  return (
+    <div
+      style={{
+        textAlign: 'center',
+        padding: '48px 24px',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '16px',
+      }}
+    >
+      <style>{`
+        @keyframes convergence-pulse {
+          0%, 100% { transform: scale(1); opacity: 0.6; box-shadow: var(--shadow-vessel); }
+          50% { transform: scale(1.06); opacity: 1; box-shadow: var(--shadow-bloom); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          @keyframes convergence-pulse { 0%, 100% { opacity: 0.8; } }
+        }
+      `}</style>
+      <div
+        aria-hidden="true"
+        style={{
+          width: '96px',
+          height: '96px',
+          borderRadius: 'var(--md-sys-shape-corner-full)',
+          background: 'var(--bloom-gemini)',
+          animation: 'convergence-pulse 1.4s cubic-bezier(0.4,0,0.2,1) infinite',
+        }}
+      />
       <p
         style={{
           fontFamily: 'var(--font)',
-          fontSize: 'var(--md-sys-typescale-label-medium-size)',
-          fontWeight: 'var(--md-sys-typescale-label-medium-weight)',
-          lineHeight: 'var(--md-sys-typescale-label-medium-line-height)',
+          fontSize: 'var(--md-sys-typescale-body-large-size)',
           color: 'var(--md-sys-color-on-surface-variant)',
-          marginBottom: '16px',
         }}
       >
-        {recipeSectionLabel.value}
+        Finding what works...
       </p>
+    </div>
+  )
+}
 
-      {/* Recipe list empty state */}
+// ---------------------------------------------------------------------------
+// Recipe empty state — plate vessel + sane-size headline + subtext
+// ---------------------------------------------------------------------------
+
+function RecipeEmptyState() {
+  return (
+    <div
+      style={{
+        textAlign: 'center',
+        padding: '48px 24px',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '16px',
+      }}
+    >
+      {/* 96px circular vessel — empty plate illustration */}
       <div
+        class="vessel"
+        aria-hidden="true"
+        style={{ width: '96px', height: '96px' }}
+      >
+        <svg width="52" height="52" viewBox="0 0 52 52" fill="none" aria-hidden="true">
+          <circle cx="26" cy="28" r="16" stroke="white" stroke-width="2.2" fill="none" />
+          <ellipse cx="26" cy="28" rx="10" ry="10" stroke="white" stroke-width="1.5" fill="none" opacity="0.5" />
+          <path d="M20 12 L20 18" stroke="white" stroke-width="2" stroke-linecap="round" />
+          <path d="M26 10 L26 18" stroke="white" stroke-width="2" stroke-linecap="round" />
+          <path d="M32 12 L32 18" stroke="white" stroke-width="2" stroke-linecap="round" />
+        </svg>
+      </div>
+
+      {/* Headline — "headline" style (28sp/36sp), NOT display-large */}
+      <p
         style={{
-          textAlign: 'center',
-          padding: '48px 24px',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '16px',
+          fontFamily: 'var(--font)',
+          fontSize: 'var(--md-sys-typescale-headline-medium-size)',
+          fontWeight: 'var(--md-sys-typescale-headline-medium-weight)',
+          lineHeight: 'var(--md-sys-typescale-headline-medium-line-height)',
+          letterSpacing: 'var(--md-sys-typescale-headline-medium-tracking)',
+          background: 'var(--gradient-gemini)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          backgroundClip: 'text',
+          color: 'transparent',
         }}
       >
-        <div
-          class="vessel"
-          aria-hidden="true"
-          style={{ width: '96px', height: '96px' }}
-        >
-          {/* Empty plate SVG */}
-          <svg width="52" height="52" viewBox="0 0 52 52" fill="none" aria-hidden="true">
-            <circle cx="26" cy="28" r="16" stroke="white" stroke-width="2.2" fill="none" />
-            <ellipse cx="26" cy="28" rx="10" ry="10" stroke="white" stroke-width="1.5" fill="none" opacity="0.5" />
-            <path d="M20 12 L20 18" stroke="white" stroke-width="2" stroke-linecap="round" />
-            <path d="M26 10 L26 18" stroke="white" stroke-width="2" stroke-linecap="round" />
-            <path d="M32 12 L32 18" stroke="white" stroke-width="2" stroke-linecap="round" />
-          </svg>
-        </div>
-
-        <p
-          style={{
-            fontFamily: 'var(--font)',
-            fontSize: 'var(--md-sys-typescale-display-large-size)',
-            fontWeight: 'var(--md-sys-typescale-display-large-weight)',
-            letterSpacing: 'var(--md-sys-typescale-display-large-tracking)',
-            background: 'var(--gradient-gemini)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
-            color: 'transparent',
-          }}
-        >
-          Nothing matches yet
-        </p>
-        <p
-          style={{
-            fontFamily: 'var(--font)',
-            fontSize: 'var(--md-sys-typescale-body-large-size)',
-            color: 'var(--md-sys-color-on-surface-variant)',
-            maxWidth: '280px',
-          }}
-        >
-          Add more to your pantry on the shelf above
-        </p>
-      </div>
-    </section>
+        Nothing matches yet
+      </p>
+      <p
+        style={{
+          fontFamily: 'var(--font)',
+          fontSize: 'var(--md-sys-typescale-body-large-size)',
+          color: 'var(--md-sys-color-on-surface-variant)',
+          maxWidth: '280px',
+        }}
+      >
+        Add more to your pantry on the shelf above
+      </p>
+    </div>
   )
+}
+
+// ---------------------------------------------------------------------------
+// Exported placeholder (kept for backwards-compat; no longer called internally)
+// ---------------------------------------------------------------------------
+
+/** @deprecated T-008 replaced this with RecipesSection */
+export function RecipesSectionPlaceholder() {
+  return <RecipesSection />
 }

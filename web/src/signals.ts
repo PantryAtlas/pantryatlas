@@ -3,6 +3,7 @@
  * Single source of truth for mode, pantry, and UI state.
  */
 import { signal, computed } from '@preact/signals'
+import type { RankedRecipe } from './components/RecipeCard'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -128,6 +129,40 @@ export const recipeSectionLabel = computed(() =>
     : 'Recipes you can scale to 50–500 meals'
 )
 
+// ---------------------------------------------------------------------------
+// Recipe results state
+// ---------------------------------------------------------------------------
+
+export type RecipeLoadState = 'idle' | 'loading' | 'done'
+
+export const recipes = signal<RankedRecipe[]>([])
+export const recipeLoadState = signal<RecipeLoadState>('idle')
+
+export async function fetchRecipes(pantryItems: PantryItem[], currentMode: Mode) {
+  recipeLoadState.value = 'loading'
+  try {
+    const res = await fetch('/navigator/recipes/from-pantry', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mode: currentMode,
+        pantry: pantryItems.map((it) => it.canonical_name),
+      }),
+    })
+    if (res.ok) {
+      recipes.value = await res.json()
+      recipeLoadState.value = 'done'
+    } else {
+      recipes.value = []
+      recipeLoadState.value = 'done'
+    }
+  } catch {
+    recipes.value = []
+    recipeLoadState.value = 'done'
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Expiry helpers
 // Parse ISO date string (YYYY-MM-DD) as local date to avoid UTC midnight shift.
 function parseLocalDate(iso: string): Date {
