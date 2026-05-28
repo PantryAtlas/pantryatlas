@@ -4,6 +4,10 @@ The prebuilt recipe DB is published to Cloudflare R2 and fetched by
 `ops/pi-bootstrap.sh`. CI does **not** rebuild the DB — it is built once on a Pi
 (the ~5.2h ingest) and uploaded with this runbook.
 
+> For how downloads stay cheap and abuse-resistant (R2's free egress, the
+> `r2.dev`-disabled posture, optional cache/rate-limit/alert hardening), see
+> [`R2_PROTECTION.md`](./R2_PROTECTION.md).
+
 ## One-time setup
 
 1. `npx -y wrangler r2 bucket create pantryatlas-artifacts`
