@@ -130,6 +130,8 @@ body {
   position: fixed; top: 0; left: 0; z-index: 100;
   display: flex; flex-direction: column; gap: 1px;
   padding: 16px 20px;
+  /* Cap width on small screens so the byline wraps instead of colliding with the top-right help link. */
+  max-width: 58vw;
   background: linear-gradient(to bottom, rgba(252,252,255,0.92), rgba(252,252,255,0));
   backdrop-filter: blur(6px);
 }
@@ -138,6 +140,22 @@ body {
   background: var(--gradient-gemini); -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 .wordmark__byline { font-size: 0.6875rem; color: var(--on-surface-variant); }
+
+/* ---------- Fixed help / docs link (top-right) ---------- */
+.topnav { position: fixed; top: 0; right: 0; z-index: 100; padding: 16px 20px; }
+.topnav__link {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 8px 15px; border-radius: 999px;
+  background: rgba(255,255,255,0.72); border: 1px solid var(--outline-variant);
+  backdrop-filter: blur(6px);
+  color: var(--primary); font-weight: 600; font-size: 0.875rem; line-height: 1;
+  text-decoration: none; white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.topnav__link:hover, .topnav__link:focus-visible {
+  background: rgba(255,255,255,0.96); border-color: var(--primary); box-shadow: var(--shadow-rest);
+}
+.topnav__link .icon { width: 17px; height: 17px; }
 
 /* ---------- Buttons ---------- */
 .btn {
@@ -283,6 +301,7 @@ body {
 @media (min-width: 720px) {
   .two-col { grid-template-columns: 1fr 1fr; }
   .three-col { grid-template-columns: repeat(3, 1fr); }
+  .wordmark { max-width: none; }
 }
 
 .kitchen-card .title { margin-top: 4px; }
