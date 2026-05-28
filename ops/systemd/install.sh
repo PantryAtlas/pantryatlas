@@ -7,6 +7,7 @@ UNITS=(
     pantryatlas-mem-monitor.service
     pantryatlas-embeddings.service
     pantryatlas-gemma.service
+    pantryatlas-navigator.service
 )
 
 UNIT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -27,4 +28,4 @@ for unit in "${UNITS[@]}"; do
     systemctl enable "$unit"
 done
 
-echo "INSTALL COMPLETE — run: sudo systemctl start pantryatlas-mem-monitor pantryatlas-embeddings pantryatlas-gemma"
+echo "INSTALL COMPLETE — run: sudo systemctl start pantryatlas-mem-monitor pantryatlas-embeddings pantryatlas-gemma pantryatlas-navigator"

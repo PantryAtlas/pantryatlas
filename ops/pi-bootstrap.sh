@@ -139,6 +139,18 @@ stage_pip_install() {
     log "pip install: done"
 }
 
+stage_web_build() {
+    local stamp="$STAMPS_DIR/06-web-build.done"
+    if [ -f "$stamp" ]; then
+        log "web build: already done"
+        return 0
+    fi
+    log "web build: installing Node deps and building frontend..."
+    cd "${REPO_DIR}/web" && npm install && npm run build
+    touch "$stamp"
+    log "web build: done"
+}
+
 stage_smoke_test() {
     log "smoke test: verifying imports..."
     "$PANTRYATLAS_VENV/bin/python" -c '
@@ -164,6 +176,7 @@ main() {
     stage_llama_cpp
     stage_gemma_download
     stage_pip_install
+    stage_web_build
     stage_smoke_test
 
     log "Venv:           $PANTRYATLAS_VENV"
