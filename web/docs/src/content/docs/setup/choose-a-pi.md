@@ -22,13 +22,16 @@ It isn't ready yet — for today, pick the Pi 5.
 
 ## Then set it up
 
-A one-click pre-built image is coming soon. For now, this is the path:
+The easiest path is our pre-built image:
 
-1. On another computer, clone the project from GitHub and follow the install
-   steps in the README to set up the microSD card.
+1. [Download &amp; flash the image](/setup/install-image/) to the microSD card with
+   the free Raspberry Pi Imager (about 8 minutes).
 2. Insert the card, plug in power and Wi-Fi (or ethernet). Wait for the solid
    green light (~1 minute).
 3. Open **pantryatlas.local** in any browser on the same network. Pick Home or
    Community Kitchen on first launch. Done.
+
+Prefer to build it yourself? Clone the project from GitHub and follow the install
+steps in the README instead.
 
 Stuck? See [Troubleshooting](/maintenance/troubleshooting/).
