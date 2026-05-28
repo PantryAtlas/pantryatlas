@@ -12,8 +12,10 @@ latest manifest JSON to an output dir, and prints the bootstrap pins.
 
 from __future__ import annotations
 
+import argparse
 import datetime as _dt
 import hashlib
+import json
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -111,3 +113,53 @@ def build_manifest(
         "bytes": bytes_,
         "built_at": built_at,
     }
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(prog="pantryatlas.ops.db_publish")
+    parser.add_argument("--db", type=Path, required=True, help="Path to recipes.db")
+    parser.add_argument(
+        "--version", required=True, help="Release version, e.g. v0.2.0"
+    )
+    parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
+    parser.add_argument(
+        "--built-at", default=None, help="ISO-8601 UTC; defaults to DB file mtime"
+    )
+    parser.add_argument(
+        "--out-dir", type=Path, required=True, help="Directory for manifest JSON"
+    )
+    args = parser.parse_args()
+
+    if not args.db.exists():
+        parser.error(f"DB not found: {args.db}")
+
+    built_at = args.built_at or _dt.datetime.fromtimestamp(
+        args.db.stat().st_mtime, _dt.UTC
+    ).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    stamp_db(args.db, db_version=args.version, built_at=built_at)
+    sha = sha256_file(args.db)
+    size = args.db.stat().st_size
+    count = recipe_count(args.db)
+    manifest = build_manifest(
+        db_version=args.version,
+        sha256=sha,
+        bytes_=size,
+        recipe_count=count,
+        built_at=built_at,
+        base_url=args.base_url,
+    )
+
+    args.out_dir.mkdir(parents=True, exist_ok=True)
+    body = json.dumps(manifest, indent=2) + "\n"
+    (args.out_dir / f"recipes-{args.version}.json").write_text(body)
+    (args.out_dir / "recipes-latest.json").write_text(body)
+
+    print("# --- paste into ops/pi-bootstrap.sh ---")
+    print(f'RECIPES_DB_URL="{manifest["url"]}"')
+    print(f'RECIPES_DB_SHA256="{sha}"')
+    print(f"# recipes={count} bytes={size} built_at={built_at}")
+
+
+if __name__ == "__main__":
+    main()
