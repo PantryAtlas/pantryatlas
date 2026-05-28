@@ -46,8 +46,10 @@ class RecipeStore:
     tables: ``recipes_meta`` (regular) and ``recipes_vec`` (vec0 virtual
     table). Tables are created idempotently on open.
 
-    Not thread-safe: each thread must use its own store instance
-    (sqlite3 ``check_same_thread=True``).
+    Thread safety: the underlying connection is opened with
+    ``check_same_thread=False`` to allow FastAPI's thread-pool handlers to
+    share the same instance.  Concurrent *writes* are not safe — all write
+    operations should be serialised by the caller (single-writer model).
     """
 
     def __init__(self, db_path: str | Path) -> None:
