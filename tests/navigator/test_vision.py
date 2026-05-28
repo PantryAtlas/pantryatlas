@@ -240,7 +240,6 @@ def test_route_registered() -> None:
     tmp = _P("/tmp/pantry_route_test")
     tmp.mkdir(exist_ok=True)
     mod_name = "pantryatlas.navigator.server"
-    env_patch = {"HOME": str(tmp)}
     import os
 
     old_home = os.environ.get("HOME")
@@ -369,8 +368,8 @@ def test_vision_route_live_detection(tmp_path: Path) -> None:
     result = parse_shelf(image_bytes, real_client)
     assert isinstance(result, list)
     assert len(result) >= 1, (
-        f"Expected ≥1 detection from fixture, got 0. "
-        f"Check that --mmproj is passed to llama-server."
+        "Expected ≥1 detection from fixture, got 0. "
+        "Check that --mmproj is passed to llama-server."
     )
     for d in result:
         assert isinstance(d.label, str) and d.label

@@ -8,14 +8,14 @@ Seeded pantry: garlic (expires tomorrow) + kale (expires today = error-container
 Canned recipes: two realistic RecipeNLG-shaped ranked results for screenshot testing.
 """
 from __future__ import annotations
+
 import asyncio
-import json
 import os
 from datetime import date, timedelta
 from pathlib import Path
+
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -235,7 +235,7 @@ async def post_recipes_from_pantry(request: Request):
     except Exception:
         pass
 
-    pantry_names = set(it["canonical_name"] for it in PANTRY)
+    pantry_names = {it["canonical_name"] for it in PANTRY}
     if not pantry_names:
         return []
 
@@ -279,7 +279,7 @@ async def post_recipes_refine(request: Request):
     for rec in recipes:
         title = rec.get("title", "")
         ings = rec.get("ingredients", [])
-        pantry_names = set(it["canonical_name"] for it in PANTRY)
+        pantry_names = {it["canonical_name"] for it in PANTRY}
         missing = [ing for ing in ings if ing not in pantry_names]
         total = len(ings)
         cov = (total - len(missing)) / total if total else 0.0
@@ -316,7 +316,7 @@ async def post_recipes_swaps(request: Request):
     except Exception:
         body = {}
     ings = body.get("ingredients", [])
-    pantry_names = set(it["canonical_name"] for it in PANTRY)
+    pantry_names = {it["canonical_name"] for it in PANTRY}
     swaps = []
     seen = set()
     for ing in ings:

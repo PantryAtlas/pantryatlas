@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from pantryatlas.navigator.ingest import (
+    curate,
     extract_ingredient_lines,
     parse_recipe,
-    curate,
 )
 
 
@@ -95,7 +95,11 @@ def test_curate_requires_minimum_ingredients():
     """Test that curate discards rows with fewer than 3 ingredients."""
     rows = [
         {"title": "Too Few", "ingredients": ["salt", "pepper"], "instructions": "mix"},
-        {"title": "Just Right", "ingredients": ["flour", "sugar", "butter"], "instructions": "bake"},
+        {
+            "title": "Just Right",
+            "ingredients": ["flour", "sugar", "butter"],
+            "instructions": "bake",
+        },
         {"title": "Also Few", "ingredients": ["water"], "instructions": "heat"},
     ]
 
