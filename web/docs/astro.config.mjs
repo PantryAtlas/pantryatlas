@@ -20,8 +20,14 @@ export default defineConfig({
         "object-src 'none'",
       ],
       // 'wasm-unsafe-eval' is required by Pagefind search (WASM) in production builds.
+      // script-src stays fully hash-locked (no 'unsafe-inline') — the security-critical part.
       scriptDirective: { resources: ["'self'", "'wasm-unsafe-eval'"] },
-      styleDirective: { resources: ["'self'"] },
+      // 'unsafe-inline' is required for style: Starlight (icon sizing, sidebar
+      // depth) and Shiki code blocks emit inline style ATTRIBUTES that CSP hashes
+      // cannot cover, and Astro disallows style-src-attr in `directives`. Astro
+      // still emits hashes for <style> ELEMENTS, so this only relaxes inline
+      // style attributes; no third-party style origins are allowed.
+      styleDirective: { resources: ["'self'", "'unsafe-inline'"] },
     },
   },
   integrations: [
