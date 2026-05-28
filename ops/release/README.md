@@ -23,6 +23,8 @@ From a machine with the built DB present (system `python3` must be able to impor
 ops/release/publish-db.sh ~/.pantryatlas/recipes.db v0.2.0
 ```
 
+(replace `v0.2.0` with the release tag)
+
 This stamps the DB (`PRAGMA user_version` + `_pantryatlas_db_meta`), uploads the
 `.db`, the per-version + `latest` manifests, and `ATTRIBUTION.txt`, then prints:
 
@@ -31,7 +33,8 @@ RECIPES_DB_URL="https://dl.pantryatlas.org/db/recipes-v0.2.0.db"
 RECIPES_DB_SHA256="<sha>"
 ```
 
-Paste those two lines into the pins in `ops/pi-bootstrap.sh` and commit. Dry-run
-first with `PUBLISH_DRY_RUN=1 ops/release/publish-db.sh ...` to preview uploads.
+Dry-run first with `PUBLISH_DRY_RUN=1 ops/release/publish-db.sh ...` to preview
+uploads. Once satisfied, paste those two env-var lines into the pins in
+`ops/pi-bootstrap.sh` and commit.
 
 Then verify live: `PANTRYATLAS_PI_INTEGRATION=1 pytest tests/integration/test_recipes_db_artifact.py -m pi_integration -v`.
