@@ -55,6 +55,9 @@ export default defineConfig({
         { label: 'Developers', translations: { es: 'Desarrolladores', fr: 'Développeurs', ar: 'المطورون', 'zh-CN': '开发者' }, items: [{ autogenerate: { directory: 'developers' } }] },
         { label: 'Reference', translations: { es: 'Referencia', fr: 'Référence', ar: 'مرجع', 'zh-CN': '参考' }, items: [{ autogenerate: { directory: 'reference' } }] },
       ],
+      components: {
+        Banner: './src/components/MtBanner.astro',
+      },
       // Pagefind (search) is disabled by default so the site builds on the Pi 5,
       // whose 16KB memory pages crash Pagefind's jemalloc allocator. Production
       // builds on x86 / Cloudflare Pages set DOCS_SEARCH=1 to enable search.

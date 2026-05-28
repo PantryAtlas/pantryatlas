@@ -1,0 +1,36 @@
+---
+import Default from '@astrojs/starlight/components/Banner.astro';
+const { entry, editUrl } = Astro.locals.starlightRoute;
+const isMachine = entry.data.translationStatus === 'machine';
+// Use t.exists() to check if the custom key is registered for this locale,
+// because i18next returns the key string (not undefined) for missing keys,
+// so nullish coalescing (??) would never fall back to our hardcoded English.
+const text = Astro.locals.t.exists('mtBanner.text')
+  ? Astro.locals.t('mtBanner.text')
+  : 'Machine-translated — help us improve this page';
+---
+
+{isMachine && (
+  <div class="mt-banner" dir="auto">
+    <span>{text}</span>
+    {editUrl && <a href={editUrl.href}>↗</a>}
+  </div>
+)}
+
+{/* Preserve any normal frontmatter banner below ours */}
+<Default><slot /></Default>
+
+<style>
+  .mt-banner {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    justify-content: center;
+    padding: 0.4rem 0.75rem;
+    font-size: var(--sl-text-xs);
+    background: var(--sl-color-blue-low, var(--sl-color-gray-6));
+    color: var(--sl-color-blue-high, var(--sl-color-white));
+    border-bottom: 1px solid var(--sl-color-hairline);
+  }
+  .mt-banner a { color: inherit; text-decoration: underline; }
+</style>
