@@ -1,0 +1,163 @@
+/* ============================================================
+   PantryAtlas Navigator — Global styles
+   Imports token system; establishes base + utility classes.
+   ============================================================ */
+
+@import "./tokens.css";
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: var(--font);
+  font-size: var(--md-sys-typescale-body-large-size);
+  line-height: var(--md-sys-typescale-body-large-line-height);
+  color: var(--md-sys-color-on-surface);
+  background: var(--gradient-page);
+  background-attachment: fixed;
+  min-height: 100svh;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+#app {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ---------- Type utilities ---------- */
+.type-display-large {
+  font-family: var(--md-sys-typescale-display-large-font), system-ui, sans-serif;
+  font-size: var(--md-sys-typescale-display-large-size);
+  font-weight: var(--md-sys-typescale-display-large-weight);
+  line-height: var(--md-sys-typescale-display-large-line-height);
+  letter-spacing: var(--md-sys-typescale-display-large-tracking);
+}
+
+.type-headline-medium {
+  font-family: var(--md-sys-typescale-headline-medium-font), system-ui, sans-serif;
+  font-size: var(--md-sys-typescale-headline-medium-size);
+  font-weight: var(--md-sys-typescale-headline-medium-weight);
+  line-height: var(--md-sys-typescale-headline-medium-line-height);
+  letter-spacing: var(--md-sys-typescale-headline-medium-tracking);
+}
+
+.type-title-medium {
+  font-family: var(--md-sys-typescale-title-medium-font), system-ui, sans-serif;
+  font-size: var(--md-sys-typescale-title-medium-size);
+  font-weight: var(--md-sys-typescale-title-medium-weight);
+  line-height: var(--md-sys-typescale-title-medium-line-height);
+}
+
+.type-body-large {
+  font-family: var(--md-sys-typescale-body-large-font), system-ui, sans-serif;
+  font-size: var(--md-sys-typescale-body-large-size);
+  font-weight: var(--md-sys-typescale-body-large-weight);
+  line-height: var(--md-sys-typescale-body-large-line-height);
+}
+
+.type-label-medium {
+  font-family: var(--md-sys-typescale-label-medium-font), system-ui, sans-serif;
+  font-size: var(--md-sys-typescale-label-medium-size);
+  font-weight: var(--md-sys-typescale-label-medium-weight);
+  line-height: var(--md-sys-typescale-label-medium-line-height);
+}
+
+/* ---------- Card ---------- */
+.card {
+  position: relative;
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-low) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant) 60%, transparent);
+  border-radius: var(--md-sys-shape-corner-extra-large);
+  padding: 32px;
+  box-shadow: var(--shadow-rest);
+  backdrop-filter: blur(8px);
+  isolation: isolate;
+  transition: box-shadow 0.18s cubic-bezier(0.2,0,0,1);
+}
+.card:hover {
+  box-shadow: var(--shadow-active);
+}
+
+/* ---------- Vessel (gradient circle) ---------- */
+.vessel {
+  position: relative;
+  display: grid;
+  place-items: center;
+  border-radius: var(--md-sys-shape-corner-full);
+  background: var(--bloom-gemini), #5566d8;
+  box-shadow: var(--shadow-vessel);
+  color: #fff;
+  isolation: isolate;
+  overflow: hidden;
+}
+.vessel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--noise);
+  background-size: 180px 180px;
+  mix-blend-mode: soft-light;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* ---------- Pill button ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: var(--font);
+  font-size: var(--md-sys-typescale-label-large-size);
+  font-weight: var(--md-sys-typescale-label-large-weight);
+  text-decoration: none;
+  padding: 13px 26px;
+  border-radius: var(--md-sys-shape-corner-full);
+  min-height: 48px;
+  cursor: pointer;
+  border: none;
+  transition: transform 0.18s cubic-bezier(0.2,0,0,1), box-shadow 0.18s;
+}
+.btn--filled {
+  background: var(--gradient-gemini);
+  color: var(--md-sys-color-on-primary);
+  box-shadow: var(--shadow-rest);
+}
+.btn--filled:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-active);
+}
+.btn--tonal {
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+}
+
+/* ---------- Coverage ring SVG ---------- */
+.coverage-ring {
+  display: block;
+  width: 80px;
+  height: 80px;
+}
+
+/* ---------- Reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 200ms !important;
+  }
+}
