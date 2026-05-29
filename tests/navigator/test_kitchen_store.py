@@ -20,7 +20,9 @@ def test_open_creates_tables(tmp_path: Path) -> None:
             "SELECT name FROM sqlite_master WHERE type='table'"
         ).fetchall()
     }
-    assert {"pantry_items", "inventory_events", "cook_events"} <= names
+    assert {
+        "pantry_items", "inventory_events", "cook_events", "off_cache", "devices"
+    } <= names
 
 
 def test_migrates_from_pantry_json_once(tmp_path: Path) -> None:
