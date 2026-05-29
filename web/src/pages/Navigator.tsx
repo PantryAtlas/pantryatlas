@@ -28,6 +28,7 @@ import {
   photoFile,
   photoSheetState,
   daysUntilExpiry,
+  expiringSoon,
   hasPersistedMode,
   wireOfflineReplay,
 } from '../signals'
@@ -191,6 +192,24 @@ export function Navigator() {
               opacity: 0.5,
             }}
           />
+
+          {/* Expiry nudge strip — shown when any on-hand item expires within 3 days */}
+          {expiringSoon.value.length > 0 && (
+            <div
+              data-expiry-nudge="true"
+              style={{
+                padding: '12px 16px',
+                borderRadius: 'var(--md-sys-shape-corner-large)',
+                background: 'var(--md-sys-color-error-container)',
+                color: 'var(--md-sys-color-on-error-container)',
+                fontFamily: 'var(--font)',
+                fontSize: 'var(--md-sys-typescale-body-medium-size)',
+                marginBottom: '12px',
+              }}
+            >
+              Expiring soon: {expiringSoon.value.map((i) => i.canonical_name).join(', ')} — cook these first.
+            </div>
+          )}
 
           {/* Section D: Recipes section (T-008) */}
           <RecipesSection />

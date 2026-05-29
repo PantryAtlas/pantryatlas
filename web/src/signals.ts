@@ -269,6 +269,12 @@ export const photoErrorMsg = signal<string>('')
 
 export const pantryCount = computed(() => pantry.value.length)
 
+export const expiringSoon = computed(() =>
+  pantry.value.filter(
+    (i) => i.state !== 'used_up' && (daysUntilExpiry(i.expires_at) ?? 99) <= 3
+  )
+)
+
 export const modeLabel = computed(() =>
   mode.value === 'home' ? 'Home Kitchen' : 'Community Kitchen'
 )
