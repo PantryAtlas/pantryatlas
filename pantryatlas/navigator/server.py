@@ -253,10 +253,21 @@ def create_app(
     if store is None and store_factory is None:
         raise ValueError("One of store or store_factory is required.")
 
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def _lifespan(application: FastAPI):  # noqa: RUF029
+        yield
+        # Shutdown: close the OFF HTTP connection pool to avoid resource leaks.
+        client = getattr(application.state, "off_client", None)
+        if client is not None and hasattr(client, "close"):
+            client.close()
+
     app = FastAPI(
         title="PantryAtlas Navigator",
         description="Pantry-in → ranked-recipes-out API",
         version="0.2.0",
+        lifespan=_lifespan,
     )
 
     # Store dependencies on app.state so route handlers can access them.
