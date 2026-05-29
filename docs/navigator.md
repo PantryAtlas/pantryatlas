@@ -521,6 +521,18 @@ Returns a **waste tally** — items that were discarded or expired within a roll
 
 ---
 
+### The instant → refine → swaps flow
+
+The navigator splits the expensive substitution embedding out of the critical path so results feel instant and agentic:
+
+1. **Instant** — `/from-pantry` paints coverage-ranked cards in ~1s (no embedding).
+2. **Refine** — the client immediately calls `/refine` with those cards; the UI shows a subtle "refining…" chip and the top cards re-order as real substitution scores arrive (~1s). Scores only move *down*, so the settle is stable.
+3. **Swaps** — expanding a card calls `/swaps` for just that recipe's missing items, surfacing "try olive oil · 81% match" inline where the user decides to cook.
+
+`/refine` and `/swaps` are network-only (never cached by the service worker) and degrade gracefully offline: the instant coverage results stand, the chip reads "offline · coverage order", and expanded cards show "swaps unavailable offline".
+
+---
+
 ## Device-trust fabric (SP-C)
 
 The device-trust fabric lets a LAN device (a second Pi, a phone acting as a camera sensor, a Coral board) request to join the kitchen mesh. The operator approves or rejects the request from the PWA. On approval, a bearer token is issued once — only its `sha256` hash is stored; the raw token is shown once in the UI and never retrievable again.
@@ -641,28 +653,6 @@ The `devices` table is part of `~/.pantryatlas/kitchen.db`:
 
 `KitchenStore._device_to_dict` strips `token_hash` before returning any device record. `list_devices()`, `get_device()`, and `device_by_token_hash()` all go through this method — the raw hash never reaches the application layer.
 
-### Updated schema table
-
-| Table | Holds |
-|---|---|
-| `pantry_items` | One row per ingredient: editable fields (`raw_text`, `quantity_*`, `expires_at`) plus the coarse-state model (`state`, `confidence`, `last_observed_at`, `source`). |
-| `inventory_events` | Append-only ledger: one row per `add` / `consume` / `discard` / `expire` / `observe` / `adjust`, tagged with `source` and an optional `detail_json`. The waste tally and audit trail read from here. |
-| `cook_events` | One row per "I cooked this": `dish_name`, `recipe_id`, `servings`, `rating`, `notes`, `cooked_at`, and the `consumed_json` snapshot. Drives the meal-log timeline. |
-| `off_cache` | Cache of Open Food Facts product JSON keyed by barcode code. One row per scanned barcode, indefinite TTL (no expiry in v1). See `POST /navigator/pantry/barcode` for the full cache-first strategy. |
-| `devices` | One row per enrolled device: identity, status, and the `token_hash` (never leaked). Drives the device-approval panel and bearer-token verification. |
-
----
-
-### The instant → refine → swaps flow
-
-The navigator splits the expensive substitution embedding out of the critical path so results feel instant and agentic:
-
-1. **Instant** — `/from-pantry` paints coverage-ranked cards in ~1s (no embedding).
-2. **Refine** — the client immediately calls `/refine` with those cards; the UI shows a subtle "refining…" chip and the top cards re-order as real substitution scores arrive (~1s). Scores only move *down*, so the settle is stable.
-3. **Swaps** — expanding a card calls `/swaps` for just that recipe's missing items, surfacing "try olive oil · 81% match" inline where the user decides to cook.
-
-`/refine` and `/swaps` are network-only (never cached by the service worker) and degrade gracefully offline: the instant coverage results stand, the chip reads "offline · coverage order", and expanded cards show "swaps unavailable offline".
-
 ---
 
 ## Kitchen store + the cook loop
@@ -673,7 +663,7 @@ It is wired into `create_app` with the same lazy-init pattern as `RecipeStore` (
 
 ### Schema
 
-Four tables:
+Five tables:
 
 | Table | Holds |
 |---|---|
