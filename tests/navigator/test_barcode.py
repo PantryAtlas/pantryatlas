@@ -7,7 +7,7 @@ import numpy as np
 import zxingcpp
 from PIL import Image
 
-from pantryatlas.navigator.barcode import decode_barcode, product_to_ingredient
+from pantryatlas.navigator.barcode import decode_barcode, product_to_ingredient, upc_ean_variants
 from pantryatlas.pantry.models import Ingredient
 
 
@@ -34,6 +34,35 @@ def test_decode_returns_none_when_no_barcode():
     buf = io.BytesIO()
     Image.new("RGB", (200, 200), "white").save(buf, format="PNG")
     assert decode_barcode(buf.getvalue()) is None
+
+
+# --- upc_ean_variants ---
+
+
+def test_upc_ean_variants_12digit_adds_ean13_prefix():
+    result = upc_ean_variants("737628064502")
+    assert result == ["737628064502", "0737628064502"]
+
+
+def test_upc_ean_variants_13digit_leading_zero_adds_upca():
+    result = upc_ean_variants("0737628064502")
+    assert result == ["0737628064502", "737628064502"]
+
+
+def test_upc_ean_variants_13digit_no_leading_zero_unchanged():
+    result = upc_ean_variants("7376280645020")
+    assert result == ["7376280645020"]
+
+
+def test_upc_ean_variants_non_digit_unchanged():
+    result = upc_ean_variants("ABC-123")
+    assert result == ["ABC-123"]
+
+
+def test_upc_ean_variants_no_duplicates():
+    # A 13-digit '0'-prefixed code should never duplicate
+    result = upc_ean_variants("0737628064502")
+    assert len(result) == len(set(result))
 
 
 # --- mapping ---

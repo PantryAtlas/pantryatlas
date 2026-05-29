@@ -43,6 +43,7 @@ export function MealLog() {
           }}>
             {new Date(m.cooked_at).toLocaleDateString()}
             {m.consumed.length > 0 ? ` · used ${m.consumed.length} item${m.consumed.length === 1 ? '' : 's'}` : ''}
+            {m.servings != null ? ` · ${m.servings} serving${m.servings === 1 ? '' : 's'}` : ''}
           </span>
         </li>
       ))}

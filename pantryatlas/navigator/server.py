@@ -41,7 +41,6 @@ Design decisions
 
 from __future__ import annotations
 
-import json
 import os
 from collections.abc import Callable
 from datetime import date
@@ -59,7 +58,7 @@ from pantryatlas.inference.providers.lan_endpoint import LanEndpointProvider
 from pantryatlas.inference.registry import ProviderRegistry
 from pantryatlas.navigator.openfoodfacts import OffUnavailable, OpenFoodFactsClient
 from pantryatlas.navigator.ranking import RankedRecipe, compute_swaps, rank_recipes
-from pantryatlas.pantry.models import Ingredient, Pantry, Quantity
+from pantryatlas.pantry.models import Ingredient, Quantity
 from pantryatlas.store.kitchen import KitchenStore
 from pantryatlas.store.recipes import RecipeStore
 
@@ -166,66 +165,6 @@ class DeviceEnrollIn(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Pantry JSON serialisation
-# ---------------------------------------------------------------------------
-
-
-def _pantry_to_list(pantry: Pantry) -> list[dict[str, Any]]:
-    """Serialise ``Pantry`` to a list of dicts suitable for JSON encoding."""
-    result = []
-    for ing in pantry:
-        item: dict[str, Any] = {
-            "canonical_name": ing.canonical_name,
-            "raw_text": ing.raw_text,
-        }
-        if ing.quantity is not None:
-            item["quantity"] = {
-                "amount": ing.quantity.amount,
-                "unit": ing.quantity.unit,
-            }
-        if ing.expires_at is not None:
-            item["expires_at"] = ing.expires_at.isoformat()
-        result.append(item)
-    return result
-
-
-def _load_pantry(pantry_path: Path) -> Pantry:
-    """Load Pantry from JSON file; returns empty Pantry when file absent."""
-    pantry = Pantry()
-    if not pantry_path.exists():
-        return pantry
-    raw = json.loads(pantry_path.read_text(encoding="utf-8"))
-    for item in raw:
-        qty = None
-        if item.get("quantity"):
-            qty = Quantity(
-                amount=item["quantity"]["amount"],
-                unit=item["quantity"].get("unit", ""),
-            )
-        exp = None
-        if item.get("expires_at"):
-            exp = date.fromisoformat(item["expires_at"])
-        pantry.add(
-            Ingredient(
-                canonical_name=item["canonical_name"],
-                raw_text=item["raw_text"],
-                quantity=qty,
-                expires_at=exp,
-            )
-        )
-    return pantry
-
-
-def _save_pantry(pantry: Pantry, pantry_path: Path) -> None:
-    """Persist Pantry to JSON file, creating parent dirs as needed."""
-    pantry_path.parent.mkdir(parents=True, exist_ok=True)
-    pantry_path.write_text(
-        json.dumps(_pantry_to_list(pantry), indent=2),
-        encoding="utf-8",
-    )
-
-
-# ---------------------------------------------------------------------------
 # Lazy store accessor
 # ---------------------------------------------------------------------------
 
@@ -294,7 +233,12 @@ def create_app(
             Must NOT trigger ONNX model loading in tests; pass a fake.
         embed_fn: Callable mapping list[str] → np.ndarray (N, D).
             Must NOT trigger ONNX model loading in tests; pass a fake.
-        pantry_path: Path to the flat JSON pantry file.
+        pantry_path: Stored on ``app.state.pantry_path`` for calling-code API
+            stability only — no route or factory reads it.  Mutable user state
+            (pantry items, cook log, devices) is persisted to ``kitchen.db`` via
+            ``KitchenStore``; the production kitchen factory captures the
+            pantry.json migration path directly at construction time, not via
+            this state value.
         web_dist: Path to the built PWA dist directory.
             When None, defaults to ``<repo>/web/dist`` if it exists; otherwise
             the static mount is skipped gracefully.
@@ -311,10 +255,21 @@ def create_app(
     if store is None and store_factory is None:
         raise ValueError("One of store or store_factory is required.")
 
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def _lifespan(application: FastAPI):  # noqa: RUF029
+        yield
+        # Shutdown: close the OFF HTTP connection pool to avoid resource leaks.
+        client = getattr(application.state, "off_client", None)
+        if client is not None and hasattr(client, "close"):
+            client.close()
+
     app = FastAPI(
         title="PantryAtlas Navigator",
         description="Pantry-in → ranked-recipes-out API",
         version="0.2.0",
+        lifespan=_lifespan,
     )
 
     # Store dependencies on app.state so route handlers can access them.
@@ -650,7 +605,11 @@ def create_app(
         Read-only: does NOT add to the pantry. The client confirms, then POSTs to
         /navigator/pantry/items with {raw_text, canonical_name, source:"barcode"}.
         """
-        from pantryatlas.navigator.barcode import decode_barcode, product_to_ingredient
+        from pantryatlas.navigator.barcode import (
+            decode_barcode,
+            product_to_ingredient,
+            upc_ean_variants,
+        )
 
         content_type = (image.content_type or "").lower()
         if content_type and content_type not in (
@@ -668,17 +627,21 @@ def create_app(
             raise HTTPException(status_code=422, detail="no barcode detected")
 
         kitchen = _get_kitchen(app)
-        product = kitchen.get_cached_off(code)
-        if product is None:
-            off = app.state.off_client
+        off = app.state.off_client
+        product = None
+        for variant in upc_ean_variants(code):
+            product = kitchen.get_cached_off(variant)
+            if product is not None:
+                break
             if off is None:
                 return {"found": False, "code": code, "error": "off_unavailable"}
             try:
-                product = off.get_product(code)
+                product = off.get_product(variant)
             except OffUnavailable:
                 return {"found": False, "code": code, "error": "off_unavailable"}
             if product is not None:
-                kitchen.cache_off(code, product)
+                kitchen.cache_off(variant, product)
+                break
 
         if product is None:
             return {"found": False, "code": code}
