@@ -317,3 +317,39 @@ def test_device_reject_and_remove(tmp_path):
     assert store.get_device(dev["device_id"]) is None
     assert store.reject_device("ghost") is None
     assert store.remove_device("ghost") is False
+
+
+# ---------------------------------------------------------------------------
+# Star Slice 1 Task 1: set_expiry
+# ---------------------------------------------------------------------------
+
+
+def test_set_expiry_sets_and_clears(tmp_path):
+    from datetime import date
+    store = KitchenStore(tmp_path / "kitchen.db")
+    store.add_item(Ing(canonical_name="milk", raw_text="milk"))
+
+    # Set a date — stored as pure YYYY-MM-DD
+    item = store.set_expiry("milk", date(2099, 1, 2))
+    assert item is not None
+    assert item["expires_at"] == "2099-01-02"
+
+    # Clear the date — expires_at drops out of the dict
+    item = store.set_expiry("milk", None)
+    assert item is not None
+    assert "expires_at" not in item
+
+
+def test_set_expiry_unknown_item_returns_none(tmp_path):
+    from datetime import date
+    store = KitchenStore(tmp_path / "kitchen.db")
+    assert store.set_expiry("ghost", date(2099, 1, 1)) is None
+
+
+def test_set_expiry_event_is_not_waste(tmp_path):
+    from datetime import date
+    store = KitchenStore(tmp_path / "kitchen.db")
+    store.add_item(Ing(canonical_name="milk", raw_text="milk"))
+    store.set_expiry("milk", date(2099, 1, 1))
+    tally = store.waste_tally(window_days=30)
+    assert tally["total"] == 0  # set_expiry must never count as waste

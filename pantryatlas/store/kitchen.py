@@ -408,6 +408,27 @@ class KitchenStore:
             self._conn.commit()
             return self.get_item(canonical_name)
 
+    def set_expiry(self, canonical_name: str, expires_at: date | None,
+                   source: str = "manual") -> dict[str, Any] | None:
+        """Set or clear an item's expiry date.
+
+        Stored as a pure ``YYYY-MM-DD`` string (or NULL when cleared) — the web
+        ``parseLocalDate`` splits on ``-`` and would NaN on a full ISO datetime.
+        Logs a ``set_expiry`` event, which is NOT a waste event.
+        """
+        iso = expires_at.isoformat() if expires_at is not None else None
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE pantry_items SET expires_at=?, updated_at=? "
+                "WHERE canonical_name=?",
+                (iso, _now_iso(), canonical_name),
+            )
+            if not cur.rowcount:
+                return None
+            self._log_event(canonical_name, "set_expiry", source, {"expires_at": iso})
+            self._conn.commit()
+            return self.get_item(canonical_name)
+
     def cache_off(self, code: str, product: dict[str, Any]) -> None:
         with self._lock:
             self._conn.execute(
