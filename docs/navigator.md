@@ -16,18 +16,25 @@ Pantry items (typed / photographed)
         ▼  POST /navigator/pantry/items
   Ingredient resolution (exact → fuzzy → semantic)
         │
-        ▼  stored in ~/.pantryatlas/pantry.json
+        ▼  stored in ~/.pantryatlas/kitchen.db (KitchenStore)
   POST /navigator/recipes/from-pantry
         │
         ▼  text-overlap pre-filter → rank_recipes()
   Ranked recipe list (score, coverage, missing)
+        │
+        ▼  POST /navigator/cook  ("I cooked this")
+  Cook event logged + on-hand items soft-decremented
+        │
+        ▼  GET /navigator/meals · GET /navigator/waste
+  Meal-log timeline + waste tally
 ```
 
-The navigator consists of three parts:
+The navigator consists of four parts:
 
-- **FastAPI server** (`pantryatlas.navigator.server`) — 7 REST routes + static PWA serving
+- **FastAPI server** (`pantryatlas.navigator.server`) — REST routes under `/navigator` + static PWA serving
 - **Ranking algorithm** (`pantryatlas.navigator.ranking`) — weighted scoring of candidate recipes
 - **Ingestion CLI** (`pantryatlas.navigator.ingest`) — loads RecipeNLG data into the recipe store
+- **Kitchen store** (`pantryatlas.store.kitchen.KitchenStore`) — mutable user state (pantry + event ledger + cook log) in `~/.pantryatlas/kitchen.db`, the source of truth that closes the food-waste loop (see *Kitchen store + the cook loop* below)
 
 ---
 
@@ -137,7 +144,7 @@ The navigator is a single-screen app — pantry on top, recipes below, no tabs o
 
 ## API reference
 
-The navigator server exposes 7 routes under the `/navigator` prefix. All request and response bodies are JSON.
+The navigator server exposes a set of routes under the `/navigator` prefix. All request and response bodies are JSON.
 
 ---
 
@@ -157,9 +164,9 @@ Returns service health and the number of recipes loaded in the store.
 
 `GET /navigator/pantry`
 
-Returns the current pantry as a list of ingredient objects, loaded from `~/.pantryatlas/pantry.json`.
+Returns the current pantry as a list of ingredient objects, loaded from the `KitchenStore` (`~/.pantryatlas/kitchen.db`). Each item carries a coarse `state` (`present` / `low` / `used_up`) and `confidence` alongside the editable fields.
 
-**Response:** array of ingredient objects (see PUT /navigator/pantry for shape).
+**Response:** array of ingredient objects (see PUT /navigator/pantry for the editable shape; reads additionally include `state`, `confidence`, `source`, and `last_observed_at`).
 
 ---
 
@@ -301,6 +308,121 @@ Returns an empty array when no pantry items overlap any recipe in the store.
 
 ---
 
+`POST /navigator/pantry/items/{name}/consume`
+
+Applies a **coarse consume transition** to one pantry item (manual "used some / used it up / threw it away" controls on the pantry row). Returns the updated item, or 404 if there is no such item. Each transition appends an `inventory_events` ledger row.
+
+**Path parameter:** `name` — the canonical ingredient name.
+
+**Request body:**
+```json
+{ "coarse_amount": "half" }
+```
+
+`coarse_amount` is one of:
+
+| `coarse_amount` | Effect | Ledger `change_type` |
+|---|---|---|
+| `half` | "used some" — `present → low` (`confidence → 0.5`); already-`low` stays `low` | `consume` |
+| `used_up` | "used it up" — any state → `used_up` (`confidence → 0.0`) | `consume` |
+| `discarded` | "threw it away" — any state → `used_up`, counted as waste | `discard` |
+| `cook` | one notch down (`present → low → used_up`); the tap-to-cook default | `consume` |
+
+**Response (200):** the updated item object (same shape as `GET /navigator/pantry`).
+
+**Error (404):** `{"detail": "No pantry item 'kale'."}`
+
+---
+
+`POST /navigator/pantry/items/{name}/restore`
+
+Restores a consumed/expired item back to `present` (`confidence → 1.0`) — the undo for an accidental consume or a camera rescan that finds the item still on the shelf. Appends an `observe` ledger row. Returns the updated item, or 404 if there is no such item.
+
+**Response (200):** the updated item object. **Error (404):** `{"detail": "No pantry item 'kale'."}`
+
+---
+
+`POST /navigator/cook`
+
+**"I cooked this."** Atomically logs a cook event *and* soft-decrements the consumed on-hand items, in a single SQLite transaction. This is the route the recipe card's "I cooked this" button calls.
+
+The button derives `consumed` from the recipe's **covered** ingredients (present in the pantry), each at `coarse_amount: "cook"` — so cooking a recipe drops every ingredient it used one notch (`present → low`, `low → used_up`). If `consumed` is omitted but `recipe_id` is supplied, the server resolves that recipe's ingredients and decrements the on-hand subset. Any consumed name that is **not** on-hand is reported under `unmatched` and left untouched (the event still logs).
+
+> **`servings` is logged but does not scale the decrement in SP-A.** The cook event records `servings` for the meal-log timeline, but every covered ingredient drops exactly one coarse notch regardless of how many servings were made. This is coarse-by-design: SP-A tracks *presence*, not quantity. A future camera rescan reconciles the true amount (see the blend truth-model below).
+
+**Request body:**
+```json
+{
+  "dish_name": "Garlic Kale Stir-Fry",
+  "recipe_id": "r1",
+  "servings": 2,
+  "rating": 5,
+  "notes": "extra garlic",
+  "consumed": [
+    { "canonical_name": "garlic", "coarse_amount": "cook" },
+    { "canonical_name": "kale", "coarse_amount": "cook" }
+  ]
+}
+```
+
+Only `dish_name` is required. `recipe_id`, `servings`, `rating`, `notes`, and `consumed` are all optional.
+
+**Response (201):**
+```json
+{
+  "id": 1,
+  "dish_name": "Garlic Kale Stir-Fry",
+  "matched": ["garlic", "kale"],
+  "unmatched": []
+}
+```
+
+---
+
+`GET /navigator/meals`
+
+Returns the cook-event timeline, newest first — the meal-log view.
+
+**Query parameter (optional):** `limit` — max events to return (default 50).
+
+**Response:** array of cook-event objects:
+```json
+[
+  {
+    "id": 2,
+    "recipe_id": "r1",
+    "dish_name": "Garlic Kale Stir-Fry",
+    "servings": 2,
+    "cooked_at": "2026-05-28T18:30:00+00:00",
+    "rating": 5,
+    "notes": "extra garlic",
+    "consumed": [{ "canonical_name": "garlic", "coarse_amount": "cook" }],
+    "source": "tap-to-cook"
+  }
+]
+```
+
+---
+
+`GET /navigator/waste`
+
+Returns a **waste tally** — items that were discarded or expired within a rolling window, counted from the `inventory_events` ledger. Items merely *used up* through cooking are not waste.
+
+**Query parameter (optional):** `window_days` — rolling window in days (default 30).
+
+**Response:**
+```json
+{
+  "window_days": 30,
+  "discarded": 1,
+  "expired": 1,
+  "total": 2,
+  "items": ["milk", "eggs"]
+}
+```
+
+---
+
 ### The instant → refine → swaps flow
 
 The navigator splits the expensive substitution embedding out of the critical path so results feel instant and agentic:
@@ -310,6 +432,49 @@ The navigator splits the expensive substitution embedding out of the critical pa
 3. **Swaps** — expanding a card calls `/swaps` for just that recipe's missing items, surfacing "try olive oil · 81% match" inline where the user decides to cook.
 
 `/refine` and `/swaps` are network-only (never cached by the service worker) and degrade gracefully offline: the instant coverage results stand, the chip reads "offline · coverage order", and expanded cards show "swaps unavailable offline".
+
+---
+
+## Kitchen store + the cook loop
+
+The `KitchenStore` (`pantryatlas.store.kitchen.KitchenStore`) holds all **mutable user state** in `~/.pantryatlas/kitchen.db`. It is plain SQLite — **no `sqlite-vec`** — so it runs on every Python including the Pi's 3.11 build that lacks `enable_load_extension`. It is kept deliberately separate from the static, embedding-bearing `recipes.db`.
+
+It is wired into `create_app` with the same lazy-init pattern as `RecipeStore` (`kitchen` / `kitchen_factory` params + a `_get_kitchen` accessor), so importing the server module stays side-effect-free — the db is opened on first request, not at import.
+
+### Schema
+
+Three tables:
+
+| Table | Holds |
+|---|---|
+| `pantry_items` | One row per ingredient: editable fields (`raw_text`, `quantity_*`, `expires_at`) plus the coarse-state model (`state`, `confidence`, `last_observed_at`, `source`). |
+| `inventory_events` | Append-only ledger: one row per `add` / `consume` / `discard` / `expire` / `observe` / `adjust`, tagged with `source` and an optional `detail_json`. The waste tally and audit trail read from here. |
+| `cook_events` | One row per "I cooked this": `dish_name`, `recipe_id`, `servings`, `rating`, `notes`, `cooked_at`, and the `consumed_json` snapshot. Drives the meal-log timeline. |
+
+### Migration from `pantry.json`
+
+Earlier versions stored the pantry as a flat `~/.pantryatlas/pantry.json` file. On first open, `KitchenStore` performs a **one-time, non-destructive migration**: if `pantry_items` is empty and `pantry.json` still exists, it imports every item (state `present`, confidence `1.0`, source `manual`), writes one `add` ledger row per item tagged `source='migration'`, then **renames** the file to `pantry.json.imported`. Because the rename removes the trigger and the populated table short-circuits the import, re-opening the store is a no-op — the migration cannot run twice or duplicate items. A corrupt/unreadable `pantry.json` is skipped (the store simply starts empty); it is never fatal.
+
+### Coarse-state model
+
+A pantry item's presence is tracked at three coarse levels, not as a precise quantity:
+
+| `state` | `confidence` | Meaning |
+|---|---|---|
+| `present` | 1.0 | On hand. Counts toward recipe coverage. |
+| `low` | 0.5 | Running low — one notch consumed. Still counts as on-hand for ranking. |
+| `used_up` | 0.0 | Gone. Excluded from recipe ranking; the row is dimmed in the UI. |
+
+Only `present` and `low` items feed `on_hand()` (and therefore recipe ranking). `used_up` items are retained (not deleted) so they can be restored or reconciled.
+
+### Blend truth-model
+
+The loop blends two sources of truth so it can run with **no new hardware**:
+
+- **Cook soft-decrements.** Tapping "I cooked this" (or a manual consume control) moves items one coarse notch down. This is fast, cheap, and approximate — it assumes you used what the recipe covers. It deliberately does **not** scale by `servings`; `servings` is recorded on the cook event for the timeline only.
+- **Future camera rescans reconcile.** A subsequent shelf scan is authoritative: it can promote a `used_up` item back to `present` (via the restore path) or confirm it really is gone, correcting any drift the soft-decrement introduced.
+
+The append-only `inventory_events` ledger preserves the full history regardless of which source wrote a given change, so reconciliation never loses information.
 
 ---
 
@@ -360,7 +525,7 @@ Results are sorted descending by score. The endpoint returns at most 20 recipes 
 
 ## Privacy + attribution
 
-**No telemetry.** PantryAtlas sends no data off-device. The pantry is stored in `~/.pantryatlas/pantry.json`. The recipe database is stored in `~/.pantryatlas/recipes.db`. The server binds to your local network only; nothing is routed to the internet.
+**No telemetry.** PantryAtlas sends no data off-device. Mutable user state — the pantry, the inventory-event ledger, and the cook log — is stored in `~/.pantryatlas/kitchen.db` (migrated once from the legacy `~/.pantryatlas/pantry.json`, which is then renamed to `pantry.json.imported`). The static recipe database is stored in `~/.pantryatlas/recipes.db`. The server binds to your local network only; nothing is routed to the internet.
 
 **RecipeNLG attribution.** Recipe data is sourced from the RecipeNLG corpus:
 

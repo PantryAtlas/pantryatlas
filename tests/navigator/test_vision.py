@@ -34,6 +34,7 @@ from pantryatlas.navigator.vision import (
     _parse_detected,  # noqa: PLC2701  (internal but tested directly)
     parse_shelf,
 )
+from pantryatlas.store.kitchen import KitchenStore
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -222,6 +223,7 @@ def _make_vision_client(
         embed_fn=_embed,
         pantry_path=tmp_path / "pantry.json",
         vision_client=vision_client,
+        kitchen=KitchenStore(tmp_path / "kitchen.db"),
     )
     return TestClient(app)
 

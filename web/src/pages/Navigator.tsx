@@ -1,6 +1,6 @@
 import { h, Fragment } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { useSignalEffect } from '@preact/signals'
+import { useSignalEffect, signal } from '@preact/signals'
 import {
   mode,
   modeSwitcherOpen,
@@ -16,6 +16,9 @@ import {
   refineState,
   recipeKey,
   deleteItem,
+  consumeItem,
+  restoreItem,
+  type PantryItem,
   addItem,
   addInputValue,
   addState,
@@ -25,6 +28,7 @@ import {
   photoFile,
   photoSheetState,
   daysUntilExpiry,
+  expiringSoon,
   hasPersistedMode,
   wireOfflineReplay,
 } from '../signals'
@@ -34,6 +38,10 @@ import { RecipeCard } from '../components/RecipeCard'
 import { OfflineBanner } from '../components/OfflineBanner'
 import { AiHelpersPanel } from '../components/AiHelpersPanel'
 import { BrandMark } from '../components/BrandMark'
+import { MealLog } from '../components/MealLog'
+
+// Module-scope signal so TopBar and Navigator can share show-log state
+const showLog = signal(false)
 
 // ---------------------------------------------------------------------------
 // Debounce util
@@ -57,6 +65,61 @@ function debounceRecipe<T extends (...args: Parameters<T>) => void>(fn: T, ms: n
     clearTimeout(timer)
     timer = setTimeout(() => fn(...args), ms)
   }) as T
+}
+
+// ---------------------------------------------------------------------------
+// PantryRowActions — coarse consume controls or "Still have it" restore
+// ---------------------------------------------------------------------------
+
+function PantryRowActions({ item }: { item: PantryItem }) {
+  if (item.state === 'used_up') {
+    return (
+      <button
+        type="button"
+        data-restore={item.canonical_name}
+        onClick={() => restoreItem(item.canonical_name)}
+        aria-label={`Mark ${item.canonical_name} as still on hand`}
+        style={{
+          minHeight: '36px', padding: '4px 12px',
+          borderRadius: 'var(--md-sys-shape-corner-full)',
+          background: 'transparent',
+          border: '1px solid var(--md-sys-color-outline-variant)',
+          color: 'var(--md-sys-color-primary)',
+          fontFamily: 'var(--font)',
+          fontSize: 'var(--md-sys-typescale-label-medium-size)',
+          cursor: 'pointer', whiteSpace: 'nowrap',
+        }}
+      >
+        Still have it
+      </button>
+    )
+  }
+  const btn = (label: string, amount: string) => (
+    <button
+      type="button"
+      data-consume={`${item.canonical_name}:${amount}`}
+      onClick={() => consumeItem(item.canonical_name, amount)}
+      aria-label={`Mark ${item.canonical_name} as ${label}`}
+      style={{
+        minHeight: '36px', padding: '4px 10px',
+        borderRadius: 'var(--md-sys-shape-corner-full)',
+        background: 'transparent', border: 'none',
+        color: 'var(--md-sys-color-on-surface-variant)',
+        fontFamily: 'var(--font)',
+        fontSize: 'var(--md-sys-typescale-label-medium-size)',
+        cursor: 'pointer', whiteSpace: 'nowrap',
+      }}
+    >
+      {label}
+    </button>
+  )
+  return (
+    <span style={{ display: 'inline-flex', gap: '2px' }}>
+      {btn('½ left', 'half')}
+      {btn('used up', 'used_up')}
+      {btn('tossed', 'discarded')}
+    </span>
+  )
 }
 
 const _debouncedFetchRecipes = debounceRecipe(
@@ -132,10 +195,46 @@ export function Navigator() {
             }}
           />
 
+          {/* Expiry nudge strip — shown when any on-hand item expires within 3 days */}
+          {expiringSoon.value.length > 0 && (
+            <div
+              data-expiry-nudge="true"
+              style={{
+                padding: '12px 16px',
+                borderRadius: 'var(--md-sys-shape-corner-large)',
+                background: 'var(--md-sys-color-error-container)',
+                color: 'var(--md-sys-color-on-error-container)',
+                fontFamily: 'var(--font)',
+                fontSize: 'var(--md-sys-typescale-body-medium-size)',
+                marginBottom: '12px',
+              }}
+            >
+              Expiring soon: {expiringSoon.value.map((i) => i.canonical_name).join(', ')} — cook these first.
+            </div>
+          )}
+
           {/* Section D: Recipes section (T-008) */}
           <RecipesSection />
 
-          {/* Section E: AI helpers settings panel (T-014) */}
+          {/* Section E: Kitchen log — collapsible (toggled via "Log" in top bar) */}
+          {showLog.value && (
+            <section aria-label="Kitchen log" style={{ marginTop: '32px' }}>
+              <p
+                style={{
+                  fontFamily: 'var(--font)',
+                  fontSize: 'var(--md-sys-typescale-label-medium-size)',
+                  fontWeight: 'var(--md-sys-typescale-label-medium-weight)',
+                  color: 'var(--md-sys-color-on-surface-variant)',
+                  marginBottom: '12px',
+                }}
+              >
+                Kitchen log
+              </p>
+              <MealLog />
+            </section>
+          )}
+
+          {/* Section F: AI helpers settings panel (T-014) */}
           <div style={{ marginTop: '48px' }}>
             <button
               type="button"
@@ -218,6 +317,30 @@ function TopBar() {
           >Atlas</span>
         </h1>
       </div>
+
+      {/* Log toggle button */}
+      <button
+        type="button"
+        onClick={() => { showLog.value = !showLog.value }}
+        aria-label={showLog.value ? 'Hide kitchen log' : 'Show kitchen log'}
+        style={{
+          background: showLog.value ? 'var(--md-sys-color-primary-container)' : 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+          fontFamily: 'var(--font)',
+          fontSize: 'var(--md-sys-typescale-label-medium-size)',
+          fontWeight: 'var(--md-sys-typescale-label-medium-weight)',
+          color: showLog.value
+            ? 'var(--md-sys-color-on-primary-container)'
+            : 'var(--md-sys-color-on-surface-variant)',
+          padding: '6px 14px',
+          borderRadius: 'var(--md-sys-shape-corner-full)',
+          minHeight: '44px',
+          transition: 'background 0.15s',
+        }}
+      >
+        Log
+      </button>
 
       {/* Mode chip — tap to open mode switcher */}
       <button
@@ -634,12 +757,7 @@ function PantrySection() {
 // ---------------------------------------------------------------------------
 
 interface PantryCardProps {
-  item: {
-    canonical_name: string
-    raw_text: string
-    expires_at?: string
-    _pending?: boolean
-  }
+  item: PantryItem
 }
 
 function PantryCard({ item }: PantryCardProps) {
@@ -687,6 +805,7 @@ function PantryCard({ item }: PantryCardProps) {
         alignItems: 'center',
         gap: '14px',
         transition: 'box-shadow 0.18s cubic-bezier(0.2,0,0,1)',
+        opacity: item.state === 'used_up' ? 0.5 : 1,
       }}
       onMouseEnter={(e) => {
         ;(e.currentTarget as HTMLLIElement).style.boxShadow = 'var(--shadow-active)'
@@ -760,8 +879,10 @@ function PantryCard({ item }: PantryCardProps) {
         )}
       </div>
 
-      {/* Trailing: pending-sync chip + expiry chip + delete button */}
+      {/* Trailing: pending-sync chip + expiry chip + consume controls + delete button */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+        {/* Coarse consume controls */}
+        <PantryRowActions item={item} />
         {/* Pending-sync indicator — shown for optimistic offline items */}
         {isPending && (
           <span

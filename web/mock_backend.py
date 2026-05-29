@@ -1,16 +1,34 @@
 """
-Mock backend for T-007 + T-008 screenshot testing.
-Implements pantry routes + POST /navigator/recipes/from-pantry.
+Mock backend for T-007 + T-008 screenshot testing and the SP-A loop verify.
+Implements pantry routes + POST /navigator/recipes/from-pantry, now backed by a
+real ``KitchenStore`` so the full cook -> decrement -> timeline loop is exercised
+against the same persistence the production app uses (no sqlite-vec dependency).
 
 Resolved vocab: garlic, onion, kale, tomato, butternut squash, olive oil, salt,
                black pepper, vegetable broth, onion
 Seeded pantry: garlic (expires tomorrow) + kale (expires today = error-container chip)
-Canned recipes: two realistic RecipeNLG-shaped ranked results for screenshot testing.
+Canned recipes: realistic RecipeNLG-shaped ranked results for screenshot testing.
+
+SP-A routes added (all backed by KitchenStore):
+  POST   /navigator/cook                            log a cook event + soft-decrement
+  GET    /navigator/meals                           cook-event timeline (newest first)
+  GET    /navigator/waste                           discard/expire tally
+  POST   /navigator/pantry/items/{name}/consume     coarse consume transition
+  POST   /navigator/pantry/items/{name}/restore     restore a consumed item
+
+Env:
+  MOCK_KITCHEN_DB     path to the kitchen.db SQLite file. If unset, an isolated
+                      per-process temp file is used and the default two items are
+                      seeded (keeps the sibling screenshot scripts working). When
+                      set (e.g. by verify_loop.mjs), the store starts EMPTY so the
+                      verify run is fully deterministic.
+  MOCK_REFINE_DELAY_S artificial /refine delay for the "refining…" screenshot.
 """
 from __future__ import annotations
 
 import asyncio
 import os
+import tempfile
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -18,6 +36,9 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+
+from pantryatlas.pantry.models import Ingredient
+from pantryatlas.store.kitchen import KitchenStore
 
 # Artificial delay (seconds) on /refine so the "refining…" chip is visible long
 # enough to screenshot. Only affects this mock — the real backend has no delay.
@@ -34,7 +55,7 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------------------------------
-# In-memory pantry (seeded)
+# Vocab + KitchenStore-backed pantry
 # ---------------------------------------------------------------------------
 VOCAB = {
     "garlic": "garlic",
@@ -51,33 +72,53 @@ VOCAB = {
 TODAY = date.today().isoformat()
 TOMORROW = (date.today() + timedelta(days=1)).isoformat()
 
-PANTRY: list[dict] = [
-    {
-        "canonical_name": "garlic",
-        "raw_text": "garlic",
-        "expires_at": TOMORROW,
-    },
-    {
-        "canonical_name": "kale",
-        "raw_text": "wilting kale",
-        "expires_at": TODAY,
-    },
+# Default seed used only when MOCK_KITCHEN_DB is unset (screenshot scripts).
+_DEFAULT_SEED = [
+    Ingredient(canonical_name="garlic", raw_text="garlic",
+               expires_at=date.today() + timedelta(days=1)),
+    Ingredient(canonical_name="kale", raw_text="wilting kale",
+               expires_at=date.today()),
 ]
 
+
+def _make_kitchen() -> KitchenStore:
+    """Open the KitchenStore. A persistent path (MOCK_KITCHEN_DB) starts empty;
+    otherwise use a fresh temp db seeded with the default two items."""
+    db_env = os.environ.get("MOCK_KITCHEN_DB")
+    if db_env:
+        return KitchenStore(db_env)
+    tmp = Path(tempfile.mkdtemp(prefix="pa-mock-")) / "kitchen.db"
+    store = KitchenStore(tmp)
+    for ing in _DEFAULT_SEED:
+        store.add_item(ing)
+    return store
+
+
+KITCHEN = _make_kitchen()
+
+
+def _on_hand_names() -> set[str]:
+    """Canonical names of items that count as on-hand (present | low)."""
+    return {ing.canonical_name for ing in KITCHEN.on_hand()}
+
+
 # ---------------------------------------------------------------------------
-# Routes
+# Pantry routes (KitchenStore-backed)
 # ---------------------------------------------------------------------------
 
 @app.get("/navigator/pantry")
 def get_pantry():
-    return PANTRY
+    return KITCHEN.list_items()
 
 @app.put("/navigator/pantry")
 async def put_pantry(request: Request):
     body = await request.json()
-    PANTRY.clear()
-    PANTRY.extend(body)
-    return PANTRY
+    ingredients = [
+        Ingredient(canonical_name=it["canonical_name"],
+                   raw_text=it.get("raw_text", it["canonical_name"]))
+        for it in body
+    ]
+    return KITCHEN.replace_all(ingredients)
 
 @app.post("/navigator/pantry/items", status_code=201)
 async def post_pantry_item(request: Request):
@@ -86,16 +127,28 @@ async def post_pantry_item(request: Request):
     canonical = VOCAB.get(raw)
     if not canonical:
         raise HTTPException(status_code=422, detail=f"Cannot resolve '{raw}'")
-    item = {"canonical_name": canonical, "raw_text": raw}
-    # Remove if already present, then add
-    PANTRY[:] = [it for it in PANTRY if it["canonical_name"] != canonical]
-    PANTRY.append(item)
-    return {"canonical_name": canonical, "raw_text": raw}
+    item = KITCHEN.add_item(Ingredient(canonical_name=canonical, raw_text=raw))
+    return {"canonical_name": item["canonical_name"], "raw_text": item["raw_text"]}
 
 @app.delete("/navigator/pantry/items/{name}")
 def delete_pantry_item(name: str):
-    PANTRY[:] = [it for it in PANTRY if it["canonical_name"] != name]
+    KITCHEN.remove_item(name)
     return {"removed": name}
+
+@app.post("/navigator/pantry/items/{name}/consume")
+async def consume_pantry_item(name: str, request: Request):
+    body = await request.json()
+    item = KITCHEN.consume_item(name, body.get("coarse_amount", "used_up"))
+    if item is None:
+        raise HTTPException(status_code=404, detail=f"No pantry item '{name}'.")
+    return item
+
+@app.post("/navigator/pantry/items/{name}/restore")
+def restore_pantry_item(name: str):
+    item = KITCHEN.restore_item(name)
+    if item is None:
+        raise HTTPException(status_code=404, detail=f"No pantry item '{name}'.")
+    return item
 
 @app.post("/navigator/pantry/resolve")
 async def post_resolve(request: Request):
@@ -105,6 +158,39 @@ async def post_resolve(request: Request):
     if not canonical:
         raise HTTPException(status_code=404, detail=f"Cannot resolve '{raw}'")
     return {"canonical_name": canonical}
+
+# ---------------------------------------------------------------------------
+# Cook / meals / waste routes (KitchenStore-backed)
+# ---------------------------------------------------------------------------
+
+@app.post("/navigator/cook", status_code=201)
+async def post_cook(request: Request):
+    body = await request.json()
+    # The real "I cooked this" button always sends an explicit, non-empty
+    # `consumed` array (covered ingredients with coarse_amount='cook'); the
+    # KitchenStore drops any name that is not on-hand. That is the load-bearing
+    # path this mock guards for verify_loop.mjs.
+    consumed = [
+        {"canonical_name": c["canonical_name"],
+         "coarse_amount": c.get("coarse_amount", "cook")}
+        for c in (body.get("consumed") or [])
+    ]
+    return KITCHEN.add_cook_event(
+        dish_name=body["dish_name"],
+        recipe_id=body.get("recipe_id"),
+        servings=body.get("servings"),
+        rating=body.get("rating"),
+        notes=body.get("notes"),
+        consumed=consumed,
+    )
+
+@app.get("/navigator/meals")
+def get_meals(limit: int = 50):
+    return KITCHEN.list_meals(limit=limit)
+
+@app.get("/navigator/waste")
+def get_waste(window_days: int = 30):
+    return KITCHEN.waste_tally(window_days=window_days)
 
 # ---------------------------------------------------------------------------
 # Canned recipe data (RecipeNLG shape)
@@ -235,7 +321,7 @@ async def post_recipes_from_pantry(request: Request):
     except Exception:
         pass
 
-    pantry_names = {it["canonical_name"] for it in PANTRY}
+    pantry_names = _on_hand_names()
     if not pantry_names:
         return []
 
@@ -279,7 +365,7 @@ async def post_recipes_refine(request: Request):
     for rec in recipes:
         title = rec.get("title", "")
         ings = rec.get("ingredients", [])
-        pantry_names = {it["canonical_name"] for it in PANTRY}
+        pantry_names = _on_hand_names()
         missing = [ing for ing in ings if ing not in pantry_names]
         total = len(ings)
         cov = (total - len(missing)) / total if total else 0.0
@@ -316,7 +402,7 @@ async def post_recipes_swaps(request: Request):
     except Exception:
         body = {}
     ings = body.get("ingredients", [])
-    pantry_names = {it["canonical_name"] for it in PANTRY}
+    pantry_names = _on_hand_names()
     swaps = []
     seen = set()
     for ing in ings:
@@ -340,7 +426,7 @@ async def parse_shelf():
 
 @app.get("/navigator/health")
 def health():
-    return {"status": "ok", "recipe_count": 0}
+    return {"status": "ok", "recipe_count": len(CANNED_RECIPES)}
 
 # Serve the built PWA from the same origin (so no dev proxy is needed for
 # screenshots). Mounted last so the explicit /navigator/* routes win.
@@ -349,4 +435,5 @@ if _DIST.exists():
     app.mount("/", StaticFiles(directory=str(_DIST), html=True), name="dist")
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8099, log_level="warning")
+    port = int(os.environ.get("MOCK_PORT", "8099"))
+    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
