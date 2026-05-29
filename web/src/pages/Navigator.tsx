@@ -1,6 +1,6 @@
 import { h, Fragment } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { useSignalEffect } from '@preact/signals'
+import { useSignalEffect, signal } from '@preact/signals'
 import {
   mode,
   modeSwitcherOpen,
@@ -37,6 +37,10 @@ import { RecipeCard } from '../components/RecipeCard'
 import { OfflineBanner } from '../components/OfflineBanner'
 import { AiHelpersPanel } from '../components/AiHelpersPanel'
 import { BrandMark } from '../components/BrandMark'
+import { MealLog } from '../components/MealLog'
+
+// Module-scope signal so TopBar and Navigator can share show-log state
+const showLog = signal(false)
 
 // ---------------------------------------------------------------------------
 // Debounce util
@@ -191,7 +195,25 @@ export function Navigator() {
           {/* Section D: Recipes section (T-008) */}
           <RecipesSection />
 
-          {/* Section E: AI helpers settings panel (T-014) */}
+          {/* Section E: Kitchen log — collapsible (toggled via "Log" in top bar) */}
+          {showLog.value && (
+            <section aria-label="Kitchen log" style={{ marginTop: '32px' }}>
+              <p
+                style={{
+                  fontFamily: 'var(--font)',
+                  fontSize: 'var(--md-sys-typescale-label-medium-size)',
+                  fontWeight: 'var(--md-sys-typescale-label-medium-weight)',
+                  color: 'var(--md-sys-color-on-surface-variant)',
+                  marginBottom: '12px',
+                }}
+              >
+                Kitchen log
+              </p>
+              <MealLog />
+            </section>
+          )}
+
+          {/* Section F: AI helpers settings panel (T-014) */}
           <div style={{ marginTop: '48px' }}>
             <button
               type="button"
@@ -274,6 +296,30 @@ function TopBar() {
           >Atlas</span>
         </h1>
       </div>
+
+      {/* Log toggle button */}
+      <button
+        type="button"
+        onClick={() => { showLog.value = !showLog.value }}
+        aria-label={showLog.value ? 'Hide kitchen log' : 'Show kitchen log'}
+        style={{
+          background: showLog.value ? 'var(--md-sys-color-primary-container)' : 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+          fontFamily: 'var(--font)',
+          fontSize: 'var(--md-sys-typescale-label-medium-size)',
+          fontWeight: 'var(--md-sys-typescale-label-medium-weight)',
+          color: showLog.value
+            ? 'var(--md-sys-color-on-primary-container)'
+            : 'var(--md-sys-color-on-surface-variant)',
+          padding: '6px 14px',
+          borderRadius: 'var(--md-sys-shape-corner-full)',
+          minHeight: '44px',
+          transition: 'background 0.15s',
+        }}
+      >
+        Log
+      </button>
 
       {/* Mode chip — tap to open mode switcher */}
       <button
