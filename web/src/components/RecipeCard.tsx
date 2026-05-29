@@ -1,7 +1,7 @@
 import { h, Fragment } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 import { CoverageRing } from './CoverageRing'
-import { fetchSwaps, recipeSwaps, recipeKey, type SwapSuggestion } from '../signals'
+import { fetchSwaps, recipeSwaps, recipeKey, cookRecipe, type SwapSuggestion } from '../signals'
 
 /**
  * RecipeCard — collapsible recipe card with inline expansion.
@@ -170,6 +170,17 @@ export function RecipeCard({ ranked, animDelay = 0 }: RecipeCardProps) {
     if (s.best_swap) return `try ${s.best_swap} · ${Math.round(s.similarity * 100)}% match`
     if (s.reason === 'no_pantry') return null
     return 'no close swap in your pantry'
+  }
+
+  const [cooking, setCooking] = useState(false)
+  const [cooked, setCooked] = useState(false)
+
+  async function handleCooked(e: MouseEvent) {
+    e.stopPropagation()
+    setCooking(true)
+    const ok = await cookRecipe({ dish_name: recipe.title, servings: 2 })
+    setCooking(false)
+    if (ok) setCooked(true)
   }
 
   // Single chip label
@@ -518,6 +529,34 @@ export function RecipeCard({ ranked, animDelay = 0 }: RecipeCardProps) {
 
             {/* Action buttons */}
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              {/* "I cooked this" — filled primary pill; logs + soft-decrements */}
+              <button
+                type="button"
+                data-cooked-btn={cooked ? 'done' : 'idle'}
+                disabled={cooking || cooked}
+                onClick={handleCooked}
+                style={{
+                  flex: '1 1 auto',
+                  minHeight: '44px',
+                  padding: '10px 20px',
+                  borderRadius: 'var(--md-sys-shape-corner-full)',
+                  background: cooked
+                    ? 'var(--md-sys-color-tertiary-container)'
+                    : 'var(--md-sys-color-primary)',
+                  color: cooked
+                    ? 'var(--md-sys-color-on-tertiary-container)'
+                    : 'var(--md-sys-color-on-primary)',
+                  border: 'none',
+                  fontFamily: 'var(--font)',
+                  fontSize: 'var(--md-sys-typescale-label-large-size)',
+                  fontWeight: 'var(--md-sys-typescale-label-large-weight)',
+                  cursor: cooking || cooked ? 'default' : 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {cooked ? '✓ Logged' : cooking ? 'Logging…' : 'I cooked this'}
+              </button>
+
               {/* "Add missing to shopping list" — outlined pill */}
               <button
                 type="button"
