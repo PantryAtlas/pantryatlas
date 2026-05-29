@@ -26,27 +26,34 @@ _ALIASES: dict[str, str] = {}
 
 class FlavorStore:
     def __init__(self, parquet_path: str | Path) -> None:
-        # Lazy import: keep `import pantryatlas.flavor` (and thus the server
-        # module) cheap — pandas costs ~7s to import. The cost is paid once when
-        # a FlavorStore is actually built (warmed at app startup; see create_app).
-        import pandas as pd
+        # Read via pyarrow (already a project dependency) rather than pandas — it
+        # keeps the install light (no pandas wheel on the Pi image) and the import
+        # cheap. Lazy-imported so `import pantryatlas.flavor` (and thus the server
+        # module) stays fast; the load is warmed once at app startup (create_app).
+        import pyarrow.parquet as pq
 
-        df = pd.read_parquet(parquet_path)
+        table = pq.read_table(
+            parquet_path, columns=["compound_id", "compound_name", "molecules_json"]
+        )
+        ids = table.column("compound_id").to_pylist()
+        names = table.column("compound_name").to_pylist()
+        mols_col = table.column("molecules_json").to_pylist()
+
         self._ent_mol: dict[int, frozenset[int]] = {}
         self._id2name: dict[int, str] = {}
         self._name2id: dict[str, int] = {}
         rows: list[tuple[str, int]] = []
-        for _, r in df.iterrows():
-            eid = int(r["compound_id"])
-            mols = r["molecules_json"]
-            mols = json.loads(mols) if isinstance(mols, str) else mols
+        for raw_id, raw_name, raw_mols in zip(ids, names, mols_col, strict=True):
+            eid = int(raw_id)
+            mols = json.loads(raw_mols) if isinstance(raw_mols, str) else (raw_mols or [])
             self._ent_mol[eid] = frozenset(
                 m["pubchem_id"]
                 for m in mols
                 if isinstance(m, dict) and m.get("pubchem_id") is not None
             )
-            self._id2name[eid] = str(r["compound_name"])
-            rows.append((str(r["compound_name"]).strip().lower(), eid))
+            name = str(raw_name)
+            self._id2name[eid] = name
+            rows.append((name.strip().lower(), eid))
         # Register longest names first so multiword/specific entities win.
         for name, eid in sorted(rows, key=lambda t: -len(t[0])):
             self._register(name, eid)
