@@ -33,6 +33,11 @@ import {
   expired,
   expireItem,
   setExpiry,
+  waste,
+  wasteWindow,
+  wasteOpen,
+  fetchWaste,
+  mostWasted,
   hasPersistedMode,
   wireOfflineReplay,
   devicesPanelOpen,
@@ -327,6 +332,24 @@ export function Navigator() {
             </section>
           )}
 
+          {/* Section E3: Waste dashboard — collapsible (toggled via "Waste" in top bar) */}
+          {wasteOpen.value && (
+            <section aria-label="Waste dashboard" style={{ marginTop: '32px' }}>
+              <p
+                style={{
+                  fontFamily: 'var(--font)',
+                  fontSize: 'var(--md-sys-typescale-label-medium-size)',
+                  fontWeight: 'var(--md-sys-typescale-label-medium-weight)',
+                  color: 'var(--md-sys-color-on-surface-variant)',
+                  marginBottom: '12px',
+                }}
+              >
+                What you wasted
+              </p>
+              <WasteDashboard />
+            </section>
+          )}
+
           {/* Section F: AI helpers settings panel (T-014) */}
           <div style={{ marginTop: '48px' }}>
             <button
@@ -458,6 +481,28 @@ function TopBar() {
         }}
       >
         Devices
+      </button>
+
+      {/* Waste toggle button */}
+      <button
+        type="button"
+        onClick={() => { wasteOpen.value = !wasteOpen.value }}
+        aria-label={wasteOpen.value ? 'Hide waste dashboard' : 'Show waste dashboard'}
+        style={{
+          minHeight: '40px',
+          padding: '4px 12px',
+          borderRadius: 'var(--md-sys-shape-corner-full)',
+          background: wasteOpen.value ? 'var(--md-sys-color-primary-container)' : 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+          fontFamily: 'var(--font)',
+          fontSize: 'var(--md-sys-typescale-label-medium-size)',
+          color: wasteOpen.value
+            ? 'var(--md-sys-color-on-primary-container)'
+            : 'var(--md-sys-color-on-surface-variant)',
+        }}
+      >
+        Waste
       </button>
 
       {/* Mode chip — tap to open mode switcher */}
@@ -1247,6 +1292,68 @@ function PantryEmptyState() {
       >
         Type something above — or tap the camera to photograph your shelf
       </p>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Waste dashboard — collapsible section component
+// ---------------------------------------------------------------------------
+
+function WasteDashboard() {
+  useEffect(() => { void fetchWaste(wasteWindow.value) }, [])
+  const t = waste.value
+  const top = mostWasted(t, 5)
+  const setWindow = (days: number) => { wasteWindow.value = days; void fetchWaste(days) }
+  const windows = [7, 30, 90]
+  return (
+    <div data-waste-dashboard="true" style={{ fontFamily: 'var(--font)', color: 'var(--md-sys-color-on-surface)' }}>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+        {windows.map((d) => (
+          <button
+            key={d}
+            type="button"
+            data-waste-window={String(d)}
+            onClick={() => setWindow(d)}
+            style={{
+              minHeight: '36px', padding: '4px 12px',
+              borderRadius: 'var(--md-sys-shape-corner-full)',
+              border: '1px solid var(--md-sys-color-outline-variant)',
+              background: wasteWindow.value === d
+                ? 'var(--md-sys-color-primary-container)' : 'transparent',
+              color: wasteWindow.value === d
+                ? 'var(--md-sys-color-on-primary-container)'
+                : 'var(--md-sys-color-on-surface-variant)',
+              cursor: 'pointer',
+              fontFamily: 'var(--font)',
+              fontSize: 'var(--md-sys-typescale-label-medium-size)',
+            }}
+          >
+            {d}d
+          </button>
+        ))}
+      </div>
+      {t && t.total === 0 && (
+        <p style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
+          Nothing wasted in this window — nice.
+        </p>
+      )}
+      {t && t.total > 0 && (
+        <div>
+          <p style={{ marginBottom: '8px' }}>
+            <strong>{t.total}</strong> wasted · {t.discarded} thrown out · {t.expired} expired
+          </p>
+          <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            {top.map((row) => (
+              <li key={row.name} data-waste-item={row.name}
+                  style={{ display: 'flex', justifyContent: 'space-between',
+                           color: 'var(--md-sys-color-on-surface-variant)' }}>
+                <span>{row.name}</span><span>×{row.count}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   )
 }
