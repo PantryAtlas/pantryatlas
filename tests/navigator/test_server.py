@@ -612,3 +612,38 @@ def test_vision_client_enabled_with_env(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setenv("PANTRYATLAS_VISION_URL", "http://127.0.0.1:8080")
     client = _build_vision_client()
     assert isinstance(client, GemmaClient)
+
+
+def test_put_item_expiry_sets_date(client):
+    client.post("/navigator/pantry/items", json={"raw_text": "milk", "canonical_name": "milk"})
+    res = client.put("/navigator/pantry/items/milk/expiry", json={"expires_at": "2099-01-02"})
+    assert res.status_code == 200
+    assert res.json()["expires_at"] == "2099-01-02"
+
+
+def test_put_item_expiry_clears_with_null(client):
+    client.post("/navigator/pantry/items", json={"raw_text": "milk", "canonical_name": "milk"})
+    client.put("/navigator/pantry/items/milk/expiry", json={"expires_at": "2099-01-02"})
+    res = client.put("/navigator/pantry/items/milk/expiry", json={"expires_at": None})
+    assert res.status_code == 200
+    assert "expires_at" not in res.json()
+
+
+def test_put_item_expiry_unknown_404(client):
+    res = client.put("/navigator/pantry/items/ghost/expiry", json={"expires_at": "2099-01-02"})
+    assert res.status_code == 404
+
+
+def test_post_item_expire_marks_used_up(client):
+    client.post("/navigator/pantry/items", json={"raw_text": "eggs", "canonical_name": "eggs"})
+    res = client.post("/navigator/pantry/items/eggs/expire")
+    assert res.status_code == 200
+    assert res.json()["state"] == "used_up"
+    waste = client.get("/navigator/waste").json()
+    assert waste["expired"] == 1
+    assert {"name": "eggs", "count": 1} in waste["by_item"]
+
+
+def test_post_item_expire_unknown_404(client):
+    res = client.post("/navigator/pantry/items/ghost/expire")
+    assert res.status_code == 404

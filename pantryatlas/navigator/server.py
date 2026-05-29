@@ -139,6 +139,12 @@ class ConsumeIn(BaseModel):
     coarse_amount: str = "used_up"  # half | used_up | discarded
 
 
+class ExpiryIn(BaseModel):
+    """Body for PUT /navigator/pantry/items/{name}/expiry."""
+
+    expires_at: date | None = None  # null clears the date
+
+
 class ConsumedItemIn(BaseModel):
     canonical_name: str
     coarse_amount: str = "cook"
@@ -391,6 +397,20 @@ def create_app(
     @app.post("/navigator/pantry/items/{name}/restore")
     def restore_pantry_item(name: str) -> dict[str, Any]:
         item = _get_kitchen(app).restore_item(name)
+        if item is None:
+            raise HTTPException(status_code=404, detail=f"No pantry item '{name}'.")
+        return item
+
+    @app.put("/navigator/pantry/items/{name}/expiry")
+    def put_pantry_item_expiry(name: str, body: ExpiryIn) -> dict[str, Any]:
+        item = _get_kitchen(app).set_expiry(name, body.expires_at)
+        if item is None:
+            raise HTTPException(status_code=404, detail=f"No pantry item '{name}'.")
+        return item
+
+    @app.post("/navigator/pantry/items/{name}/expire")
+    def post_pantry_item_expire(name: str) -> dict[str, Any]:
+        item = _get_kitchen(app).mark_expired(name)
         if item is None:
             raise HTTPException(status_code=404, detail=f"No pantry item '{name}'.")
         return item
