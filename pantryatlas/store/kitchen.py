@@ -307,8 +307,10 @@ class KitchenStore:
                 (new_state, new_conf, _now_iso(), canonical_name),
             )
             change_type = "discard" if coarse_amount == "discarded" else "consume"
-            self._log_event(canonical_name, change_type, source,
-                            {"coarse_amount": coarse_amount, "prev_state": row[0]})
+            # Waste invariant: don't double-count a discard on an already-used_up item.
+            if not (change_type == "discard" and row[0] == "used_up"):
+                self._log_event(canonical_name, change_type, source,
+                                {"coarse_amount": coarse_amount, "prev_state": row[0]})
             self._conn.commit()
             return self.get_item(canonical_name)
 
@@ -397,13 +399,19 @@ class KitchenStore:
 
     def mark_expired(self, canonical_name: str, source: str = "manual") -> dict[str, Any] | None:
         with self._lock:
-            cur = self._conn.execute(
+            row = self._conn.execute(
+                "SELECT state FROM pantry_items WHERE canonical_name=?", (canonical_name,)
+            ).fetchone()
+            if row is None:
+                return None
+            if row[0] == "used_up":
+                # Already off-hand — don't fabricate a second expire event.
+                return self.get_item(canonical_name)
+            self._conn.execute(
                 "UPDATE pantry_items SET state='used_up', confidence=0.0, updated_at=? "
                 "WHERE canonical_name=?",
                 (_now_iso(), canonical_name),
             )
-            if not cur.rowcount:
-                return None
             self._log_event(canonical_name, "expire", source)
             self._conn.commit()
             return self.get_item(canonical_name)
