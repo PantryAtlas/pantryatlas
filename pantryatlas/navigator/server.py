@@ -649,7 +649,11 @@ def create_app(
         Read-only: does NOT add to the pantry. The client confirms, then POSTs to
         /navigator/pantry/items with {raw_text, canonical_name, source:"barcode"}.
         """
-        from pantryatlas.navigator.barcode import decode_barcode, product_to_ingredient
+        from pantryatlas.navigator.barcode import (
+            decode_barcode,
+            product_to_ingredient,
+            upc_ean_variants,
+        )
 
         content_type = (image.content_type or "").lower()
         if content_type and content_type not in (
@@ -667,17 +671,21 @@ def create_app(
             raise HTTPException(status_code=422, detail="no barcode detected")
 
         kitchen = _get_kitchen(app)
-        product = kitchen.get_cached_off(code)
-        if product is None:
-            off = app.state.off_client
+        off = app.state.off_client
+        product = None
+        for variant in upc_ean_variants(code):
+            product = kitchen.get_cached_off(variant)
+            if product is not None:
+                break
             if off is None:
                 return {"found": False, "code": code, "error": "off_unavailable"}
             try:
-                product = off.get_product(code)
+                product = off.get_product(variant)
             except OffUnavailable:
                 return {"found": False, "code": code, "error": "off_unavailable"}
             if product is not None:
-                kitchen.cache_off(code, product)
+                kitchen.cache_off(variant, product)
+                break
 
         if product is None:
             return {"found": False, "code": code}

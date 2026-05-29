@@ -9,6 +9,27 @@ from collections.abc import Callable
 from pantryatlas.pantry.models import Ingredient
 
 
+def upc_ean_variants(code: str) -> list[str]:
+    """Return the barcode plus its UPC-A<->EAN-13 variant(s), decoded-form first, deduped.
+
+    A UPC-A (12 digits) is the same product as the EAN-13 formed by prefixing '0';
+    an EAN-13 beginning '0' is the same product as its 12-digit UPC-A (drop the '0').
+    Non-numeric or other-length codes return just [code].
+    """
+    variants = [code]
+    if code.isdigit():
+        if len(code) == 12:
+            variants.append("0" + code)
+        elif len(code) == 13 and code.startswith("0"):
+            variants.append(code[1:])
+    # dedupe, preserve order
+    seen, out = set(), []
+    for v in variants:
+        if v not in seen:
+            seen.add(v); out.append(v)
+    return out
+
+
 def decode_barcode(image_bytes: bytes) -> str | None:
     """Decode the first barcode in an image, or None. Host-side (zxing-cpp)."""
     import zxingcpp

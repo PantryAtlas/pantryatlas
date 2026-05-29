@@ -154,3 +154,34 @@ def test_barcode_route_off_client_none_is_graceful(tmp_path):
     assert r.status_code == 200
     assert r.json()["found"] is False
     assert r.json().get("error") == "off_unavailable"
+
+
+def test_barcode_route_ean13_variant_fallback(tmp_path):
+    """EAN-13 '0'-prefixed decode falls back to UPC-A 12-digit variant on OFF miss."""
+    # '0737628064502' (EAN-13, leading 0) decodes faithfully as '0737628064502'.
+    # OFF has no entry for that form (status:0) but has one for the 12-digit UPC-A
+    # '737628064502'.  upc_ean_variants should cause the route to find it.
+    upca = "737628064502"
+    ean13 = "0" + upca
+
+    def handler(req):
+        url = str(req.url)
+        # Match exact segment to avoid the 12-digit being a substring of the 13-digit URL.
+        if url.endswith(f"/{ean13}.json") or f"/{ean13}.json?" in url:
+            return httpx.Response(200, json={"status": 0})
+        if url.endswith(f"/{upca}.json") or f"/{upca}.json?" in url:
+            return httpx.Response(200, json={"status": 1, "product": {
+                "product_name": "Soy Sauce", "brands": "Kikkoman",
+                "ingredients_tags": [], "categories_tags": ["en:condiments"],
+            }})
+        return httpx.Response(200, json={"status": 0})
+
+    client = _client_with_off(tmp_path, handler)
+    img_bytes = _barcode_png(ean13)  # decodes to '0737628064502'
+    r = client.post("/navigator/pantry/barcode",
+                    files={"image": ("b.png", img_bytes, "image/png")})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["found"] is True, f"Expected found:true via variant fallback, got: {body}"
+    # code in response is always the ORIGINAL decoded code
+    assert body["code"] == ean13
