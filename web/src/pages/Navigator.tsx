@@ -266,6 +266,7 @@ export function Navigator() {
                     <button
                       type="button"
                       data-expired-action={`${i.canonical_name}:used`}
+                      aria-label={`${i.canonical_name}: used it in time`}
                       onClick={() => consumeItem(i.canonical_name, 'used_up')}
                       style={expiredBtnStyle}
                     >
@@ -274,6 +275,7 @@ export function Navigator() {
                     <button
                       type="button"
                       data-expired-action={`${i.canonical_name}:tossed`}
+                      aria-label={`${i.canonical_name}: threw it out`}
                       onClick={() => consumeItem(i.canonical_name, 'discarded')}
                       style={expiredBtnStyle}
                     >
@@ -282,6 +284,7 @@ export function Navigator() {
                     <button
                       type="button"
                       data-expired-action={`${i.canonical_name}:expired`}
+                      aria-label={`${i.canonical_name}: expired or spoiled`}
                       onClick={() => expireItem(i.canonical_name)}
                       style={expiredBtnStyle}
                     >

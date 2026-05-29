@@ -194,6 +194,7 @@ export async function cookRecipe(opts: {
     if (res.ok || res.status === 201) {
       await fetchPantry()
       await fetchMeals()
+      await refreshWasteIfOpen()
       return true
     }
   } catch {
@@ -210,7 +211,10 @@ export async function consumeItem(canonicalName: string, coarseAmount: string) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ coarse_amount: coarseAmount }),
     })
-    if (res.ok) await fetchPantry()
+    if (res.ok) {
+      await fetchPantry()
+      await refreshWasteIfOpen()
+    }
   } catch {
     // ignore
   }
@@ -255,7 +259,10 @@ export async function expireItem(canonicalName: string) {
     const res = await fetch(`/navigator/pantry/items/${encodeURIComponent(canonicalName)}/expire`, {
       method: 'POST',
     })
-    if (res.ok) await fetchPantry()
+    if (res.ok) {
+      await fetchPantry()
+      await refreshWasteIfOpen()
+    }
   } catch {
     // ignore
   }
@@ -268,6 +275,12 @@ export async function fetchWaste(windowDays: number = 30) {
   } catch {
     // keep existing
   }
+}
+
+/** Refresh the waste tally if the dashboard is open, so its totals stay
+ *  truthful after a waste-affecting action (expire / discard / cook). */
+async function refreshWasteIfOpen() {
+  if (wasteOpen.value) await fetchWaste(wasteWindow.value)
 }
 
 /** Top-N most-wasted items from a tally (pure; safe on null/empty). */
