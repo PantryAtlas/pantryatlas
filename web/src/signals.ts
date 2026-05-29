@@ -38,6 +38,15 @@ export interface CookEvent {
   source: string
 }
 
+export interface WasteTally {
+  window_days: number
+  discarded: number
+  expired: number
+  total: number
+  items: string[]
+  by_item: { name: string; count: number }[]
+}
+
 export type AddState = 'idle' | 'resolving' | 'resolved' | 'error'
 
 // ---------------------------------------------------------------------------
@@ -185,6 +194,7 @@ export async function cookRecipe(opts: {
     if (res.ok || res.status === 201) {
       await fetchPantry()
       await fetchMeals()
+      await refreshWasteIfOpen()
       return true
     }
   } catch {
@@ -201,7 +211,10 @@ export async function consumeItem(canonicalName: string, coarseAmount: string) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ coarse_amount: coarseAmount }),
     })
-    if (res.ok) await fetchPantry()
+    if (res.ok) {
+      await fetchPantry()
+      await refreshWasteIfOpen()
+    }
   } catch {
     // ignore
   }
@@ -216,6 +229,64 @@ export async function restoreItem(canonicalName: string) {
   } catch {
     // ignore
   }
+}
+
+// ---------------------------------------------------------------------------
+// Expiry + waste
+// ---------------------------------------------------------------------------
+
+export const waste = signal<WasteTally | null>(null)
+export const wasteWindow = signal<number>(30)
+export const wasteOpen = signal<boolean>(false)
+
+/** Set or clear an item's expiry date (ISO YYYY-MM-DD, or null to clear). */
+export async function setExpiry(canonicalName: string, isoDate: string | null) {
+  try {
+    const res = await fetch(`/navigator/pantry/items/${encodeURIComponent(canonicalName)}/expiry`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expires_at: isoDate }),
+    })
+    if (res.ok) await fetchPantry()
+  } catch {
+    // ignore — keep current state
+  }
+}
+
+/** Manual-confirm: log that an item expired/spoiled (flips it to used_up). */
+export async function expireItem(canonicalName: string) {
+  try {
+    const res = await fetch(`/navigator/pantry/items/${encodeURIComponent(canonicalName)}/expire`, {
+      method: 'POST',
+    })
+    if (res.ok) {
+      await fetchPantry()
+      await refreshWasteIfOpen()
+    }
+  } catch {
+    // ignore
+  }
+}
+
+export async function fetchWaste(windowDays: number = 30) {
+  try {
+    const res = await fetch(`/navigator/waste?window_days=${windowDays}`)
+    if (res.ok) waste.value = await res.json()
+  } catch {
+    // keep existing
+  }
+}
+
+/** Refresh the waste tally if the dashboard is open, so its totals stay
+ *  truthful after a waste-affecting action (expire / discard / cook). */
+async function refreshWasteIfOpen() {
+  if (wasteOpen.value) await fetchWaste(wasteWindow.value)
+}
+
+/** Top-N most-wasted items from a tally (pure; safe on null/empty). */
+export function mostWasted(tally: WasteTally | null, n: number = 3): { name: string; count: number }[] {
+  if (!tally || !tally.by_item) return []
+  return tally.by_item.slice(0, n)
 }
 
 // ---------------------------------------------------------------------------
@@ -387,6 +458,14 @@ export const expiringSoon = computed(() =>
     if (i.state === 'used_up') return false
     const d = daysUntilExpiry(i.expires_at)
     return d !== null && d >= 0 && d <= 3
+  })
+)
+
+export const expired = computed(() =>
+  pantry.value.filter((i) => {
+    if (i.state === 'used_up') return false
+    const d = daysUntilExpiry(i.expires_at)
+    return d !== null && d < 0
   })
 )
 

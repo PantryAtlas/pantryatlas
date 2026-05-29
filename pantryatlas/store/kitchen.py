@@ -307,8 +307,10 @@ class KitchenStore:
                 (new_state, new_conf, _now_iso(), canonical_name),
             )
             change_type = "discard" if coarse_amount == "discarded" else "consume"
-            self._log_event(canonical_name, change_type, source,
-                            {"coarse_amount": coarse_amount, "prev_state": row[0]})
+            # Waste invariant: don't double-count a discard on an already-used_up item.
+            if not (change_type == "discard" and row[0] == "used_up"):
+                self._log_event(canonical_name, change_type, source,
+                                {"coarse_amount": coarse_amount, "prev_state": row[0]})
             self._conn.commit()
             return self.get_item(canonical_name)
 
@@ -397,14 +399,41 @@ class KitchenStore:
 
     def mark_expired(self, canonical_name: str, source: str = "manual") -> dict[str, Any] | None:
         with self._lock:
-            cur = self._conn.execute(
+            row = self._conn.execute(
+                "SELECT state FROM pantry_items WHERE canonical_name=?", (canonical_name,)
+            ).fetchone()
+            if row is None:
+                return None
+            if row[0] == "used_up":
+                # Already off-hand — don't fabricate a second expire event.
+                return self.get_item(canonical_name)
+            self._conn.execute(
                 "UPDATE pantry_items SET state='used_up', confidence=0.0, updated_at=? "
                 "WHERE canonical_name=?",
                 (_now_iso(), canonical_name),
             )
+            self._log_event(canonical_name, "expire", source)
+            self._conn.commit()
+            return self.get_item(canonical_name)
+
+    def set_expiry(self, canonical_name: str, expires_at: date | None,
+                   source: str = "manual") -> dict[str, Any] | None:
+        """Set or clear an item's expiry date.
+
+        Stored as a pure ``YYYY-MM-DD`` string (or NULL when cleared) — the web
+        ``parseLocalDate`` splits on ``-`` and would NaN on a full ISO datetime.
+        Logs a ``set_expiry`` event, which is NOT a waste event.
+        """
+        iso = expires_at.isoformat() if expires_at is not None else None
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE pantry_items SET expires_at=?, updated_at=? "
+                "WHERE canonical_name=?",
+                (iso, _now_iso(), canonical_name),
+            )
             if not cur.rowcount:
                 return None
-            self._log_event(canonical_name, "expire", source)
+            self._log_event(canonical_name, "set_expiry", source, {"expires_at": iso})
             self._conn.commit()
             return self.get_item(canonical_name)
 
@@ -512,10 +541,18 @@ class KitchenStore:
         ).fetchall()
         discarded = sum(1 for r in rows if r[1] == "discard")
         expired = sum(1 for r in rows if r[1] == "expire")
+        counts: dict[str, int] = {}
+        for r in rows:
+            counts[r[0]] = counts.get(r[0], 0) + 1
+        by_item = [
+            {"name": n, "count": c}
+            for n, c in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+        ]
         return {
             "window_days": window_days,
             "discarded": discarded,
             "expired": expired,
             "total": discarded + expired,
             "items": [r[0] for r in rows],
+            "by_item": by_item,
         }

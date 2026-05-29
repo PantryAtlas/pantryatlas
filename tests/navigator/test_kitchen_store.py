@@ -317,3 +317,84 @@ def test_device_reject_and_remove(tmp_path):
     assert store.get_device(dev["device_id"]) is None
     assert store.reject_device("ghost") is None
     assert store.remove_device("ghost") is False
+
+
+# ---------------------------------------------------------------------------
+# Star Slice 1 Task 1: set_expiry
+# ---------------------------------------------------------------------------
+
+
+def test_set_expiry_sets_and_clears(tmp_path):
+    from datetime import date
+    store = KitchenStore(tmp_path / "kitchen.db")
+    store.add_item(Ing(canonical_name="milk", raw_text="milk"))
+
+    # Set a date — stored as pure YYYY-MM-DD
+    item = store.set_expiry("milk", date(2099, 1, 2))
+    assert item is not None
+    assert item["expires_at"] == "2099-01-02"
+
+    # Clear the date — expires_at drops out of the dict
+    item = store.set_expiry("milk", None)
+    assert item is not None
+    assert "expires_at" not in item
+
+
+def test_set_expiry_unknown_item_returns_none(tmp_path):
+    from datetime import date
+    store = KitchenStore(tmp_path / "kitchen.db")
+    assert store.set_expiry("ghost", date(2099, 1, 1)) is None
+
+
+def test_set_expiry_event_is_not_waste(tmp_path):
+    from datetime import date
+    store = KitchenStore(tmp_path / "kitchen.db")
+    store.add_item(Ing(canonical_name="milk", raw_text="milk"))
+    store.set_expiry("milk", date(2099, 1, 1))
+    tally = store.waste_tally(window_days=30)
+    assert tally["total"] == 0  # set_expiry must never count as waste
+
+
+# ---------------------------------------------------------------------------
+# Star Slice 1 Task 2: double-count guards (waste invariant)
+# ---------------------------------------------------------------------------
+
+
+def test_mark_expired_is_idempotent(tmp_path):
+    store = KitchenStore(tmp_path / "kitchen.db")
+    store.add_item(Ing(canonical_name="eggs", raw_text="eggs"))
+    store.mark_expired("eggs")   # first: present -> used_up, logs expire
+    store.mark_expired("eggs")   # second: already used_up -> no-op, no log
+    tally = store.waste_tally(window_days=30)
+    assert tally["expired"] == 1, "a second mark_expired must not double-count"
+    assert tally["total"] == 1
+
+
+def test_discard_does_not_double_count_when_already_used_up(tmp_path):
+    store = KitchenStore(tmp_path / "kitchen.db")
+    store.add_item(Ing(canonical_name="milk", raw_text="milk"))
+    store.consume_item("milk", "discarded")  # present -> used_up, logs discard
+    store.consume_item("milk", "discarded")  # already used_up -> no extra discard
+    tally = store.waste_tally(window_days=30)
+    assert tally["discarded"] == 1, "a second discard on a used_up item must not double-count"
+    assert tally["total"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Star Slice 1 Task 3: additive by_item in waste_tally
+# ---------------------------------------------------------------------------
+
+
+def test_waste_tally_by_item_counts_sorted(tmp_path):
+    store = KitchenStore(tmp_path / "kitchen.db")
+    for n in ("milk", "eggs"):
+        store.add_item(Ing(canonical_name=n, raw_text=n))
+    store.consume_item("milk", "discarded")  # milk x1
+    store.mark_expired("eggs")               # eggs x1
+    store.add_item(Ing(canonical_name="milk", raw_text="milk"))  # re-add milk
+    store.consume_item("milk", "discarded")  # milk x2
+    tally = store.waste_tally(window_days=30)
+    # items keeps its flat shape (backward-compatible)
+    assert sorted(tally["items"]) == ["eggs", "milk", "milk"]
+    # by_item: most-wasted first, then name
+    assert tally["by_item"] == [{"name": "milk", "count": 2}, {"name": "eggs", "count": 1}]
