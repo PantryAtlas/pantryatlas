@@ -4,7 +4,7 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from pantryatlas.navigator.openfoodfacts import OpenFoodFactsClient, OffUnavailable
+from pantryatlas.navigator.openfoodfacts import OffUnavailable, OpenFoodFactsClient
 
 
 def _client(handler) -> OpenFoodFactsClient:

@@ -46,8 +46,10 @@ def _fake_resolver(raw: str) -> Ingredient | None:
 
 
 def test_mapping_uses_ingredient_tag_first():
-    product = {"product_name": "Thai Kitchen Rice Noodles", "brands": "Thai Kitchen",
-               "ingredients_tags": ["en:rice-noodles"], "categories_tags": ["en:pastas", "en:noodles"]}
+    product = {
+        "product_name": "Thai Kitchen Rice Noodles", "brands": "Thai Kitchen",
+        "ingredients_tags": ["en:rice-noodles"], "categories_tags": ["en:pastas", "en:noodles"],
+    }
     ing, matched = product_to_ingredient(product, _fake_resolver)
     assert matched is True
     assert ing.canonical_name == "noodles"   # "rice noodles" → resolver → "noodles"
