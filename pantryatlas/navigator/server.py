@@ -260,8 +260,8 @@ def create_app(
     vision_client: GemmaClient | None = None,
     provider_registry: ProviderRegistry | None = None,
     providers_config_path: Path | None = None,
-    kitchen: "KitchenStore | None" = None,
-    kitchen_factory: "Callable[[], KitchenStore] | None" = None,
+    kitchen: KitchenStore | None = None,
+    kitchen_factory: Callable[[], KitchenStore] | None = None,
 ) -> FastAPI:
     """Build and return a FastAPI app wired to the given dependencies.
 
@@ -702,6 +702,7 @@ def _ranked_to_dict(r: RankedRecipe) -> dict[str, Any]:
 
 _DEFAULT_PANTRY_PATH = Path.home() / ".pantryatlas" / "pantry.json"
 _DEFAULT_DB_PATH = Path.home() / ".pantryatlas" / "recipes.db"
+_DEFAULT_KITCHEN_DB_PATH = Path.home() / ".pantryatlas" / "kitchen.db"
 
 
 def _make_production_store_factory() -> Callable[[], RecipeStore]:
@@ -716,6 +717,15 @@ def _make_production_store_factory() -> Callable[[], RecipeStore]:
 
         _DEFAULT_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
         return _RS(_DEFAULT_DB_PATH)
+
+    return _factory
+
+
+def _make_production_kitchen_factory() -> Callable[[], KitchenStore]:
+    """Return a factory that opens the real KitchenStore and migrates pantry.json once."""
+
+    def _factory() -> KitchenStore:
+        return KitchenStore(_DEFAULT_KITCHEN_DB_PATH, pantry_json_path=_DEFAULT_PANTRY_PATH)
 
     return _factory
 
@@ -770,6 +780,7 @@ def _build_production_app() -> FastAPI:
         pantry_path=_DEFAULT_PANTRY_PATH,
         provider_registry=_build_registry(),
         providers_config_path=DEFAULT_CONFIG_PATH,
+        kitchen_factory=_make_production_kitchen_factory(),
     )
 
 

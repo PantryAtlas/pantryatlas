@@ -578,3 +578,13 @@ def test_module_level_app_route_count(
     assert not pantryatlas_dir.exists(), (
         f"Import created {pantryatlas_dir} — store init is not lazy!"
     )
+
+
+def test_import_does_not_create_kitchen_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Importing server must NOT create ~/.pantryatlas/kitchen.db (lazy factory)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    mod_name = "pantryatlas.navigator.server"
+    if mod_name in sys.modules:
+        del sys.modules[mod_name]
+    importlib.import_module(mod_name)
+    assert not (tmp_path / ".pantryatlas" / "kitchen.db").exists()

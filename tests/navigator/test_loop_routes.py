@@ -79,7 +79,10 @@ def test_cook_route_logs_and_decrements(tmp_path):
     client = _client(tmp_path)
     for n in ("garlic", "tomato", "basil"):
         client.post("/navigator/pantry/items", json={"raw_text": n})
-    r = client.post("/navigator/cook", json={"recipe_id": "r1", "dish_name": "Pomodoro", "servings": 2})
+    r = client.post(
+        "/navigator/cook",
+        json={"recipe_id": "r1", "dish_name": "Pomodoro", "servings": 2},
+    )
     assert r.status_code == 201
     body = r.json()
     assert set(body["matched"]) == {"garlic", "tomato", "basil"}   # derived from recipe r1
