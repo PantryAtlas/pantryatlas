@@ -94,6 +94,8 @@ class AddItemIn(BaseModel):
     """Body for POST /navigator/pantry/items."""
 
     raw_text: str
+    canonical_name: str | None = None  # when set, skip the resolver (e.g. barcode confirm)
+    source: str = "manual"             # provenance: manual | barcode | vision:<id>
 
 
 class ResolveIn(BaseModel):
@@ -381,15 +383,19 @@ def create_app(
 
     @app.post("/navigator/pantry/items", status_code=201)
     def post_pantry_item(body: AddItemIn) -> dict[str, Any]:
-        """Add one ingredient from raw text.  Returns the resolved canonical_name."""
-        ingredient = app.state.resolver(body.raw_text)
-        if ingredient is None:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Cannot resolve '{body.raw_text}' to a canonical ingredient.",
-            )
-        item = _get_kitchen(app).add_item(ingredient)
-        return {"canonical_name": item["canonical_name"], "raw_text": item["raw_text"]}
+        """Add one ingredient. With canonical_name set, store it directly (skip resolver)."""
+        if body.canonical_name:
+            ingredient = Ingredient(canonical_name=body.canonical_name, raw_text=body.raw_text)
+        else:
+            ingredient = app.state.resolver(body.raw_text)
+            if ingredient is None:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Cannot resolve '{body.raw_text}' to a canonical ingredient.",
+                )
+        item = _get_kitchen(app).add_item(ingredient, source=body.source)
+        return {"canonical_name": item["canonical_name"], "raw_text": item["raw_text"],
+                "source": item["source"]}
 
     # ------------------------------------------------------------------
     # Pantry — remove one item
