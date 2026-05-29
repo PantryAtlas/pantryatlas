@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pantryatlas.navigator.device_auth import mint_token, hash_token
+from pantryatlas.navigator.device_auth import hash_token, mint_token
 
 
 def test_mint_token_is_unique_and_urlsafe():
