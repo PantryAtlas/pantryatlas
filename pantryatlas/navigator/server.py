@@ -791,6 +791,8 @@ def create_app(
     @app.post("/navigator/devices/{device_id}/approve")
     def approve_device(device_id: str) -> dict[str, Any]:
         from pantryatlas.navigator.device_auth import hash_token, mint_token
+        # Re-approving a paired device rotates the token: a fresh token is issued
+        # and the previous one stops verifying.
         token = mint_token()
         device = _get_kitchen(app).approve_device(device_id, hash_token(token))
         if device is None:

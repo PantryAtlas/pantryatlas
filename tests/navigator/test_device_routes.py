@@ -64,6 +64,10 @@ def test_me_rejects_bad_or_missing_token(tmp_path):
                       headers={"Authorization": "Bearer nope"}).status_code == 401
     assert client.get("/navigator/devices/me",
                       headers={"Authorization": "notbearer x"}).status_code == 401
+    assert client.get("/navigator/devices/me",
+                      headers={"Authorization": "Bearer "}).status_code == 401
+    assert client.get("/navigator/devices/me",
+                      headers={"Authorization": "Bearer    "}).status_code == 401
 
 
 def test_reject_and_delete(tmp_path):
@@ -78,3 +82,17 @@ def test_reject_and_delete(tmp_path):
     assert client.delete(f"/navigator/devices/{did}").json()["deleted"] == did
     assert client.post("/navigator/devices/ghost/approve").status_code == 404
     assert client.delete("/navigator/devices/ghost").status_code == 404
+
+
+def test_me_rejects_removed_device_token(tmp_path):
+    client = _client(tmp_path)
+    did = client.post("/navigator/devices/enroll",
+                      json={"name": "X", "role": "sensor"}).json()["device_id"]
+    token = client.post(f"/navigator/devices/{did}/approve").json()["token"]
+    # token works while paired
+    assert client.get("/navigator/devices/me",
+                      headers={"Authorization": f"Bearer {token}"}).status_code == 200
+    # after the device is removed, its token must stop verifying
+    client.delete(f"/navigator/devices/{did}")
+    assert client.get("/navigator/devices/me",
+                      headers={"Authorization": f"Bearer {token}"}).status_code == 401
