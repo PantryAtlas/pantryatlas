@@ -1,0 +1,11 @@
+<?xml version="1.0" standalone='no'?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<service-group>
+  <name replace-wildcards="yes">PantryAtlas on %h</name>
+  <service>
+    <type>_pantryatlas._tcp</type>
+    <port>8090</port>
+    <txt-record>role=hub</txt-record>
+    <txt-record>schema=1</txt-record>
+  </service>
+</service-group>
