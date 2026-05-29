@@ -26,7 +26,8 @@ def upc_ean_variants(code: str) -> list[str]:
     seen, out = set(), []
     for v in variants:
         if v not in seen:
-            seen.add(v); out.append(v)
+            seen.add(v)
+            out.append(v)
     return out
 
 

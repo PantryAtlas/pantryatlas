@@ -41,7 +41,6 @@ Design decisions
 
 from __future__ import annotations
 
-import json
 from collections.abc import Callable
 from datetime import date
 from pathlib import Path
@@ -58,7 +57,7 @@ from pantryatlas.inference.providers.lan_endpoint import LanEndpointProvider
 from pantryatlas.inference.registry import ProviderRegistry
 from pantryatlas.navigator.openfoodfacts import OffUnavailable, OpenFoodFactsClient
 from pantryatlas.navigator.ranking import RankedRecipe, compute_swaps, rank_recipes
-from pantryatlas.pantry.models import Ingredient, Pantry, Quantity
+from pantryatlas.pantry.models import Ingredient, Quantity
 from pantryatlas.store.kitchen import KitchenStore
 from pantryatlas.store.recipes import RecipeStore
 
@@ -165,66 +164,6 @@ class DeviceEnrollIn(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Pantry JSON serialisation
-# ---------------------------------------------------------------------------
-
-
-def _pantry_to_list(pantry: Pantry) -> list[dict[str, Any]]:
-    """Serialise ``Pantry`` to a list of dicts suitable for JSON encoding."""
-    result = []
-    for ing in pantry:
-        item: dict[str, Any] = {
-            "canonical_name": ing.canonical_name,
-            "raw_text": ing.raw_text,
-        }
-        if ing.quantity is not None:
-            item["quantity"] = {
-                "amount": ing.quantity.amount,
-                "unit": ing.quantity.unit,
-            }
-        if ing.expires_at is not None:
-            item["expires_at"] = ing.expires_at.isoformat()
-        result.append(item)
-    return result
-
-
-def _load_pantry(pantry_path: Path) -> Pantry:
-    """Load Pantry from JSON file; returns empty Pantry when file absent."""
-    pantry = Pantry()
-    if not pantry_path.exists():
-        return pantry
-    raw = json.loads(pantry_path.read_text(encoding="utf-8"))
-    for item in raw:
-        qty = None
-        if item.get("quantity"):
-            qty = Quantity(
-                amount=item["quantity"]["amount"],
-                unit=item["quantity"].get("unit", ""),
-            )
-        exp = None
-        if item.get("expires_at"):
-            exp = date.fromisoformat(item["expires_at"])
-        pantry.add(
-            Ingredient(
-                canonical_name=item["canonical_name"],
-                raw_text=item["raw_text"],
-                quantity=qty,
-                expires_at=exp,
-            )
-        )
-    return pantry
-
-
-def _save_pantry(pantry: Pantry, pantry_path: Path) -> None:
-    """Persist Pantry to JSON file, creating parent dirs as needed."""
-    pantry_path.parent.mkdir(parents=True, exist_ok=True)
-    pantry_path.write_text(
-        json.dumps(_pantry_to_list(pantry), indent=2),
-        encoding="utf-8",
-    )
-
-
-# ---------------------------------------------------------------------------
 # Lazy store accessor
 # ---------------------------------------------------------------------------
 
@@ -293,7 +232,11 @@ def create_app(
             Must NOT trigger ONNX model loading in tests; pass a fake.
         embed_fn: Callable mapping list[str] → np.ndarray (N, D).
             Must NOT trigger ONNX model loading in tests; pass a fake.
-        pantry_path: Path to the flat JSON pantry file.
+        pantry_path: Path stored on ``app.state.pantry_path`` for legacy
+            compatibility and one-time migration (``KitchenStore`` handles
+            migration from this path on first open).  Mutable user state
+            (pantry items, cook log) is persisted to ``kitchen.db`` via
+            ``KitchenStore``; this path is no longer read directly by routes.
         web_dist: Path to the built PWA dist directory.
             When None, defaults to ``<repo>/web/dist`` if it exists; otherwise
             the static mount is skipped gracefully.
