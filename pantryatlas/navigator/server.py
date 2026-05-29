@@ -41,6 +41,7 @@ Design decisions
 
 from __future__ import annotations
 
+import logging
 import os
 from collections.abc import Callable
 from datetime import date
@@ -53,6 +54,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from pantryatlas.flavor import FlavorStore
 from pantryatlas.inference.config import save_provider_config
 from pantryatlas.inference.providers.lan_endpoint import LanEndpointProvider
 from pantryatlas.inference.registry import ProviderRegistry
@@ -61,6 +63,8 @@ from pantryatlas.navigator.ranking import RankedRecipe, compute_swaps, rank_reci
 from pantryatlas.pantry.models import Ingredient, Quantity
 from pantryatlas.store.kitchen import KitchenStore
 from pantryatlas.store.recipes import RecipeStore
+
+_server_log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from pantryatlas.gemma.client import GemmaClient
@@ -207,6 +211,18 @@ def _get_kitchen(app: FastAPI) -> KitchenStore:
     return kitchen
 
 
+def _get_flavor(app: FastAPI) -> FlavorStore:
+    """Return the app's FlavorStore, building it lazily via factory if needed."""
+    flavor: FlavorStore | None = getattr(app.state, "flavor", None)
+    if flavor is None:
+        factory: Callable[[], FlavorStore] | None = getattr(app.state, "flavor_factory", None)
+        if factory is None:
+            raise RuntimeError("No FlavorStore and no flavor_factory configured on app.state")
+        app.state.flavor = factory()
+        flavor = app.state.flavor
+    return flavor
+
+
 # ---------------------------------------------------------------------------
 # App factory
 # ---------------------------------------------------------------------------
@@ -226,6 +242,8 @@ def create_app(
     kitchen: KitchenStore | None = None,
     kitchen_factory: Callable[[], KitchenStore] | None = None,
     off_client: OpenFoodFactsClient | None = None,
+    flavor: FlavorStore | None = None,
+    flavor_factory: Callable[[], FlavorStore] | None = None,
 ) -> FastAPI:
     """Build and return a FastAPI app wired to the given dependencies.
 
@@ -265,6 +283,16 @@ def create_app(
 
     @asynccontextmanager
     async def _lifespan(application: FastAPI):  # noqa: RUF029
+        # Startup: warm the FlavorStore once (pandas + parquet ~9s) so the first
+        # from-pantry request isn't stalled. Best-effort — never block boot.
+        if (
+            getattr(application.state, "flavor", None) is not None
+            or getattr(application.state, "flavor_factory", None) is not None
+        ):
+            try:
+                _get_flavor(application)
+            except Exception:
+                _server_log.warning("FlavorStore warm-up failed; will load lazily", exc_info=True)
         yield
         # Shutdown: close the OFF HTTP connection pool to avoid resource leaks.
         client = getattr(application.state, "off_client", None)
@@ -291,6 +319,12 @@ def create_app(
     app.state.kitchen = kitchen
     app.state.kitchen_factory = kitchen_factory
     app.state.off_client = off_client
+    app.state.flavor = flavor
+    # Default factory: load the bundled parquet lazily on first use.
+    if flavor is None and flavor_factory is None:
+        _parquet = Path(__file__).resolve().parent.parent / "data" / "compounds.parquet"
+        flavor_factory = lambda: FlavorStore(_parquet)  # noqa: E731
+    app.state.flavor_factory = flavor_factory
 
     # ------------------------------------------------------------------
     # Static PWA serving (guarded — tolerates missing web/dist)
@@ -488,11 +522,13 @@ def create_app(
             # Fall back: return empty list rather than 500
             return []
 
+        flavor_store = _get_flavor(app)
         ranked: list[RankedRecipe] = rank_recipes(
             pantry,
             candidates,
             cuisine=cuisine,
             compute_substitution=False,
+            flavor_fn=flavor_store.flavor_score,
         )
 
         return [_ranked_to_dict(r) for r in ranked]
@@ -527,6 +563,7 @@ def create_app(
             k=len(candidates),
             cuisine=cuisine,
             compute_substitution=True,
+            flavor_fn=_get_flavor(app).flavor_score,
         )
         return [_ranked_to_dict(r) for r in ranked]
 
@@ -809,6 +846,7 @@ def _ranked_to_dict(r: RankedRecipe) -> dict[str, Any]:
         "expiration_urgency": r.expiration_urgency,
         "substitution_penalty": r.substitution_penalty,
         "cultural_fit": r.cultural_fit,
+        "flavor": r.flavor,
         "source": RECIPE_SOURCE_ATTRIBUTION,
     }
 
