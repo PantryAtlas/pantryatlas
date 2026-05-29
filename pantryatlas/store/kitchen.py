@@ -343,7 +343,10 @@ class KitchenStore:
                             "WHERE canonical_name=?",
                             (new_state, new_conf, _now_iso(), name),
                         )
-                        self._log_event(name, "consume", source, {"cook_event_id": event_id})
+                        evt_change_type = (
+                            "discard" if c.get("coarse_amount") == "discarded" else "consume"
+                        )
+                        self._log_event(name, evt_change_type, source, {"cook_event_id": event_id})
                     else:
                         unmatched.append(name)
                 self._conn.commit()

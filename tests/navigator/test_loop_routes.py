@@ -110,3 +110,54 @@ def test_waste_route(tmp_path):
     client.post("/navigator/pantry/items/tomato/consume", json={"coarse_amount": "discarded"})
     tally = client.get("/navigator/waste").json()
     assert tally["discarded"] == 1 and tally["total"] == 1
+
+
+def test_cook_unknown_recipe_id_still_logs(tmp_path):
+    """POST /cook with an unknown recipe_id → 201, matched=[], event created."""
+    client = _client(tmp_path)
+    r = client.post(
+        "/navigator/cook",
+        json={"dish_name": "Mystery", "recipe_id": "no-such-id"},
+    )
+    assert r.status_code == 201
+    body = r.json()
+    assert body["matched"] == []
+    meals = client.get("/navigator/meals").json()
+    assert meals[0]["dish_name"] == "Mystery"
+
+
+def _client_with_r2(tmp_path: Path) -> TestClient:
+    """A client whose _FakeStore also contains recipe r2 with saffron (unknown)."""
+    from pantryatlas.navigator.server import create_app
+
+    class _FakeStoreExtended:
+        def __init__(self):
+            self._recipes = {
+                "r1": _FakeRecipe(["garlic", "tomato", "basil"]),
+                "r2": _FakeRecipe(["garlic", "saffron"]),  # saffron unknown to _fake_resolver
+            }
+
+        def count(self): return len(self._recipes)
+        def get(self, rid): return self._recipes.get(rid)
+        def iter_overlapping(self, names): return []
+
+    kitchen = KitchenStore(tmp_path / "kitchen.db")
+    app = create_app(
+        store=_FakeStoreExtended(), resolver=_fake_resolver, embed_fn=_fake_embed,
+        pantry_path=tmp_path / "pantry.json", kitchen=kitchen,
+    )
+    return TestClient(app)
+
+
+def test_cook_unresolvable_ingredient_falls_back_to_raw_token(tmp_path):
+    """Resolver returns None for 'saffron' → raw token used as canonical_name, no crash."""
+    client = _client_with_r2(tmp_path)
+    # Add garlic so it can be matched; saffron is not on hand → unmatched raw token
+    client.post("/navigator/pantry/items", json={"raw_text": "garlic"})
+
+    r = client.post("/navigator/cook", json={"dish_name": "Saffron Rice", "recipe_id": "r2"})
+    assert r.status_code == 201
+    body = r.json()
+    # garlic is on hand → matched; saffron resolved to None → raw token "saffron" used
+    assert "garlic" in body["matched"]
+    assert "saffron" in body["unmatched"]

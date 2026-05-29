@@ -236,3 +236,26 @@ def test_waste_tally_counts_discards_and_expires(tmp_path):
     assert tally["expired"] == 1
     assert tally["total"] == 2
     assert set(tally["items"]) == {"milk", "eggs"}
+
+
+def test_cook_event_discarded_counts_as_waste(tmp_path):
+    store = KitchenStore(tmp_path / "kitchen.db")
+    store.add_item(Ing(canonical_name="milk", raw_text="milk"))
+    store.add_item(Ing(canonical_name="butter", raw_text="butter"))
+
+    # "discarded" consumed item must count as waste + reach used_up state
+    store.add_cook_event(
+        dish_name="Discard Test",
+        consumed=[{"canonical_name": "milk", "coarse_amount": "discarded"}],
+    )
+    tally = store.waste_tally(window_days=30)
+    assert tally["discarded"] == 1, "cook-event discard should count as waste"
+    assert store.get_item("milk")["state"] == "used_up"
+
+    # "cook"-default consumed item must NOT count as waste
+    store.add_cook_event(
+        dish_name="Normal Cook",
+        consumed=[{"canonical_name": "butter", "coarse_amount": "cook"}],
+    )
+    tally2 = store.waste_tally(window_days=30)
+    assert tally2["discarded"] == 1, "cook-default should not add to waste tally"
