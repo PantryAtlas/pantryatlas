@@ -56,6 +56,11 @@ CREATE TABLE IF NOT EXISTS cook_events (
     consumed_json TEXT,
     source        TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS off_cache (
+    code         TEXT PRIMARY KEY,
+    product_json TEXT NOT NULL,
+    fetched_at   TEXT NOT NULL
+);
 """
 
 
@@ -389,6 +394,22 @@ class KitchenStore:
             self._log_event(canonical_name, "expire", source)
             self._conn.commit()
             return self.get_item(canonical_name)
+
+    def cache_off(self, code: str, product: dict[str, Any]) -> None:
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO off_cache (code, product_json, fetched_at) VALUES (?,?,?) "
+                "ON CONFLICT(code) DO UPDATE SET product_json=excluded.product_json, "
+                "fetched_at=excluded.fetched_at",
+                (code, json.dumps(product), _now_iso()),
+            )
+            self._conn.commit()
+
+    def get_cached_off(self, code: str) -> dict[str, Any] | None:
+        row = self._conn.execute(
+            "SELECT product_json FROM off_cache WHERE code=?", (code,)
+        ).fetchone()
+        return json.loads(row[0]) if row is not None else None
 
     def waste_tally(self, window_days: int = 30) -> dict[str, Any]:
         cutoff = (datetime.now(UTC) - timedelta(days=window_days)).isoformat()
