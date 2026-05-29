@@ -123,12 +123,25 @@ async def put_pantry(request: Request):
 @app.post("/navigator/pantry/items", status_code=201)
 async def post_pantry_item(request: Request):
     body = await request.json()
-    raw = body.get("raw_text", "").strip().lower()
-    canonical = VOCAB.get(raw)
-    if not canonical:
-        raise HTTPException(status_code=422, detail=f"Cannot resolve '{raw}'")
-    item = KITCHEN.add_item(Ingredient(canonical_name=canonical, raw_text=raw))
-    return {"canonical_name": item["canonical_name"], "raw_text": item["raw_text"]}
+    raw = body.get("raw_text", "")
+    source = body.get("source", "manual")
+    canonical_name = body.get("canonical_name")
+
+    if canonical_name:
+        # Barcode (or any explicit-canonical) confirm path — bypass VOCAB.
+        ingredient = Ingredient(canonical_name=canonical_name, raw_text=raw)
+    else:
+        resolved = VOCAB.get(raw.strip().lower())
+        if not resolved:
+            raise HTTPException(status_code=422, detail=f"Cannot resolve '{raw}'")
+        ingredient = Ingredient(canonical_name=resolved, raw_text=raw.strip().lower())
+
+    item = KITCHEN.add_item(ingredient, source=source)
+    return {
+        "canonical_name": item["canonical_name"],
+        "raw_text": item["raw_text"],
+        "source": item.get("source", source),
+    }
 
 @app.delete("/navigator/pantry/items/{name}")
 def delete_pantry_item(name: str):
@@ -417,6 +430,31 @@ async def post_recipes_swaps(request: Request):
                 {"missing": ing, "best_swap": None, "similarity": 0.31, "reason": "no_close_match"}
             )
     return {"swaps": swaps}
+
+
+# ---------------------------------------------------------------------------
+# Barcode route — canned candidate (no real decode / OFF lookup in the mock)
+# ---------------------------------------------------------------------------
+
+@app.post("/navigator/pantry/barcode")
+async def post_pantry_barcode(request: Request):
+    """Canned barcode response for headless verify.
+
+    The real route decodes the uploaded image and looks it up in Open Food
+    Facts; the mock skips both and returns a fixed known-product candidate so
+    verify_barcode.mjs can drive the confirm sheet without needing a real
+    barcode image or internet access.
+    """
+    return {
+        "found": True,
+        "code": "737628064502",
+        "product": {"name": "Rice Noodles", "brand": "Thai Kitchen"},
+        "proposed": {
+            "canonical_name": "noodles",
+            "raw_text": "Rice Noodles (Thai Kitchen)",
+            "matched": True,
+        },
+    }
 
 
 # /navigator/vision/parse-shelf → 404 (T-014 not yet built)

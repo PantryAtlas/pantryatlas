@@ -194,22 +194,120 @@ Replaces the entire pantry with the supplied list (Pydantic-validated). Returns 
 
 `POST /navigator/pantry/items`
 
-Adds one ingredient from raw text. The server resolves the text to a canonical name using the ingredient matcher (exact → fuzzy → semantic). Returns 201 on success, 422 if the text cannot be resolved.
+Adds one ingredient. If `canonical_name` is supplied (e.g. from a barcode confirm), the resolver is bypassed and the name is stored directly. Otherwise the server resolves `raw_text` to a canonical name using the ingredient matcher (exact → fuzzy → semantic). Returns 201 on success, 422 if the text cannot be resolved.
+
+The optional `source` field records provenance: `"manual"` (default), `"barcode"`, or `"vision:<id>"`.
 
 **Request body:**
 ```json
 { "raw_text": "wilting kale" }
 ```
 
+or (from a barcode confirm, bypasses the resolver):
+
+```json
+{
+  "raw_text": "Rice Noodles (Thai Kitchen)",
+  "canonical_name": "noodles",
+  "source": "barcode"
+}
+```
+
 **Response (201):**
 ```json
 {
   "canonical_name": "kale",
-  "raw_text": "wilting kale"
+  "raw_text": "wilting kale",
+  "source": "manual"
 }
 ```
 
 **Error (422):** `{"detail": "Cannot resolve 'wilting kale' to a canonical ingredient."}`
+
+---
+
+`POST /navigator/pantry/barcode`
+
+**Highest-accuracy pantry IN path.** Accepts a barcode photo from any phone (iOS / Android) and returns a candidate ingredient to confirm. Barcode scanning is the most accurate ingestion path because it identifies the exact product, eliminating all guesswork in ingredient resolution.
+
+**Design:** The image is decoded host-side using `zxing-cpp` (no `BarcodeDetector` browser API; works on any iOS Safari upload). The barcode code is looked up in [Open Food Facts](https://world.openfoodfacts.org/) (cache-first via the `off_cache` table in `KitchenStore`; see below). The product's ingredient tags and category tags are mapped to a canonical pantry ingredient via the resolver. **This route is read-only** — it does not add anything to the pantry. The client shows the `BarcodeReviewSheet`, lets the user optionally edit the canonical name, then confirms by calling `POST /navigator/pantry/items` with `{canonical_name, source:"barcode"}`.
+
+**Request:** `multipart/form-data` with a single `image` field (JPEG or PNG, ≤ 8 MiB).
+
+```
+POST /navigator/pantry/barcode
+Content-Type: multipart/form-data; boundary=...
+
+--boundary
+Content-Disposition: form-data; name="image"; filename="barcode.jpg"
+Content-Type: image/jpeg
+
+<binary image data>
+--boundary--
+```
+
+**Response — barcode found and in Open Food Facts (200):**
+```json
+{
+  "found": true,
+  "code": "737628064502",
+  "product": { "name": "Rice Noodles", "brand": "Thai Kitchen" },
+  "proposed": {
+    "canonical_name": "noodles",
+    "raw_text": "Rice Noodles (Thai Kitchen)",
+    "matched": true
+  }
+}
+```
+
+`matched: true` means the resolver recognised the ingredient from the product's ingredient/category tags. `matched: false` means the resolver fell back to a slug of the product name — the confirm sheet shows a hint prompting the user to edit.
+
+**Response — barcode not in Open Food Facts (200):**
+```json
+{
+  "found": false,
+  "code": "737628064502"
+}
+```
+
+**Response — OFF unreachable / no network (200):**
+```json
+{
+  "found": false,
+  "code": "737628064502",
+  "error": "off_unavailable"
+}
+```
+
+**Error — no barcode detected in the image (422):**
+```json
+{ "detail": "no barcode detected" }
+```
+
+**Workflow after receiving a candidate:**
+
+```
+POST /navigator/pantry/barcode  →  { found:true, proposed:{canonical_name:"noodles"} }
+        │
+        ▼  User reviews / edits canonical_name in BarcodeReviewSheet
+        │
+        ▼  POST /navigator/pantry/items
+               { raw_text:"Rice Noodles (Thai Kitchen)",
+                 canonical_name:"noodles",
+                 source:"barcode" }
+        │
+        ▼  Item added with source:"barcode" provenance
+```
+
+**Open Food Facts dependency and `off_cache` table**
+
+The `off_cache` table in `KitchenStore` (`~/.pantryatlas/kitchen.db`) stores OFF product JSON keyed by barcode. The lookup is **cache-first**: if a code was looked up before, the cached product is used without a network call. There is **no TTL in v1** — cached entries are indefinite (product data changes rarely). Future rescans that hit the cache are therefore instant and offline-capable.
+
+| Table | Purpose |
+|---|---|
+| `off_cache` | `code TEXT PRIMARY KEY`, `product_json TEXT`, `fetched_at TEXT` — one row per barcode ever scanned |
+
+The route is **offline-graceful**: if OFF is unreachable (no network, Pi hotspot scenario), the route returns `{found:false, error:"off_unavailable"}` rather than a 5xx, and the UI prompts the user to add the item by typing instead.
 
 ---
 
@@ -443,13 +541,14 @@ It is wired into `create_app` with the same lazy-init pattern as `RecipeStore` (
 
 ### Schema
 
-Three tables:
+Four tables:
 
 | Table | Holds |
 |---|---|
 | `pantry_items` | One row per ingredient: editable fields (`raw_text`, `quantity_*`, `expires_at`) plus the coarse-state model (`state`, `confidence`, `last_observed_at`, `source`). |
 | `inventory_events` | Append-only ledger: one row per `add` / `consume` / `discard` / `expire` / `observe` / `adjust`, tagged with `source` and an optional `detail_json`. The waste tally and audit trail read from here. |
 | `cook_events` | One row per "I cooked this": `dish_name`, `recipe_id`, `servings`, `rating`, `notes`, `cooked_at`, and the `consumed_json` snapshot. Drives the meal-log timeline. |
+| `off_cache` | Cache of Open Food Facts product JSON keyed by barcode code. One row per scanned barcode, indefinite TTL (no expiry in v1). See `POST /navigator/pantry/barcode` for the full cache-first strategy. |
 
 ### Migration from `pantry.json`
 
