@@ -264,6 +264,25 @@ def test_cook_event_discarded_counts_as_waste(tmp_path):
     assert tally2["discarded"] == 1, "cook-default should not add to waste tally"
 
 
+def test_cook_event_duplicate_discard_does_not_double_count(tmp_path):
+    # Defense-in-depth: the on_hand snapshot is taken once before the loop, but
+    # state_row is re-read each iteration. A canonical name appearing twice as
+    # 'discarded' in ONE cook payload must still count as a single discard —
+    # the symmetric waste invariant guard (mirrors consume_item / mark_expired).
+    store = KitchenStore(tmp_path / "kitchen.db")
+    store.add_item(Ing(canonical_name="milk", raw_text="milk"))
+    store.add_cook_event(
+        dish_name="Dup Discard",
+        consumed=[
+            {"canonical_name": "milk", "coarse_amount": "discarded"},
+            {"canonical_name": "milk", "coarse_amount": "discarded"},
+        ],
+    )
+    tally = store.waste_tally(window_days=30)
+    assert tally["discarded"] == 1, "a duplicate discard in one cook payload must not double-count"
+    assert store.get_item("milk")["state"] == "used_up"
+
+
 # ---------------------------------------------------------------------------
 # SP-B Task 2: off_cache round-trip
 # ---------------------------------------------------------------------------
