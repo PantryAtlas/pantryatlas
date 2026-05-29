@@ -5,7 +5,7 @@ Scores candidate recipes against the current pantry using a weighted formula:
     score = 0.50 * coverage
           + 0.20 * expiration_urgency
           + 0.20 * (1 - substitution_penalty)
-          + 0.10 * cultural_fit
+          + 0.10 * flavor
 
 All four sub-scores are in [0, 1].  The function is **pure** — callers supply
 everything (pantry, candidates, embed_fn).  No DB or model is loaded here.
@@ -30,6 +30,7 @@ Design decisions
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -37,6 +38,8 @@ from typing import Any
 import numpy as np
 
 from pantryatlas.pantry.models import Pantry
+
+_log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Public types
@@ -64,6 +67,7 @@ class RankedRecipe:
     expiration_urgency: float = 0.0
     substitution_penalty: float = 0.0
     cultural_fit: float = 0.0
+    flavor: float = 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -73,7 +77,8 @@ class RankedRecipe:
 _W_COVERAGE: float = 0.50
 _W_EXPIRY: float = 0.20
 _W_SUBSTITUTION: float = 0.20
-_W_CULTURAL: float = 0.10
+_W_CULTURAL: float = 0.0   # superseded by flavor (slice 3); cuisine ranking → slice 2
+_W_FLAVOR: float = 0.10
 
 # Default look-ahead window for expiration urgency
 _EXPIRY_WINDOW_DAYS: int = 7
@@ -196,6 +201,8 @@ def rank_recipes(
     cuisine: str | None = None,
     expiry_window_days: int = _EXPIRY_WINDOW_DAYS,
     compute_substitution: bool = True,
+    flavor_fn: Callable[[list[str], list[str]], float] | None = None,
+    flavor_top_n: int = 250,
 ) -> list[RankedRecipe]:
     """Score and rank candidate recipes against the current pantry.
 
@@ -252,19 +259,43 @@ def rank_recipes(
         unique_missing = sorted({m for (_, _, missing, _, _) in prelim for m in missing})
         matches = _substitute_matches(unique_missing, pantry_names, embed_fn)  # type: ignore[arg-type]
 
-    ranked: list[RankedRecipe] = []
+    # Phase A: non-flavor score for every candidate.
+    scored: list[
+        tuple[dict[str, Any], float, list[str], float, float, float, float]
+    ] = []
     for recipe, coverage, missing, expiration_urgency, cultural_fit in prelim:
         substitution_penalty = (
             _penalty_from_matches(missing, pantry_names, matches)
             if compute_substitution
             else 0.0
         )
-        score = (
+        nonflavor = (
             _W_COVERAGE * coverage
             + _W_EXPIRY * expiration_urgency
             + _W_SUBSTITUTION * (1.0 - substitution_penalty)
             + _W_CULTURAL * cultural_fit
         )
+        scored.append(
+            (recipe, coverage, missing, expiration_urgency, cultural_fit,
+             substitution_penalty, nonflavor)
+        )
+
+    # Phase B: compute flavor only for the top-N by non-flavor score (perf cap).
+    flavor_indices = set(range(len(scored)))
+    if flavor_fn is not None and len(scored) > flavor_top_n:
+        ordered = sorted(range(len(scored)), key=lambda i: scored[i][6], reverse=True)
+        flavor_indices = set(ordered[:flavor_top_n])
+        _log.info(
+            "flavor capped to top %d of %d candidates", flavor_top_n, len(scored)
+        )
+
+    ranked: list[RankedRecipe] = []
+    for i, (recipe, coverage, missing, expiration_urgency, cultural_fit,
+            substitution_penalty, nonflavor) in enumerate(scored):
+        flavor = 0.0
+        if flavor_fn is not None and i in flavor_indices:
+            flavor = flavor_fn(recipe.get("ingredients", []), pantry_names)
+        score = nonflavor + _W_FLAVOR * flavor
         ranked.append(
             RankedRecipe(
                 recipe=recipe,
@@ -274,6 +305,7 @@ def rank_recipes(
                 expiration_urgency=expiration_urgency,
                 substitution_penalty=substitution_penalty,
                 cultural_fit=cultural_fit,
+                flavor=flavor,
             )
         )
 

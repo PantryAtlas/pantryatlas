@@ -125,6 +125,9 @@ dmypy.json
 # Data pipeline staging and outputs
 /pantryatlas/data/_staging/
 /pantryatlas/data/*.parquet
+# Exception: the FlavorDB compound table is a small (~16MB) static reference
+# asset the flavor ranking hard-requires; commit it so CI/clones/deploys have it.
+!/pantryatlas/data/compounds.parquet
 
 # IDE
 .vscode/

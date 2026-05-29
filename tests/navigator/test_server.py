@@ -647,3 +647,14 @@ def test_post_item_expire_marks_used_up(client):
 def test_post_item_expire_unknown_404(client):
     res = client.post("/navigator/pantry/items/ghost/expire")
     assert res.status_code == 404
+
+
+def test_from_pantry_includes_flavor_field(client):
+    client.post("/navigator/pantry/items", json={"raw_text": "garlic", "canonical_name": "garlic"})
+    client.post("/navigator/pantry/items", json={"raw_text": "onion", "canonical_name": "onion"})
+    res = client.post("/navigator/recipes/from-pantry")
+    assert res.status_code == 200
+    data = res.json()
+    if data:  # fake store may return few; assert the field shape when present
+        assert "flavor" in data[0]
+        assert isinstance(data[0]["flavor"], (int, float))
