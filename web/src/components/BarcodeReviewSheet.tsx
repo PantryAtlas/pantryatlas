@@ -14,15 +14,16 @@ import { barcodeSheetOpen, barcodeCandidate, barcodeState, confirmBarcodeAdd } f
  */
 export function BarcodeReviewSheet() {
   const isOpen = barcodeSheetOpen.value
-  if (!isOpen) return null
-
-  const state = barcodeState.value
   const cand = barcodeCandidate.value
+  const state = barcodeState.value
   const [canonical, setCanonical] = useState('')
+  const [adding, setAdding] = useState(false)
 
   useEffect(() => {
     if (cand?.proposed) setCanonical(cand.proposed.canonical_name)
   }, [cand?.proposed?.canonical_name])
+
+  if (!isOpen) return null
 
   function close() {
     barcodeSheetOpen.value = false
@@ -295,8 +296,13 @@ export function BarcodeReviewSheet() {
                 <button
                   type="button"
                   data-barcode-add
-                  onClick={() => confirmBarcodeAdd(cand.product?.name || canonical, canonical)}
-                  disabled={!canonical.trim()}
+                  onClick={async () => {
+                    if (adding) return
+                    setAdding(true)
+                    await confirmBarcodeAdd(cand.proposed?.raw_text || cand.product?.name || canonical, canonical)
+                    setAdding(false)
+                  }}
+                  disabled={!canonical.trim() || adding}
                   style={{
                     flex: 1,
                     height: '48px',

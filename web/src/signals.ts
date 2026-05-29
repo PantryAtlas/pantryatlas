@@ -289,7 +289,6 @@ export async function postBarcode(file: File) {
     const form = new FormData()
     form.append('image', file)
     const res = await fetch('/navigator/pantry/barcode', { method: 'POST', body: form })
-    if (res.status === 422) { barcodeState.value = 'error'; return }
     if (!res.ok) { barcodeState.value = 'error'; return }
     barcodeCandidate.value = await res.json()
     barcodeState.value = 'ready'
