@@ -24,6 +24,9 @@ LLAMA_CPP_COMMIT="fcc7508759c7a3fe5a0f4500592657900be8aca5"
 # Values from T-001 (docs/gemma4-verified-specs.md) — do NOT change without re-verifying SHA.
 GEMMA4_GGUF_URL="https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q4_K_M.gguf"
 GEMMA4_GGUF_SHA256="519b9793ed6ce0ff530f1b7c96e848e08e49e7af4d57bb97f76215963a54146d"
+# Vision projector (mmproj) — enables shelf-photo parsing (T-014). F16 ≈1 GB.
+GEMMA4_MMPROJ_URL="https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/mmproj-F16.gguf"
+GEMMA4_MMPROJ_SHA256="ddf46c21d7078e95338cfc22306b19b276a29a5ad089023449dd54d4b6170a51"
 
 PANTRYATLAS_HOME="${PANTRYATLAS_HOME:-$HOME/pantryatlas}"
 PANTRYATLAS_VENV="$PANTRYATLAS_HOME/venv"
@@ -128,8 +131,12 @@ stage_gemma_download() {
     mkdir -p "$MODELS_DIR"
     log "gemma download: fetching ~5 GB GGUF..."
     fetch_verified "$GEMMA4_GGUF_URL" "$GEMMA4_GGUF_SHA256" "$gguf"
+    # Vision projector (mmproj) — required for shelf-photo parsing (T-014).
+    local mmproj="$MODELS_DIR/mmproj-F16.gguf"
+    log "gemma download: fetching ~1 GB vision projector (mmproj)..."
+    fetch_verified "$GEMMA4_MMPROJ_URL" "$GEMMA4_MMPROJ_SHA256" "$mmproj"
     touch "$stamp"
-    log "gemma download: done (verified)"
+    log "gemma download: done (verified, incl. mmproj)"
 }
 
 stage_db_download() {

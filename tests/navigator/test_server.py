@@ -588,3 +588,27 @@ def test_import_does_not_create_kitchen_db(tmp_path: Path, monkeypatch: pytest.M
         del sys.modules[mod_name]
     importlib.import_module(mod_name)
     assert not (tmp_path / ".pantryatlas" / "kitchen.db").exists()
+
+
+# ---------------------------------------------------------------------------
+# T-014 follow-up: env-gated vision client
+# ---------------------------------------------------------------------------
+
+
+def test_vision_client_disabled_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Without PANTRYATLAS_VISION=1, no vision client is built (→ route 503s)."""
+    from pantryatlas.navigator.server import _build_vision_client
+
+    monkeypatch.delenv("PANTRYATLAS_VISION", raising=False)
+    assert _build_vision_client() is None
+
+
+def test_vision_client_enabled_with_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """PANTRYATLAS_VISION=1 builds a GemmaClient (construction does no network)."""
+    from pantryatlas.gemma.client import GemmaClient
+    from pantryatlas.navigator.server import _build_vision_client
+
+    monkeypatch.setenv("PANTRYATLAS_VISION", "1")
+    monkeypatch.setenv("PANTRYATLAS_VISION_URL", "http://127.0.0.1:8080")
+    client = _build_vision_client()
+    assert isinstance(client, GemmaClient)

@@ -41,6 +41,7 @@ Design decisions
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 from datetime import date
 from pathlib import Path
@@ -882,7 +883,26 @@ def _build_production_app() -> FastAPI:
         providers_config_path=DEFAULT_CONFIG_PATH,
         kitchen_factory=_make_production_kitchen_factory(),
         off_client=OpenFoodFactsClient(),
+        vision_client=_build_vision_client(),
     )
+
+
+def _build_vision_client() -> GemmaClient | None:
+    """Return a vision GemmaClient when vision is enabled, else None (→ 503).
+
+    Opt-in: set ``PANTRYATLAS_VISION=1`` on deployments that have bootstrapped
+    the mmproj and run llama-server with ``--mmproj`` (the gemma service started
+    with vision).  ``PANTRYATLAS_VISION_URL`` overrides the llama-server base URL
+    (default: the GemmaClient default, http://127.0.0.1:8080).  When the model
+    isn't actually vision-capable or is unreachable, ``vision_generate`` raises
+    ``VisionUnavailable`` and the route returns 503 — the graceful path.
+    """
+    if os.environ.get("PANTRYATLAS_VISION") != "1":
+        return None
+    from pantryatlas.gemma.client import GemmaClient
+
+    url = os.environ.get("PANTRYATLAS_VISION_URL")
+    return GemmaClient(base_url=url) if url else GemmaClient()
 
 
 app: FastAPI = _build_production_app()
