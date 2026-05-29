@@ -174,6 +174,7 @@ export async function cookRecipe(opts: {
   recipe_id?: string
   dish_name: string
   servings?: number
+  consumed?: { canonical_name: string; coarse_amount: string }[]
 }): Promise<boolean> {
   try {
     const res = await fetch('/navigator/cook', {

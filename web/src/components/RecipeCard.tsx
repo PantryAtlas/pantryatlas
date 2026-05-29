@@ -178,7 +178,10 @@ export function RecipeCard({ ranked, animDelay = 0 }: RecipeCardProps) {
   async function handleCooked(e: MouseEvent) {
     e.stopPropagation()
     setCooking(true)
-    const ok = await cookRecipe({ dish_name: recipe.title, servings: 2 })
+    const consumed = recipe.ingredients
+      .filter((ing) => !missing.includes(ing))
+      .map((ing) => ({ canonical_name: ing, coarse_amount: 'cook' }))
+    const ok = await cookRecipe({ dish_name: recipe.title, servings: 2, consumed })
     setCooking(false)
     if (ok) setCooked(true)
   }
