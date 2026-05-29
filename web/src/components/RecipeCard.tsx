@@ -174,6 +174,7 @@ export function RecipeCard({ ranked, animDelay = 0 }: RecipeCardProps) {
 
   const [cooking, setCooking] = useState(false)
   const [cooked, setCooked] = useState(false)
+  const [servings, setServings] = useState(2)
 
   async function handleCooked(e: MouseEvent) {
     e.stopPropagation()
@@ -181,7 +182,7 @@ export function RecipeCard({ ranked, animDelay = 0 }: RecipeCardProps) {
     const consumed = recipe.ingredients
       .filter((ing) => !missing.includes(ing))
       .map((ing) => ({ canonical_name: ing, coarse_amount: 'cook' }))
-    const ok = await cookRecipe({ dish_name: recipe.title, servings: 2, consumed })
+    const ok = await cookRecipe({ dish_name: recipe.title, servings, consumed })
     setCooking(false)
     if (ok) setCooked(true)
   }
@@ -532,6 +533,98 @@ export function RecipeCard({ ranked, animDelay = 0 }: RecipeCardProps) {
 
             {/* Action buttons */}
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              {/* Servings stepper — visible before cook is logged */}
+              {!cooked && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    minHeight: '44px',
+                    padding: '4px 8px',
+                    borderRadius: 'var(--md-sys-shape-corner-full)',
+                    border: '1.5px solid var(--md-sys-color-outline-variant)',
+                    background: 'var(--md-sys-color-surface-container-low)',
+                    flexShrink: 0,
+                  }}
+                >
+                  <button
+                    type="button"
+                    aria-label="Fewer servings"
+                    disabled={cooking || servings <= 1}
+                    onClick={(e) => { e.stopPropagation(); setServings((s) => Math.max(1, s - 1)) }}
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: 'var(--md-sys-shape-corner-full)',
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: (cooking || servings <= 1) ? 'default' : 'pointer',
+                      color: 'var(--md-sys-color-on-surface-variant)',
+                      fontFamily: 'var(--font)',
+                      fontSize: '1.25rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      opacity: (cooking || servings <= 1) ? '0.38' : '1',
+                      transition: 'background 0.15s',
+                      flexShrink: 0,
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!cooking && servings > 1)
+                        (e.currentTarget as HTMLButtonElement).style.background =
+                          'var(--md-sys-color-surface-container)'
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLButtonElement).style.background = 'transparent'
+                    }}
+                  >−</button>
+                  <span
+                    style={{
+                      minWidth: '28px',
+                      textAlign: 'center',
+                      fontFamily: 'var(--font)',
+                      fontSize: 'var(--md-sys-typescale-label-large-size)',
+                      fontWeight: 'var(--md-sys-typescale-label-large-weight)',
+                      color: 'var(--md-sys-color-on-surface)',
+                    }}
+                    aria-live="polite"
+                    aria-label={`${servings} servings`}
+                  >{servings}</span>
+                  <button
+                    type="button"
+                    aria-label="More servings"
+                    disabled={cooking || servings >= 99}
+                    onClick={(e) => { e.stopPropagation(); setServings((s) => Math.min(99, s + 1)) }}
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: 'var(--md-sys-shape-corner-full)',
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: (cooking || servings >= 99) ? 'default' : 'pointer',
+                      color: 'var(--md-sys-color-on-surface-variant)',
+                      fontFamily: 'var(--font)',
+                      fontSize: '1.25rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      opacity: (cooking || servings >= 99) ? '0.38' : '1',
+                      transition: 'background 0.15s',
+                      flexShrink: 0,
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!cooking && servings < 99)
+                        (e.currentTarget as HTMLButtonElement).style.background =
+                          'var(--md-sys-color-surface-container)'
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLButtonElement).style.background = 'transparent'
+                    }}
+                  >+</button>
+                </div>
+              )}
+
               {/* "I cooked this" — filled primary pill; logs + soft-decrements */}
               <button
                 type="button"
