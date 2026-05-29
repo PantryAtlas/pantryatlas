@@ -410,7 +410,9 @@ class KitchenStore:
         Only provided (non-None) fields are written. Returns the updated event
         dict, or None if event_id is unknown. Raises ValueError on bad rating.
         """
-        if rating is not None and (not isinstance(rating, int) or not 1 <= rating <= 5):
+        if rating is not None and (
+            not isinstance(rating, int) or isinstance(rating, bool) or not 1 <= rating <= 5
+        ):
             raise ValueError("rating must be an int in 1..5")
         with self._lock:
             exists = self._conn.execute(

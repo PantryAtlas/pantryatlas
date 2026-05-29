@@ -449,7 +449,8 @@ def test_update_cook_event_unknown_id_returns_none(tmp_path):
 def test_update_cook_event_bad_rating_raises(tmp_path):
     store = KitchenStore(tmp_path / "kitchen.db")
     ev = store.add_cook_event(dish_name="X", consumed=[])
-    for bad in (0, 6, 2.5):
+    # bool is an int subclass; reject it explicitly so True isn't stored as 1-star.
+    for bad in (0, 6, 2.5, True, False):
         with pytest.raises(ValueError):
             store.update_cook_event(ev["id"], rating=bad)
 
