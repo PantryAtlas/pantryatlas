@@ -46,3 +46,9 @@ def test_5xx_raises_off_unavailable():
     def handler(req): return httpx.Response(503, text="down")
     with pytest.raises(OffUnavailable):
         _client(handler).get_product("737628064502")
+
+
+def test_non_json_200_raises_off_unavailable():
+    def handler(req): return httpx.Response(200, text="<html>Bot blocked</html>")
+    with pytest.raises(OffUnavailable):
+        _client(handler).get_product("737628064502")

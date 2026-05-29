@@ -46,7 +46,21 @@ class OpenFoodFactsClient:
             raise OffUnavailable(f"OFF returned {r.status_code}")
         if r.status_code != 200:
             raise OffUnavailable(f"OFF returned {r.status_code}")
-        body = r.json()
+        try:
+            body = r.json()
+        except ValueError as exc:
+            raise OffUnavailable(f"OFF returned non-JSON body: {exc}") from exc
+        if not isinstance(body, dict):
+            raise OffUnavailable("OFF returned unexpected body shape")
         if body.get("status") != 1:
             return None
         return body.get("product")
+
+    def close(self) -> None:
+        self._client.close()
+
+    def __enter__(self) -> OpenFoodFactsClient:
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self.close()

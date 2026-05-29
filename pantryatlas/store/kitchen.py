@@ -406,6 +406,11 @@ class KitchenStore:
             self._conn.commit()
 
     def get_cached_off(self, code: str) -> dict[str, Any] | None:
+        """Return cached OFF product dict for *code*, or None if not cached.
+
+        The cache is intentionally indefinite in v1 (no TTL); ``fetched_at``
+        is stored for a future TTL policy.
+        """
         row = self._conn.execute(
             "SELECT product_json FROM off_cache WHERE code=?", (code,)
         ).fetchone()

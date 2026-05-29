@@ -37,7 +37,7 @@ def test_decode_returns_none_when_no_barcode():
 
 
 # --- mapping ---
-_KNOWN = {"noodles": "noodles", "rice noodles": "noodles", "pasta": "pasta"}
+_KNOWN = {"noodles": "noodles", "rice noodles": "rice_noodles", "pasta": "pasta"}
 
 
 def _fake_resolver(raw: str) -> Ingredient | None:
@@ -52,7 +52,7 @@ def test_mapping_uses_ingredient_tag_first():
     }
     ing, matched = product_to_ingredient(product, _fake_resolver)
     assert matched is True
-    assert ing.canonical_name == "noodles"   # "rice noodles" → resolver → "noodles"
+    assert ing.canonical_name == "rice_noodles"   # ingredient tag wins over category tag
     assert "Rice Noodles" in ing.raw_text
 
 
