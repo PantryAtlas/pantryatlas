@@ -79,3 +79,17 @@ Manual, on-device (this is a spike): `ops/dev/pa-deploy.sh` → on the iPhone op
 ## If the spike succeeds → next steps (out of scope here)
 
 Implement `kind:"client"` in the provider registry so the navigator can formally prefer on-device vision; self-host the SmolVLM ONNX files on pi-nas for offline/local-first; explore SmolVLM2 for the video ("pan the fridge") idea via frame sampling.
+
+## Spike results — round 1 (2026-05-28, iPhone via dev node)
+
+Five success-criteria answers from the operator's iPhone (Safari) against `http://pi-nas.local:8090/?ondevice=1`, on a Toaster-Strudel box photo:
+
+1. **Did it run?** Plumbing YES — the PWA loaded, captured the photo, lazily loaded transformers.js, and attempted inference on-device. (The core app — pantry + ranking + Coverage Dial — also works great on the iPhone.)
+2. **Backend?** **WASM**, not WebGPU — iOS Safari exposed no `navigator.gpu` on this device/version (WebGPU off or behind a Feature Flag).
+3. **Load/infer time?** N/A — failed at model-session creation.
+4. **Tab survived?** Yes (graceful error, no crash).
+5. **Output?** None — **session-creation error**: `Can't create a session ... InsertedPrecisionFreeCast_/vision_model/encoder/layers.0/layer_norm1/...`. Root cause: the onnxruntime-web **WASM EP cannot load the `fp16` vision encoder** (fp16 is a WebGPU capability).
+
+**Fix (round 2, committed):** backend-aware dtype ladder — WASM tries `q4 → int8 → fp32` (no fp16), WebGPU keeps fp16; the chosen `backend/dtype` is shown in the UI. Pending operator re-test.
+
+**Verdict so far:** on-device VLM in the PWA is *reachable* on iPhone; the open question is whether SmolVLM-256M loads + runs acceptably under the WASM EP (memory/speed), or whether the operator should enable WebGPU in iOS Safari (Settings → Apps → Safari → Advanced → Feature Flags → WebGPU) for the faster fp16 path.

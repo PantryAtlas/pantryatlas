@@ -268,7 +268,7 @@ export function PhotoReviewSheet() {
                     opacity: 0.8,
                   }}
                 >
-                  On-device · {telemetry.backend} · load {telemetry.loadMs}ms · infer {telemetry.inferMs}ms · {telemetry.model}
+                  On-device · {telemetry.backend}/{telemetry.dtype} · load {telemetry.loadMs}ms · infer {telemetry.inferMs}ms · {telemetry.model}
                 </p>
               )}
               {telemetry?.rawText && (
