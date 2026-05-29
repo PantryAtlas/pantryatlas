@@ -64,10 +64,12 @@ def test_add_without_canonical_still_resolves(tmp_path):
 
 
 def _barcode_png(value="737628064502") -> bytes:
-    img = zxingcpp.write_barcode(zxingcpp.BarcodeFormat.EAN13, value)
-    pil = img if isinstance(img, Image.Image) else Image.fromarray(img)
+    bc = zxingcpp.create_barcode(value, zxingcpp.BarcodeFormat.EAN13)
+    img = zxingcpp.write_barcode_to_image(bc, scale=4)
+    arr = np.array(img)
+    pil = Image.fromarray(arr)
     buf = _io.BytesIO()
-    pil.convert("RGB").resize((pil.width * 4, pil.height * 4)).save(buf, format="PNG")
+    pil.convert("RGB").save(buf, format="PNG")
     return buf.getvalue()
 
 
@@ -122,6 +124,31 @@ def test_barcode_route_off_not_found(tmp_path):
 def test_barcode_route_off_down_is_graceful(tmp_path):
     def off_down(req): raise httpx.ConnectError("boom")
     client = _client_with_off(tmp_path, off_down)
+    r = client.post("/navigator/pantry/barcode",
+                    files={"image": ("b.png", _barcode_png(), "image/png")})
+    assert r.status_code == 200
+    assert r.json()["found"] is False
+    assert r.json().get("error") == "off_unavailable"
+
+
+def test_barcode_route_cache_first_skips_second_network_call(tmp_path):
+    calls = {"n": 0}
+
+    def handler(req):
+        calls["n"] += 1
+        return _off_found(req)  # reuse the existing found-handler
+
+    client = _client_with_off(tmp_path, handler)
+    img = ("b.png", _barcode_png(), "image/png")
+    r1 = client.post("/navigator/pantry/barcode", files={"image": img})
+    r2 = client.post("/navigator/pantry/barcode", files={"image": img})
+    assert r1.status_code == 200 and r2.status_code == 200
+    assert r1.json()["found"] is True and r2.json()["found"] is True
+    assert calls["n"] == 1  # second scan served from off_cache, no network
+
+
+def test_barcode_route_off_client_none_is_graceful(tmp_path):
+    client = _client(tmp_path)  # no off_client on app.state
     r = client.post("/navigator/pantry/barcode",
                     files={"image": ("b.png", _barcode_png(), "image/png")})
     assert r.status_code == 200
