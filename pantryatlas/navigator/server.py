@@ -675,9 +675,15 @@ def create_app(
         return {
             "found": True,
             "code": code,
-            "product": {"name": product.get("product_name") or "", "brand": product.get("brands") or ""},
-            "proposed": {"canonical_name": ingredient.canonical_name,
-                         "raw_text": ingredient.raw_text, "matched": matched},
+            "product": {
+                "name": product.get("product_name") or "",
+                "brand": product.get("brands") or "",
+            },
+            "proposed": {
+                "canonical_name": ingredient.canonical_name,
+                "raw_text": ingredient.raw_text,
+                "matched": matched,
+            },
         }
 
     # ------------------------------------------------------------------

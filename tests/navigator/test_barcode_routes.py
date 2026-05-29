@@ -1,11 +1,16 @@
 # tests/navigator/test_barcode_routes.py
 from __future__ import annotations
 
+import io as _io
 from pathlib import Path
 
+import httpx
 import numpy as np
+import zxingcpp
 from fastapi.testclient import TestClient
+from PIL import Image
 
+from pantryatlas.navigator.openfoodfacts import OpenFoodFactsClient
 from pantryatlas.pantry.models import Ingredient
 from pantryatlas.store.kitchen import KitchenStore
 
@@ -56,13 +61,6 @@ def test_add_without_canonical_still_resolves(tmp_path):
 # ---------------------------------------------------------------------------
 # Task 5: POST /navigator/pantry/barcode route
 # ---------------------------------------------------------------------------
-import io as _io
-
-import httpx
-import zxingcpp
-from PIL import Image
-
-from pantryatlas.navigator.openfoodfacts import OpenFoodFactsClient
 
 
 def _barcode_png(value="737628064502") -> bytes:
@@ -104,7 +102,8 @@ def test_barcode_route_returns_candidate(tmp_path):
 
 def test_barcode_route_no_barcode_returns_422(tmp_path):
     client = _client_with_off(tmp_path, _off_found)
-    buf = _io.BytesIO(); Image.new("RGB", (200, 200), "white").save(buf, format="PNG")
+    buf = _io.BytesIO()
+    Image.new("RGB", (200, 200), "white").save(buf, format="PNG")
     r = client.post("/navigator/pantry/barcode",
                     files={"image": ("blank.png", buf.getvalue(), "image/png")})
     assert r.status_code == 422

@@ -270,7 +270,9 @@ def test_cook_event_discarded_counts_as_waste(tmp_path):
 def test_off_cache_round_trip(tmp_path):
     store = KitchenStore(tmp_path / "kitchen.db")
     assert store.get_cached_off("123") is None
-    store.cache_off("123", {"product_name": "Rice Noodles", "ingredients_tags": ["en:rice-noodles"]})
+    store.cache_off("123", {
+        "product_name": "Rice Noodles", "ingredients_tags": ["en:rice-noodles"],
+    })
     cached = store.get_cached_off("123")
     assert cached["product_name"] == "Rice Noodles"
     # overwrite is idempotent (cache-through on re-fetch)
