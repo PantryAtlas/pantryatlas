@@ -47,3 +47,35 @@ def test_jaccard(fs: FlavorStore):
     j = fs.jaccard(g, o)
     assert 0.0 <= j <= 1.0
     assert fs.jaccard(g, o) == fs.jaccard(o, g)  # symmetric + cached
+
+
+def test_cohesion(fs: FlavorStore):
+    assert fs.cohesion(["garlic"]) is None  # <2 mapped → None
+    assert fs.cohesion(["xyzzy", "qwerty"]) is None  # 0 mapped → None
+    c = fs.cohesion(["garlic", "onion", "tomato"])
+    assert c is not None and 0.0 <= c <= 1.0
+
+
+def test_affinity_excludes_pantry_and_equal(fs: FlavorStore):
+    # A recipe whose only mapped entities are already in the pantry → None
+    assert fs.affinity(["garlic", "onion"], ["garlic", "onion"]) is None
+    # Empty pantry → None
+    assert fs.affinity(["garlic", "onion"], []) is None
+    # Non-pantry recipe entities vs pantry → defined, in [0,1]
+    a = fs.affinity(["basil", "tomato"], ["garlic", "onion"])
+    assert a is not None and 0.0 <= a <= 1.0
+
+
+def test_flavor_score_blend(fs: FlavorStore):
+    # both None → 0.0
+    assert fs.flavor_score(["xyzzy"], []) == 0.0
+    # cohesion present, affinity None (empty pantry) → equals cohesion
+    coh = fs.cohesion(["garlic", "onion", "tomato"])
+    assert fs.flavor_score(["garlic", "onion", "tomato"], []) == pytest.approx(coh)
+    # both present → 0.5/0.5 blend
+    phrases = ["basil", "tomato", "oregano"]
+    pantry = ["garlic", "onion"]
+    coh2 = fs.cohesion(phrases)
+    aff2 = fs.affinity(phrases, pantry)
+    assert coh2 is not None and aff2 is not None
+    assert fs.flavor_score(phrases, pantry) == pytest.approx(0.5 * coh2 + 0.5 * aff2)
