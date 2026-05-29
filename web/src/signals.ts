@@ -16,9 +16,26 @@ export interface PantryItem {
   canonical_name: string
   raw_text: string
   quantity?: { amount: number; unit: string }
-  expires_at?: string // ISO date string or null
-  /** Present on optimistically-added items awaiting sync. Cleared after replay. */
+  expires_at?: string
+  /** present | low | used_up — coarse confidence in on-hand presence */
+  state?: 'present' | 'low' | 'used_up'
+  confidence?: number
+  last_observed_at?: string
+  source?: string
+  /** Present on optimistically-added items awaiting sync. */
   _pending?: boolean
+}
+
+export interface CookEvent {
+  id: number
+  recipe_id?: string | null
+  dish_name: string
+  servings?: number | null
+  cooked_at: string
+  rating?: number | null
+  notes?: string | null
+  consumed: { canonical_name: string; coarse_amount: string }[]
+  source: string
 }
 
 export type AddState = 'idle' | 'resolving' | 'resolved' | 'error'
@@ -130,6 +147,69 @@ export async function deleteItem(canonicalName: string) {
   try {
     await fetch(`/navigator/pantry/items/${encodeURIComponent(canonicalName)}`, {
       method: 'DELETE',
+    })
+    await fetchPantry()
+  } catch {
+    // ignore
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Meals / cook events
+// ---------------------------------------------------------------------------
+
+export const meals = signal<CookEvent[]>([])
+
+export async function fetchMeals() {
+  try {
+    const res = await fetch('/navigator/meals')
+    if (res.ok) meals.value = await res.json()
+  } catch {
+    // keep existing
+  }
+}
+
+/** Mark a recipe cooked: logs it + soft-decrements its ingredients, then refreshes. */
+export async function cookRecipe(opts: {
+  recipe_id?: string
+  dish_name: string
+  servings?: number
+}): Promise<boolean> {
+  try {
+    const res = await fetch('/navigator/cook', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(opts),
+    })
+    if (res.ok || res.status === 201) {
+      await fetchPantry()
+      await fetchMeals()
+      return true
+    }
+  } catch {
+    // ignore
+  }
+  return false
+}
+
+/** Coarse consume on a pantry item: 'half' | 'used_up' | 'discarded'. */
+export async function consumeItem(canonicalName: string, coarseAmount: string) {
+  try {
+    await fetch(`/navigator/pantry/items/${encodeURIComponent(canonicalName)}/consume`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ coarse_amount: coarseAmount }),
+    })
+    await fetchPantry()
+  } catch {
+    // ignore
+  }
+}
+
+export async function restoreItem(canonicalName: string) {
+  try {
+    await fetch(`/navigator/pantry/items/${encodeURIComponent(canonicalName)}/restore`, {
+      method: 'POST',
     })
     await fetchPantry()
   } catch {
