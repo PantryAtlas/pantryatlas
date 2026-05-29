@@ -140,6 +140,56 @@ class TestIngredientStorePersistence:
         assert fetched.id == rows[3].id
 
 
+class TestIngredientStoreFilters:
+    """query_by_vector metadata filtering (language, source)."""
+
+    def test_filter_by_language(self, tmp_path: pytest.TempdirFactory) -> None:
+        db = tmp_path / "ingredients.db"
+        rows = [
+            Ingredient(id="en", canonical_name="garlic", language="en",
+                       embedding=_make_unit_vec(0)),
+            Ingredient(id="es", canonical_name="ajo", language="es",
+                       embedding=_make_unit_vec(1)),
+        ]
+        with IngredientStore(db) as store:
+            store.upsert(rows)
+            results = store.query_by_vector(
+                rows[0].embedding, top_k=5, filters={"language": "es"}
+            )
+        assert {r.id for r in results} == {"es"}
+
+    def test_filter_by_source(self, tmp_path: pytest.TempdirFactory) -> None:
+        db = tmp_path / "ingredients.db"
+        rows = [
+            Ingredient(id="a", canonical_name="x", language="en",
+                       embedding=_make_unit_vec(0), source="manual"),
+            Ingredient(id="b", canonical_name="y", language="en",
+                       embedding=_make_unit_vec(1), source="recipenlg"),
+        ]
+        with IngredientStore(db) as store:
+            store.upsert(rows)
+            results = store.query_by_vector(
+                _make_unit_vec(0), top_k=5, filters={"source": "recipenlg"}
+            )
+        assert {r.id for r in results} == {"b"}
+
+    def test_unknown_filter_key_raises(self, tmp_path: pytest.TempdirFactory) -> None:
+        db = tmp_path / "ingredients.db"
+        with IngredientStore(db) as store:
+            store.upsert(_make_ingredients(2))
+            with pytest.raises(ValueError, match="unsupported filter keys"):
+                store.query_by_vector(_make_unit_vec(0), filters={"title": "x"})
+
+    def test_non_string_filter_value_raises(
+        self, tmp_path: pytest.TempdirFactory
+    ) -> None:
+        db = tmp_path / "ingredients.db"
+        with IngredientStore(db) as store:
+            store.upsert(_make_ingredients(2))
+            with pytest.raises(ValueError, match="must be a string scalar"):
+                store.query_by_vector(_make_unit_vec(0), filters={"language": 3})
+
+
 class TestIngredientStoreSize:
     """AC-6: 1500 rows must stay under 500 MB."""
 

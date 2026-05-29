@@ -10,7 +10,12 @@ from pathlib import Path
 import numpy as np
 import sqlite_vec
 
+from pantryatlas.store._filters import validate_scalar_filters
+
 _DIM = 1024
+
+# Metadata columns on ingredients_meta that query_by_vector may filter on.
+_INGREDIENT_FILTER_COLUMNS = {"language", "source"}
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS ingredients_meta (
@@ -152,32 +157,66 @@ class IngredientStore:
         Args:
             vec: Query embedding, shape (1024,) float32.
             top_k: Number of results to return.
-            filters: Optional dict of metadata filters (reserved for v0.2;
-                raises NotImplementedError if non-None).
+            filters: Optional ``{column: value}`` metadata filters with scalar
+                string values. Supported columns: ``language``, ``source``.
+                Unknown columns or non-string values raise ``ValueError``.
 
         Returns:
-            List of Ingredient objects sorted by ascending distance.
+            List of Ingredient objects sorted by ascending distance, at most
+            top_k, each matching every filter (fewer only when too few match).
         """
-        if filters is not None:
-            raise NotImplementedError("query filters not yet supported; pass filters=None")
         blob = self._to_blob(vec)
-        rows = self._conn.execute(
-            """
-            WITH knn AS (
-                SELECT id, distance
-                FROM ingredients_vec
-                WHERE embedding MATCH ?
-                ORDER BY distance
+        if not filters:
+            rows = self._conn.execute(
+                """
+                WITH knn AS (
+                    SELECT id, distance
+                    FROM ingredients_vec
+                    WHERE embedding MATCH ?
+                    ORDER BY distance
+                    LIMIT ?
+                )
+                SELECT m.id, m.canonical_name, m.language, m.aliases, m.source, v.embedding
+                FROM knn
+                JOIN ingredients_meta m ON m.id = knn.id
+                JOIN ingredients_vec v ON v.id = knn.id
+                ORDER BY knn.distance
+                """,
+                (blob, top_k),
+            ).fetchall()
+            return [self._from_row(r) for r in rows]
+
+        # Filtered path — over-fetch + widen (see RecipeStore.query_by_vector
+        # for the rationale: metadata filter is applied after the KNN join).
+        validate_scalar_filters(filters, _INGREDIENT_FILTER_COLUMNS)
+        where_sql = " AND ".join(f"m.{col} = ?" for col in filters)
+        filter_vals = list(filters.values())
+        total = self._conn.execute("SELECT COUNT(*) FROM ingredients_vec").fetchone()[0]
+        pool = max(top_k * 8, 64)
+        rows: list = []
+        while True:
+            rows = self._conn.execute(
+                f"""
+                WITH knn AS (
+                    SELECT id, distance
+                    FROM ingredients_vec
+                    WHERE embedding MATCH ?
+                    ORDER BY distance
+                    LIMIT ?
+                )
+                SELECT m.id, m.canonical_name, m.language, m.aliases, m.source, v.embedding
+                FROM knn
+                JOIN ingredients_meta m ON m.id = knn.id
+                JOIN ingredients_vec v ON v.id = knn.id
+                WHERE {where_sql}
+                ORDER BY knn.distance
                 LIMIT ?
-            )
-            SELECT m.id, m.canonical_name, m.language, m.aliases, m.source, v.embedding
-            FROM knn
-            JOIN ingredients_meta m ON m.id = knn.id
-            JOIN ingredients_vec v ON v.id = knn.id
-            ORDER BY knn.distance
-            """,
-            (blob, top_k),
-        ).fetchall()
+                """,
+                (blob, pool, *filter_vals, top_k),
+            ).fetchall()
+            if len(rows) >= top_k or pool >= total:
+                break
+            pool *= 4
         return [self._from_row(r) for r in rows]
 
     def delete(self, id: str) -> None:

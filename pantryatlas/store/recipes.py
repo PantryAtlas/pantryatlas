@@ -10,7 +10,12 @@ from pathlib import Path
 import numpy as np
 import sqlite_vec
 
+from pantryatlas.store._filters import validate_scalar_filters
+
 _DIM = 1024
+
+# Metadata columns on recipes_meta that query_by_vector may filter on.
+_RECIPE_FILTER_COLUMNS = {"language"}
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS recipes_meta (
@@ -160,32 +165,69 @@ class RecipeStore:
         Args:
             vec: Query embedding, shape (1024,) float32.
             top_k: Number of results to return.
-            filters: Optional dict of metadata filters (reserved for v0.2;
-                raises NotImplementedError if non-None).
+            filters: Optional ``{column: value}`` metadata filters with scalar
+                string values. Supported column: ``language``. Unknown columns
+                or non-string values raise ``ValueError``.
 
         Returns:
-            List of Recipe objects sorted by ascending distance.
+            List of Recipe objects sorted by ascending distance, at most top_k,
+            each matching every filter (fewer only when too few rows match).
         """
-        if filters is not None:
-            raise NotImplementedError("query filters not yet supported; pass filters=None")
         blob = self._to_blob(vec)
-        rows = self._conn.execute(
-            """
-            WITH knn AS (
-                SELECT id, distance
-                FROM recipes_vec
-                WHERE embedding MATCH ?
-                ORDER BY distance
+        if not filters:
+            rows = self._conn.execute(
+                """
+                WITH knn AS (
+                    SELECT id, distance
+                    FROM recipes_vec
+                    WHERE embedding MATCH ?
+                    ORDER BY distance
+                    LIMIT ?
+                )
+                SELECT m.id, m.title, m.language, m.ingredients_json, m.instructions, v.embedding
+                FROM knn
+                JOIN recipes_meta m ON m.id = knn.id
+                JOIN recipes_vec v ON v.id = knn.id
+                ORDER BY knn.distance
+                """,
+                (blob, top_k),
+            ).fetchall()
+            return [self._from_row(r) for r in rows]
+
+        # Filtered path. vec0 KNN requires a LIMIT and the metadata lives in a
+        # separate table, so the filter is applied AFTER the join. Over-fetch the
+        # KNN pool and widen it until top_k matches are found (or the corpus is
+        # exhausted) — a naive LIMIT top_k could under-return when the nearest
+        # rows are filtered out.
+        validate_scalar_filters(filters, _RECIPE_FILTER_COLUMNS)
+        where_sql = " AND ".join(f"m.{col} = ?" for col in filters)
+        filter_vals = list(filters.values())
+        total = self._conn.execute("SELECT COUNT(*) FROM recipes_vec").fetchone()[0]
+        pool = max(top_k * 8, 64)
+        rows: list = []
+        while True:
+            rows = self._conn.execute(
+                f"""
+                WITH knn AS (
+                    SELECT id, distance
+                    FROM recipes_vec
+                    WHERE embedding MATCH ?
+                    ORDER BY distance
+                    LIMIT ?
+                )
+                SELECT m.id, m.title, m.language, m.ingredients_json, m.instructions, v.embedding
+                FROM knn
+                JOIN recipes_meta m ON m.id = knn.id
+                JOIN recipes_vec v ON v.id = knn.id
+                WHERE {where_sql}
+                ORDER BY knn.distance
                 LIMIT ?
-            )
-            SELECT m.id, m.title, m.language, m.ingredients_json, m.instructions, v.embedding
-            FROM knn
-            JOIN recipes_meta m ON m.id = knn.id
-            JOIN recipes_vec v ON v.id = knn.id
-            ORDER BY knn.distance
-            """,
-            (blob, top_k),
-        ).fetchall()
+                """,
+                (blob, pool, *filter_vals, top_k),
+            ).fetchall()
+            if len(rows) >= top_k or pool >= total:
+                break
+            pool *= 4
         return [self._from_row(r) for r in rows]
 
     def delete(self, id: str) -> None:
