@@ -203,6 +203,7 @@ def rank_recipes(
     compute_substitution: bool = True,
     flavor_fn: Callable[[list[str], list[str]], float] | None = None,
     flavor_top_n: int = 250,
+    history_fn: Callable[[str], float] | None = None,
 ) -> list[RankedRecipe]:
     """Score and rank candidate recipes against the current pantry.
 
@@ -230,6 +231,8 @@ def rank_recipes(
         expiry_window_days: Look-ahead window for expiration urgency (default 7).
         compute_substitution: Whether to compute the embedding-based substitution
             penalty (refine mode) or skip it (fast mode).
+        history_fn: Optional ``title -> bounded adjustment`` added to each
+            candidate's score; ``None`` = no history effect.
 
     Returns:
         List of :class:`RankedRecipe` sorted descending by score, at most ``k`` items.
@@ -275,6 +278,8 @@ def rank_recipes(
             + _W_SUBSTITUTION * (1.0 - substitution_penalty)
             + _W_CULTURAL * cultural_fit
         )
+        if history_fn is not None:
+            nonflavor += history_fn(recipe.get("title", ""))
         scored.append(
             (recipe, coverage, missing, expiration_urgency, cultural_fit,
              substitution_penalty, nonflavor)
@@ -296,6 +301,10 @@ def rank_recipes(
         if flavor_fn is not None and i in flavor_indices:
             flavor = flavor_fn(recipe.get("ingredients", []), pantry_names)
         score = nonflavor + _W_FLAVOR * flavor
+        if score < 0.0:
+            score = 0.0
+        elif score > 1.0:
+            score = 1.0
         ranked.append(
             RankedRecipe(
                 recipe=recipe,

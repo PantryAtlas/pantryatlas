@@ -44,7 +44,7 @@ from __future__ import annotations
 import logging
 import os
 from collections.abc import Callable
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -59,6 +59,7 @@ from pantryatlas.inference.config import save_provider_config
 from pantryatlas.inference.providers.lan_endpoint import LanEndpointProvider
 from pantryatlas.inference.registry import ProviderRegistry
 from pantryatlas.navigator.facets import VALID_EXCLUDES, passes_filters
+from pantryatlas.navigator.history import build_history_adjuster
 from pantryatlas.navigator.openfoodfacts import OffUnavailable, OpenFoodFactsClient
 from pantryatlas.navigator.ranking import RankedRecipe, compute_swaps, rank_recipes
 from pantryatlas.pantry.models import Ingredient, Quantity
@@ -164,6 +165,13 @@ class CookIn(BaseModel):
     rating: int | None = None
     notes: str | None = None
     consumed: list[ConsumedItemIn] | None = None
+
+
+class MealReflectIn(BaseModel):
+    """Body for PATCH /navigator/meals/{meal_id}."""
+
+    rating: int | None = None
+    notes: str | None = None
 
 
 class DeviceEnrollIn(BaseModel):
@@ -475,6 +483,18 @@ def create_app(
     def get_meals(limit: int = 50) -> list[dict[str, Any]]:
         return _get_kitchen(app).list_meals(limit=limit)
 
+    @app.patch("/navigator/meals/{meal_id}")
+    def patch_meal(meal_id: int, body: MealReflectIn) -> dict[str, Any]:
+        try:
+            updated = _get_kitchen(app).update_cook_event(
+                meal_id, rating=body.rating, notes=body.notes
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e)) from e
+        if updated is None:
+            raise HTTPException(status_code=404, detail="meal not found")
+        return updated
+
     @app.get("/navigator/waste")
     def get_waste(window_days: int = 30) -> dict[str, Any]:
         return _get_kitchen(app).waste_tally(window_days=window_days)
@@ -544,12 +564,17 @@ def create_app(
             if not candidates:
                 return []
 
+        now = datetime.now(UTC)
+        history_fn = build_history_adjuster(
+            _get_kitchen(app).list_meals(limit=500), now
+        )
         flavor_store = _get_flavor(app)
         ranked: list[RankedRecipe] = rank_recipes(
             pantry,
             candidates,
             compute_substitution=False,
             flavor_fn=flavor_store.flavor_score,
+            history_fn=history_fn,
         )
 
         return [_ranked_to_dict(r) for r in ranked]
@@ -595,6 +620,10 @@ def create_app(
         if not candidates:
             return []
 
+        now = datetime.now(UTC)
+        history_fn = build_history_adjuster(
+            _get_kitchen(app).list_meals(limit=500), now
+        )
         ranked = rank_recipes(
             pantry,
             candidates,
@@ -602,6 +631,7 @@ def create_app(
             k=len(candidates),
             compute_substitution=True,
             flavor_fn=_get_flavor(app).flavor_score,
+            history_fn=history_fn,
         )
         return [_ranked_to_dict(r) for r in ranked]
 

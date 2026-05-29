@@ -45,6 +45,26 @@ export function MealLog() {
             {m.consumed.length > 0 ? ` · used ${m.consumed.length} item${m.consumed.length === 1 ? '' : 's'}` : ''}
             {m.servings != null ? ` · ${m.servings} serving${m.servings === 1 ? '' : 's'}` : ''}
           </span>
+          {m.rating ? (
+            <span
+              aria-label={`Rated ${m.rating} star${m.rating === 1 ? '' : 's'}`}
+              style={{
+                display: 'block',
+                marginTop: '4px',
+                color: 'var(--md-sys-color-primary)',
+                fontSize: 'var(--md-sys-typescale-label-medium-size)',
+                letterSpacing: '1px',
+              }}>{'★'.repeat(m.rating)}</span>
+          ) : null}
+          {m.notes ? (
+            <span style={{
+              display: 'block',
+              marginTop: '2px',
+              fontSize: 'var(--md-sys-typescale-body-medium-size)',
+              color: 'var(--md-sys-color-on-surface-variant)',
+              fontStyle: 'italic',
+            }}>{m.notes}</span>
+          ) : null}
         </li>
       ))}
     </ul>

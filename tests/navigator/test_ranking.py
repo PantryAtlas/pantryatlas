@@ -430,3 +430,56 @@ def test_flavor_top_n_cap():
     partial_res = next(r for r in results if r.recipe["title"] == "Partial")
     assert full_res.flavor == 0.5
     assert partial_res.flavor == 0.0
+
+
+# ---------------------------------------------------------------------------
+# history_fn nudge (Task 2 — Star Slice 4)
+#
+# Reuses the module's _make_pantry / _recipe helpers (no pytest fixtures named
+# simple_pantry/simple_candidates exist). Recipes have distinct titles AND
+# distinct coverage so base[0] is deterministic. All use fast mode
+# (compute_substitution=False, no embed_fn, no flavor_fn) so score == nonflavor.
+# ---------------------------------------------------------------------------
+
+
+def _history_pantry():
+    return _make_pantry("garlic", "tomato", "onion")
+
+
+def _history_candidates():
+    return [
+        _recipe("Full Match", "garlic", "tomato", "onion"),   # coverage 1.0
+        _recipe("Two Thirds", "garlic", "tomato", "basil"),   # coverage 2/3
+        _recipe("One Third", "garlic", "egg", "flour"),       # coverage 1/3
+    ]
+
+
+def test_history_fn_none_is_identical():
+    # Re-rank with and without a None history_fn -> identical scores + order.
+    pantry, candidates = _history_pantry(), _history_candidates()
+    a = rank_recipes(pantry, candidates, compute_substitution=False)
+    b = rank_recipes(pantry, candidates, compute_substitution=False, history_fn=None)
+    assert [r.recipe["title"] for r in a] == [r.recipe["title"] for r in b]
+    assert [round(r.score, 9) for r in a] == [round(r.score, 9) for r in b]
+
+
+def test_history_fn_boost_raises_score():
+    pantry, candidates = _history_pantry(), _history_candidates()
+    base = rank_recipes(pantry, candidates, compute_substitution=False)
+    target = base[0].recipe["title"]
+    boosted = rank_recipes(
+        pantry, candidates, compute_substitution=False,
+        history_fn=lambda t: 0.05 if t == target else 0.0,
+    )
+    by_title = {r.recipe["title"]: r.score for r in boosted}
+    base_by_title = {r.recipe["title"]: r.score for r in base}
+    assert by_title[target] == min(1.0, base_by_title[target] + 0.05)
+
+
+def test_history_fn_score_clamped_to_one():
+    pantry, candidates = _history_pantry(), _history_candidates()
+    ranked = rank_recipes(
+        pantry, candidates, compute_substitution=False,
+        history_fn=lambda t: 0.05,
+    )
+    assert all(r.score <= 1.0 for r in ranked)

@@ -1,7 +1,7 @@
 import { h, Fragment } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 import { CoverageRing } from './CoverageRing'
-import { fetchSwaps, recipeSwaps, recipeKey, cookRecipe, type SwapSuggestion } from '../signals'
+import { fetchSwaps, recipeSwaps, recipeKey, cookRecipe, reflectMeal, buildReflectPayload, type SwapSuggestion } from '../signals'
 import { shouldShowPairingBadge } from '../lib/flavor'
 
 /**
@@ -177,6 +177,12 @@ export function RecipeCard({ ranked, animDelay = 0 }: RecipeCardProps) {
   const [cooking, setCooking] = useState(false)
   const [cooked, setCooked] = useState(false)
   const [servings, setServings] = useState(2)
+  // Post-cook reflection state
+  const [cookedEventId, setCookedEventId] = useState<number | null>(null)
+  const [rating, setRating] = useState<number | null>(null)
+  const [note, setNote] = useState('')
+  const [reflectDone, setReflectDone] = useState(false)
+  const [saving, setSaving] = useState(false)
 
   async function handleCooked(e: MouseEvent) {
     e.stopPropagation()
@@ -184,9 +190,20 @@ export function RecipeCard({ ranked, animDelay = 0 }: RecipeCardProps) {
     const consumed = recipe.ingredients
       .filter((ing) => !missing.includes(ing))
       .map((ing) => ({ canonical_name: ing, coarse_amount: 'cook' }))
-    const ok = await cookRecipe({ dish_name: recipe.title, servings, consumed })
+    const ev = await cookRecipe({ dish_name: recipe.title, servings, consumed })
     setCooking(false)
-    if (ok) setCooked(true)
+    if (ev) { setCooked(true); setCookedEventId(ev.id) }
+  }
+
+  async function handleReflectSave(e: MouseEvent) {
+    e.stopPropagation()
+    setSaving(true)
+    if (cookedEventId != null) {
+      const p = buildReflectPayload(rating, note)
+      await reflectMeal(cookedEventId, p.rating, p.notes)
+    }
+    setSaving(false)
+    setReflectDone(true)
   }
 
   // Single chip label
@@ -672,7 +689,9 @@ export function RecipeCard({ ranked, animDelay = 0 }: RecipeCardProps) {
                   whiteSpace: 'nowrap',
                 }}
               >
-                {cooked ? '✓ Logged' : cooking ? 'Logging…' : 'I cooked this'}
+                {cooked
+                  ? `✓ Logged${reflectDone && rating ? ` · ${'★'.repeat(rating)}` : ''}`
+                  : cooking ? 'Logging…' : 'I cooked this'}
               </button>
 
               {/* "Add missing to shopping list" — outlined pill */}
@@ -739,6 +758,146 @@ export function RecipeCard({ ranked, animDelay = 0 }: RecipeCardProps) {
                 Hide for now
               </button>
             </div>
+
+            {/* Post-cook reflection panel — appears once logged, until saved/skipped */}
+            {cooked && !reflectDone && (
+              <div
+                data-reflect-panel="true"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px',
+                  padding: '16px',
+                  borderRadius: 'var(--md-sys-shape-corner-medium)',
+                  background: 'var(--md-sys-color-surface-container-low)',
+                  border: '1px solid var(--md-sys-color-outline-variant)',
+                }}
+              >
+                <p
+                  style={{
+                    fontFamily: 'var(--font)',
+                    fontSize: 'var(--md-sys-typescale-label-large-size)',
+                    fontWeight: 'var(--md-sys-typescale-label-large-weight)',
+                    color: 'var(--md-sys-color-on-surface)',
+                    margin: '0',
+                  }}
+                >
+                  How was it?
+                </p>
+
+                {/* Star rating — five toggle buttons */}
+                <div
+                  role="group"
+                  aria-label="Rate this dish"
+                  style={{ display: 'flex', gap: '4px' }}
+                >
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      aria-label={`Rate ${n} star${n === 1 ? '' : 's'}`}
+                      aria-pressed={rating === n}
+                      onClick={(e) => { e.stopPropagation(); setRating(n) }}
+                      style={{
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: 'var(--md-sys-shape-corner-full)',
+                        background: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: '1.5rem',
+                        lineHeight: '1',
+                        color: n <= (rating ?? 0)
+                          ? 'var(--md-sys-color-primary)'
+                          : 'var(--md-sys-color-outline)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'background 0.15s, color 0.15s',
+                      }}
+                      onMouseEnter={(e) => {
+                        ;(e.currentTarget as HTMLButtonElement).style.background =
+                          'var(--md-sys-color-surface-container)'
+                      }}
+                      onMouseLeave={(e) => {
+                        ;(e.currentTarget as HTMLButtonElement).style.background = 'transparent'
+                      }}
+                    >
+                      {n <= (rating ?? 0) ? '★' : '☆'}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Optional note */}
+                <input
+                  type="text"
+                  maxLength={140}
+                  aria-label="Add a note"
+                  placeholder="Add a note (optional)"
+                  value={note}
+                  onInput={(e) => setNote((e.currentTarget as HTMLInputElement).value)}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    minHeight: '44px',
+                    padding: '10px 14px',
+                    borderRadius: 'var(--md-sys-shape-corner-medium)',
+                    border: '1.5px solid var(--md-sys-color-outline-variant)',
+                    background: 'var(--md-sys-color-surface)',
+                    color: 'var(--md-sys-color-on-surface)',
+                    fontFamily: 'var(--font)',
+                    fontSize: 'var(--md-sys-typescale-body-large-size)',
+                  }}
+                />
+
+                {/* Save + Skip */}
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    data-reflect-save="true"
+                    disabled={saving}
+                    onClick={handleReflectSave}
+                    style={{
+                      flex: '1 1 auto',
+                      minHeight: '44px',
+                      padding: '10px 20px',
+                      borderRadius: 'var(--md-sys-shape-corner-full)',
+                      background: 'var(--md-sys-color-primary)',
+                      color: 'var(--md-sys-color-on-primary)',
+                      border: 'none',
+                      fontFamily: 'var(--font)',
+                      fontSize: 'var(--md-sys-typescale-label-large-size)',
+                      fontWeight: 'var(--md-sys-typescale-label-large-weight)',
+                      cursor: saving ? 'default' : 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {saving ? 'Saving…' : 'Save'}
+                  </button>
+                  <button
+                    type="button"
+                    data-reflect-skip="true"
+                    disabled={saving}
+                    onClick={(e) => { e.stopPropagation(); setReflectDone(true) }}
+                    style={{
+                      flex: '0 1 auto',
+                      minHeight: '44px',
+                      padding: '10px 20px',
+                      borderRadius: 'var(--md-sys-shape-corner-full)',
+                      background: 'var(--md-sys-color-secondary-container)',
+                      color: 'var(--md-sys-color-on-secondary-container)',
+                      border: 'none',
+                      fontFamily: 'var(--font)',
+                      fontSize: 'var(--md-sys-typescale-label-large-size)',
+                      fontWeight: 'var(--md-sys-typescale-label-large-weight)',
+                      cursor: saving ? 'default' : 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Skip
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </li>
