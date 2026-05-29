@@ -293,7 +293,9 @@ def test_cultural_fit_cuisine_boost():
 
     assert italian_result.cultural_fit == 1.0
     assert generic_result.cultural_fit == 0.0
-    assert italian_result.score > generic_result.score
+    # cultural_fit weight moved to flavor (slice 3); cuisine ranking → slice 2.
+    # cultural_fit is still computed/reported, but no longer affects score.
+    assert italian_result.score == generic_result.score
 
 
 # ---------------------------------------------------------------------------
@@ -369,3 +371,62 @@ def test_zero_coverage_recipe_has_nonzero_penalty():
     assert sorted(r.missing) == sorted(["saffron", "truffle", "foie_gras"])
     # substitution_penalty > 0 when all are missing and no close subs
     assert r.substitution_penalty > 0.0
+
+
+# ---------------------------------------------------------------------------
+# Flavor sub-score tests (Task 3 — Star Slice 3)
+# ---------------------------------------------------------------------------
+
+
+def test_flavor_reorders_ties():
+    """Two recipes tie on coverage; the higher flavor_fn score ranks first.
+
+    rank_recipes passes ``recipe["ingredients"]`` (the same list object) to
+    flavor_fn, so we key flavor off object identity for a deterministic test.
+    """
+    pantry = _make_pantry("garlic", "onion")
+    r_hi = _recipe("HiFlavor", "garlic", "onion")
+    r_lo = _recipe("LoFlavor", "garlic", "onion")
+
+    def flavor_fn(ings, pantry_names):
+        return 0.8 if ings is r_hi["ingredients"] else 0.0
+
+    results = rank_recipes(
+        pantry, [r_lo, r_hi], embed_fn=_identity_embed, flavor_fn=flavor_fn
+    )
+    assert results[0].recipe["title"] == "HiFlavor"
+    assert results[0].flavor == 0.8
+    assert results[1].flavor == 0.0
+
+
+def test_flavor_fn_none_is_backcompat():
+    """flavor_fn=None → flavor 0.0, scores unchanged from coverage/expiry/sub only."""
+    pantry = _make_pantry("garlic", "onion")
+    r = _recipe("X", "garlic", "onion")
+    [res] = rank_recipes(pantry, [r], embed_fn=_identity_embed)
+    assert res.flavor == 0.0
+    # full coverage, no missing → 0.50 + 0.20*0 + 0.20*1 + 0.10*0 = 0.70
+    assert abs(res.score - 0.70) < 1e-6
+
+
+def test_flavor_top_n_cap():
+    """With flavor_top_n=1, only the top candidate by non-flavor score gets flavor>0."""
+    pantry = _make_pantry("garlic", "onion")
+    full = _recipe("Full", "garlic", "onion")            # coverage 1.0
+    partial = _recipe("Partial", "garlic", "zucchini")   # coverage 0.5
+    calls = []
+
+    def flavor_fn(ings, pantry_names):
+        calls.append(ings)
+        return 0.5
+
+    results = rank_recipes(
+        pantry, [full, partial], embed_fn=_identity_embed,
+        flavor_fn=flavor_fn, flavor_top_n=1,
+    )
+    # Only the higher non-flavor-score recipe (Full) had flavor computed.
+    assert len(calls) == 1
+    full_res = next(r for r in results if r.recipe["title"] == "Full")
+    partial_res = next(r for r in results if r.recipe["title"] == "Partial")
+    assert full_res.flavor == 0.5
+    assert partial_res.flavor == 0.0
