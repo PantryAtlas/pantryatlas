@@ -8,6 +8,7 @@ import {
   photoErrorMsg,
   fetchPantry,
 } from '../signals'
+import { parseShelfOnDevice, onDeviceTelemetry, isOnDeviceEnabled } from '../ondevice/parseShelfOnDevice'
 
 /**
  * PhotoReviewSheet — bottom sheet (mobile) / centered modal (desktop).
@@ -27,6 +28,7 @@ export function PhotoReviewSheet() {
   const sheetState = photoSheetState.value
   const detectedItems = photoDetectedItems.value
   const errorMsg = photoErrorMsg.value
+  const telemetry = onDeviceTelemetry.value
 
   const objectUrl = useRef<string>('')
 
@@ -34,8 +36,11 @@ export function PhotoReviewSheet() {
   useEffect(() => {
     if (file) {
       objectUrl.current = URL.createObjectURL(file)
-      // POST to vision endpoint
-      postToVision(file)
+      if (isOnDeviceEnabled()) {
+        parseShelfOnDevice(file) // runs SmolVLM in-browser; sets the same signals
+      } else {
+        postToVision(file)
+      }
     }
     return () => {
       if (objectUrl.current) URL.revokeObjectURL(objectUrl.current)
@@ -206,7 +211,7 @@ export function PhotoReviewSheet() {
                   color: 'var(--md-sys-color-on-surface-variant)',
                 }}
               >
-                Reading your shelf...
+                {isOnDeviceEnabled() ? 'Reading your shelf on this phone…' : 'Reading your shelf...'}
               </p>
             </div>
           )}
@@ -253,6 +258,19 @@ export function PhotoReviewSheet() {
           {/* Parsed items checklist */}
           {sheetState === 'parsed' && (
             <div>
+              {telemetry && (
+                <p
+                  style={{
+                    fontFamily: 'var(--font)',
+                    fontSize: 'var(--md-sys-typescale-label-small-size, 11px)',
+                    color: 'var(--md-sys-color-on-surface-variant)',
+                    margin: '0 0 10px',
+                    opacity: 0.8,
+                  }}
+                >
+                  On-device · {telemetry.backend} · load {telemetry.loadMs}ms · infer {telemetry.inferMs}ms · {telemetry.model}
+                </p>
+              )}
               <p
                 style={{
                   fontFamily: 'var(--font)',
