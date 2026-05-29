@@ -30,13 +30,16 @@ def _client(tmp_path: Path) -> TestClient:
 def test_enroll_list_approve_me_flow(tmp_path):
     client = _client(tmp_path)
     # enroll
-    r = client.post("/navigator/devices/enroll",
-                    json={"name": "Counter Pi", "role": "sensor", "kind": "pi-cam", "caps": ["camera"]})
+    r = client.post(
+        "/navigator/devices/enroll",
+        json={"name": "Counter Pi", "role": "sensor", "kind": "pi-cam", "caps": ["camera"]},
+    )
     assert r.status_code == 201
     did = r.json()["device_id"]
     assert r.json()["status"] == "pending"
     # bad role rejected
-    assert client.post("/navigator/devices/enroll", json={"name": "X", "role": "bogus"}).status_code == 422
+    r_bad = client.post("/navigator/devices/enroll", json={"name": "X", "role": "bogus"})
+    assert r_bad.status_code == 422
     # list shows it, never leaks token_hash
     listing = client.get("/navigator/devices").json()
     assert any(d["device_id"] == did for d in listing)
@@ -65,12 +68,13 @@ def test_me_rejects_bad_or_missing_token(tmp_path):
 
 def test_reject_and_delete(tmp_path):
     client = _client(tmp_path)
-    did = client.post("/navigator/devices/enroll", json={"name": "X", "role": "compute"}).json()["device_id"]
+    enroll = client.post("/navigator/devices/enroll", json={"name": "X", "role": "compute"})
+    did = enroll.json()["device_id"]
     token = client.post(f"/navigator/devices/{did}/approve").json()["token"]
     assert client.post(f"/navigator/devices/{did}/reject").json()["status"] == "rejected"
     # rejected token no longer verifies
     assert client.get("/navigator/devices/me",
                       headers={"Authorization": f"Bearer {token}"}).status_code == 401
     assert client.delete(f"/navigator/devices/{did}").json()["deleted"] == did
-    assert client.post(f"/navigator/devices/ghost/approve").status_code == 404
+    assert client.post("/navigator/devices/ghost/approve").status_code == 404
     assert client.delete("/navigator/devices/ghost").status_code == 404

@@ -766,7 +766,10 @@ def create_app(
     @app.post("/navigator/devices/enroll", status_code=201)
     def enroll_device(body: DeviceEnrollIn) -> dict[str, Any]:
         if body.role not in _DEVICE_ROLES:
-            raise HTTPException(status_code=422, detail=f"role must be one of {list(_DEVICE_ROLES)}")
+            raise HTTPException(
+                status_code=422,
+                detail=f"role must be one of {list(_DEVICE_ROLES)}",
+            )
         device = _get_kitchen(app).enroll_device(body.name, body.role, body.kind, body.caps)
         return {"device_id": device["device_id"], "status": device["status"]}
 
