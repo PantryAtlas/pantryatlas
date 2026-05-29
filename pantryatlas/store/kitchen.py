@@ -403,6 +403,37 @@ class KitchenStore:
         )
         return [self._cook_row_to_dict(r) for r in rows]
 
+    def update_cook_event(self, event_id: int, *, rating: int | None = None,
+                          notes: str | None = None) -> dict[str, Any] | None:
+        """Attach a rating (1-5) and/or note to an existing cook event.
+
+        Only provided (non-None) fields are written. Returns the updated event
+        dict, or None if event_id is unknown. Raises ValueError on bad rating.
+        """
+        if rating is not None and (not isinstance(rating, int) or not 1 <= rating <= 5):
+            raise ValueError("rating must be an int in 1..5")
+        with self._lock:
+            exists = self._conn.execute(
+                "SELECT 1 FROM cook_events WHERE id=?", (event_id,)
+            ).fetchone()
+            if exists is None:
+                return None
+            sets, params = [], []
+            if rating is not None:
+                sets.append("rating=?")
+                params.append(rating)
+            if notes is not None:
+                sets.append("notes=?")
+                params.append(notes)
+            if sets:
+                params.append(event_id)
+                self._conn.execute(
+                    f"UPDATE cook_events SET {', '.join(sets)} WHERE id=?", params
+                )
+                self._conn.commit()
+            row = self._fetchone("SELECT * FROM cook_events WHERE id=?", (event_id,))
+        return self._cook_row_to_dict(row)
+
     def mark_expired(self, canonical_name: str, source: str = "manual") -> dict[str, Any] | None:
         with self._lock:
             row = self._conn.execute(

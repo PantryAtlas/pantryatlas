@@ -417,3 +417,45 @@ def test_waste_tally_by_item_counts_sorted(tmp_path):
     assert sorted(tally["items"]) == ["eggs", "milk", "milk"]
     # by_item: most-wasted first, then name
     assert tally["by_item"] == [{"name": "milk", "count": 2}, {"name": "eggs", "count": 1}]
+
+
+# ---------------------------------------------------------------------------
+# Star Slice 4 Task 3: update_cook_event (attach rating/notes)
+# ---------------------------------------------------------------------------
+
+
+def test_update_cook_event_rating_and_notes(tmp_path):
+    store = KitchenStore(tmp_path / "kitchen.db")
+    ev = store.add_cook_event(dish_name="Soup", consumed=[])
+    out = store.update_cook_event(ev["id"], rating=5, notes="great")
+    assert out["rating"] == 5 and out["notes"] == "great"
+    assert store.list_meals()[0]["rating"] == 5
+
+
+def test_update_cook_event_partial_keeps_other_field(tmp_path):
+    store = KitchenStore(tmp_path / "kitchen.db")
+    ev = store.add_cook_event(dish_name="Stew", consumed=[])
+    store.update_cook_event(ev["id"], rating=4)
+    store.update_cook_event(ev["id"], notes="add salt")
+    row = store.list_meals()[0]
+    assert row["rating"] == 4 and row["notes"] == "add salt"
+
+
+def test_update_cook_event_unknown_id_returns_none(tmp_path):
+    store = KitchenStore(tmp_path / "kitchen.db")
+    assert store.update_cook_event(999999, rating=3) is None
+
+
+def test_update_cook_event_bad_rating_raises(tmp_path):
+    store = KitchenStore(tmp_path / "kitchen.db")
+    ev = store.add_cook_event(dish_name="X", consumed=[])
+    for bad in (0, 6, 2.5):
+        with pytest.raises(ValueError):
+            store.update_cook_event(ev["id"], rating=bad)
+
+
+def test_update_cook_event_both_none_is_noop(tmp_path):
+    store = KitchenStore(tmp_path / "kitchen.db")
+    ev = store.add_cook_event(dish_name="Y", consumed=[], rating=2)
+    out = store.update_cook_event(ev["id"])
+    assert out["rating"] == 2
