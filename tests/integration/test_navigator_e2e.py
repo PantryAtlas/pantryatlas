@@ -12,8 +12,11 @@ Exercises the full agentic loop end-to-end via the in-process ASGI app:
                 penalties; at least one result becomes non-zero. Timed < 10s.
   3. SWAPS    — POST /recipes/swaps returns per-missing swap suggestions.
 
-The module-level ``app`` is repointed at a temp pantry file so the operator's
-real ~/.pantryatlas/pantry.json is never touched.
+Isolation: ``app.state.kitchen`` is set to a ``KitchenStore`` backed by a
+``tmp_path`` SQLite file before any route is hit.  ``_get_kitchen`` returns
+``app.state.kitchen`` immediately when it is not None, so the production
+factory — which would open ``~/.pantryatlas/kitchen.db`` — is never invoked.
+The operator's real kitchen database is never touched.
 """
 
 from __future__ import annotations
@@ -26,6 +29,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from pantryatlas.navigator.server import app
+from pantryatlas.store.kitchen import KitchenStore
 
 PANTRY_ITEMS = [
     {"canonical_name": "sugar", "raw_text": "sugar"},
@@ -39,7 +43,11 @@ PANTRY_ITEMS = [
 @pytest.mark.pi_integration
 def test_navigator_e2e(tmp_path: Path) -> None:
     """Instant → refine → swaps against the real recipe DB and embedder."""
-    # Never clobber the operator's real pantry — point the app at a temp file.
+    # Isolate from the operator's real kitchen.db.  _get_kitchen() returns
+    # app.state.kitchen immediately when it is not None, so the production
+    # factory (which would open ~/.pantryatlas/kitchen.db) is never invoked.
+    app.state.kitchen = KitchenStore(tmp_path / "kitchen.db")
+    # Keep the legacy pantry_path guard as belt-and-suspenders.
     app.state.pantry_path = tmp_path / "pantry.json"
 
     # Warm the ONNX embedder OUTSIDE the timed window so we measure the refine

@@ -1,29 +1,31 @@
 """T-004: FastAPI navigator endpoint.
 
-Exposes 7 API routes + static PWA serving for the PantryAtlas navigator
-submodule (pantry-in → ranked-recipes-out).
+FastAPI navigator for the PantryAtlas submodule (pantry-in → ranked-recipes-out).
 
-Routes
-------
-GET  /navigator/health                  → {"status":"ok","recipe_count":<int>}
-GET  /navigator/pantry                  → current pantry (list of items)
-PUT  /navigator/pantry                  → replace whole pantry (Pydantic-validated)
-POST /navigator/pantry/items            → add one item from {raw_text:...}, 201
-DELETE /navigator/pantry/items/{name}   → remove one item by canonical name
-POST /navigator/pantry/resolve          → resolve {raw:...} WITHOUT persisting
-POST /navigator/recipes/from-pantry     → rank recipes against current pantry
+Route groups
+------------
+- Health:           GET  /navigator/health
+- Pantry CRUD:      GET/PUT /navigator/pantry; POST/DELETE pantry/items;
+                    POST pantry/items/{name}/consume; POST pantry/items/{name}/restore;
+                    POST pantry/resolve
+- Recipe ranking:   POST /navigator/recipes/from-pantry (instant, no embedding);
+                    POST /navigator/recipes/from-pantry/refine (settled, with embedding);
+                    POST /navigator/recipes/swaps (per-recipe swap suggestions)
+- Cook loop:        POST /navigator/cook; GET /navigator/meals; GET /navigator/waste
+- Vision:           POST /navigator/vision/parse-shelf (optional; 503 when unavailable)
+- Inference:        GET/POST/DELETE /navigator/providers
+- Static:           GET / → web/dist/index.html; /assets/* → web/dist/assets
 
-Static
-------
-GET  /                                  → serves web/dist/index.html if present,
-                                          else a JSON placeholder
-/assets/*                               → static files from web/dist/assets if present
+Persistence
+-----------
+Mutable user state (pantry items, inventory-event ledger, cook log) is persisted
+to ``~/.pantryatlas/kitchen.db`` via ``KitchenStore`` (plain SQLite, no
+sqlite-vec extension required).  The static recipe corpus lives in a separate
+``~/.pantryatlas/recipes.db``.
 
 Design decisions
 ----------------
 - ``create_app()`` factory keeps ONNX model + real DB out of the test process.
-- Pantry is persisted to a flat JSON file at ``pantry_path``
-  (default ~/.pantryatlas/pantry.json; overridable via app.state).
 - Pre-filter for /recipes/from-pantry uses text-overlap against
   recipes_meta.ingredients_json — no embedding at pre-filter time.
   Candidates are then scored by rank_recipes() with the injected embed_fn.
@@ -32,8 +34,9 @@ Design decisions
 - Static mount is guarded: StaticFiles is only mounted when web/dist/assets
   exists so the import never fails when the frontend isn't built yet.
 - The module-level ``app`` is side-effect-free at import time: no DB is opened,
-  no directory is created.  The real RecipeStore is opened lazily on first use
-  via ``app.state.store_factory`` (set by ``_build_production_app``).
+  no directory is created.  The real RecipeStore and KitchenStore are opened
+  lazily on first use via ``app.state.store_factory`` / ``app.state.kitchen_factory``
+  (set by ``_build_production_app``).
 """
 
 from __future__ import annotations

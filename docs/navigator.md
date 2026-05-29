@@ -31,7 +31,7 @@ Pantry items (typed / photographed)
 
 The navigator consists of four parts:
 
-- **FastAPI server** (`pantryatlas.navigator.server`) — 14 REST routes + static PWA serving
+- **FastAPI server** (`pantryatlas.navigator.server`) — REST routes under `/navigator` + static PWA serving
 - **Ranking algorithm** (`pantryatlas.navigator.ranking`) — weighted scoring of candidate recipes
 - **Ingestion CLI** (`pantryatlas.navigator.ingest`) — loads RecipeNLG data into the recipe store
 - **Kitchen store** (`pantryatlas.store.kitchen.KitchenStore`) — mutable user state (pantry + event ledger + cook log) in `~/.pantryatlas/kitchen.db`, the source of truth that closes the food-waste loop (see *Kitchen store + the cook loop* below)
@@ -144,7 +144,7 @@ The navigator is a single-screen app — pantry on top, recipes below, no tabs o
 
 ## API reference
 
-The navigator server exposes 14 routes under the `/navigator` prefix. All request and response bodies are JSON.
+The navigator server exposes a set of routes under the `/navigator` prefix. All request and response bodies are JSON.
 
 ---
 

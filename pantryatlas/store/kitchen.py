@@ -260,7 +260,13 @@ class KitchenStore:
     @staticmethod
     def _next_state(state: str, coarse_amount: str) -> tuple[str, float]:
         if coarse_amount == "half":
-            return ("low" if state == "present" else state, 0.5)
+            if state == "present":
+                return ("low", 0.5)
+            if state == "used_up":
+                # A used-up item cannot be partially restored by a half-consume;
+                # it stays used_up with confidence 0.0 (not the contradictory 0.5).
+                return ("used_up", 0.0)
+            return (state, 0.5)  # 'low' stays low
         if coarse_amount in ("used_up", "discarded"):
             return ("used_up", 0.0)
         # 'cook' (tap-to-cook default): one notch down

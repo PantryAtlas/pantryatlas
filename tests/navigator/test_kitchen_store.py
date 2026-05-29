@@ -140,6 +140,7 @@ def test_replace_all(tmp_path: Path) -> None:
     [
         ("present", "half", "low", 0.5, "consume"),
         ("low", "half", "low", 0.5, "consume"),
+        ("used_up", "half", "used_up", 0.0, "consume"),  # used_up stays used_up, not 0.5
         ("present", "used_up", "used_up", 0.0, "consume"),
         ("present", "discarded", "used_up", 0.0, "discard"),
         ("present", "cook", "low", 0.5, "consume"),     # tap-to-cook default: one notch
