@@ -16,6 +16,13 @@ SP-A routes added (all backed by KitchenStore):
   POST   /navigator/pantry/items/{name}/consume     coarse consume transition
   POST   /navigator/pantry/items/{name}/restore     restore a consumed item
 
+SP-C routes added (all backed by KitchenStore + real device_auth):
+  POST   /navigator/devices/enroll                  enroll a device (pending)
+  GET    /navigator/devices                         list all devices (never leaks token)
+  POST   /navigator/devices/{id}/approve            approve → mint + return raw token once
+  POST   /navigator/devices/{id}/reject             reject a device
+  DELETE /navigator/devices/{id}                    remove a device
+
 Env:
   MOCK_KITCHEN_DB     path to the kitchen.db SQLite file. If unset, an isolated
                       per-process temp file is used and the default two items are
@@ -36,7 +43,9 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
+from pantryatlas.navigator.device_auth import hash_token, mint_token
 from pantryatlas.pantry.models import Ingredient
 from pantryatlas.store.kitchen import KitchenStore
 
@@ -455,6 +464,57 @@ async def post_pantry_barcode(request: Request):
             "matched": True,
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# SP-C Device-trust fabric routes (KitchenStore-backed, real device_auth)
+# ---------------------------------------------------------------------------
+
+_DEVICE_ROLES = ("compute", "sensor")
+
+
+class _DeviceEnrollIn(BaseModel):
+    name: str
+    role: str
+    kind: str | None = None
+    caps: list[str] | None = None
+
+
+@app.post("/navigator/devices/enroll", status_code=201)
+def enroll_device(body: _DeviceEnrollIn):
+    if body.role not in _DEVICE_ROLES:
+        raise HTTPException(status_code=422, detail=f"role must be one of {list(_DEVICE_ROLES)}")
+    device = KITCHEN.enroll_device(body.name, body.role, body.kind, body.caps)
+    return {"device_id": device["device_id"], "status": device["status"]}
+
+
+@app.get("/navigator/devices")
+def list_devices():
+    return KITCHEN.list_devices()
+
+
+@app.post("/navigator/devices/{device_id}/approve")
+def approve_device(device_id: str):
+    token = mint_token()
+    device = KITCHEN.approve_device(device_id, hash_token(token))
+    if device is None:
+        raise HTTPException(status_code=404, detail=f"No device '{device_id}'.")
+    return {"device_id": device_id, "status": "paired", "token": token}
+
+
+@app.post("/navigator/devices/{device_id}/reject")
+def reject_device(device_id: str):
+    device = KITCHEN.reject_device(device_id)
+    if device is None:
+        raise HTTPException(status_code=404, detail=f"No device '{device_id}'.")
+    return {"device_id": device_id, "status": "rejected"}
+
+
+@app.delete("/navigator/devices/{device_id}")
+def delete_device(device_id: str):
+    if not KITCHEN.remove_device(device_id):
+        raise HTTPException(status_code=404, detail=f"No device '{device_id}'.")
+    return {"deleted": device_id}
 
 
 # /navigator/vision/parse-shelf → 404 (T-014 not yet built)
