@@ -1,10 +1,13 @@
 // web/src/components/DevicesPanel.tsx
 import { h } from 'preact'
 import { useEffect } from 'preact/hooks'
-import { devices, fetchDevices, approveDevice, rejectDevice, removeDevice, lastIssuedToken } from '../signals'
+import { devices, fetchDevices, approveDevice, rejectDevice, removeDevice, lastIssuedToken, approvingDeviceId } from '../signals'
 
 export function DevicesPanel() {
-  useEffect(() => { void fetchDevices() }, [])
+  useEffect(() => {
+    void fetchDevices()
+    return () => { lastIssuedToken.value = null }
+  }, [])
   const list = devices.value
   if (list.length === 0) {
     return (
@@ -30,7 +33,7 @@ export function DevicesPanel() {
             </span>
           </span>
           {token && token.device_id === d.device_id && (
-            <code data-token-reveal style={{
+            <code data-token-reveal role="status" style={{
               fontSize: 'var(--md-sys-typescale-label-medium-size)',
               background: 'var(--md-sys-color-surface-container-highest)',
               padding: '6px 8px', borderRadius: 'var(--md-sys-shape-corner-small)', wordBreak: 'break-all',
@@ -40,14 +43,21 @@ export function DevicesPanel() {
           )}
           <span style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             {d.status === 'pending' && (
-              <button type="button" data-approve={d.device_id} onClick={() => approveDevice(d.device_id)}
+              <button type="button" data-approve={d.device_id}
+                aria-label={`Approve ${d.name}`}
+                disabled={approvingDeviceId.value === d.device_id}
+                onClick={() => approveDevice(d.device_id)}
                 style={pillStyle('var(--md-sys-color-primary)', 'var(--md-sys-color-on-primary)')}>Approve</button>
             )}
             {d.status === 'pending' && (
-              <button type="button" data-reject={d.device_id} onClick={() => rejectDevice(d.device_id)}
+              <button type="button" data-reject={d.device_id}
+                aria-label={`Reject ${d.name}`}
+                onClick={() => rejectDevice(d.device_id)}
                 style={pillStyle('transparent', 'var(--md-sys-color-on-surface-variant)')}>Reject</button>
             )}
-            <button type="button" data-remove={d.device_id} onClick={() => removeDevice(d.device_id)}
+            <button type="button" data-remove={d.device_id}
+              aria-label={`Remove ${d.name}`}
+              onClick={() => removeDevice(d.device_id)}
               style={pillStyle('transparent', 'var(--md-sys-color-error)')}>Remove</button>
           </span>
         </li>

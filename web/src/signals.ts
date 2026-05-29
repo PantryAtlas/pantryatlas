@@ -333,6 +333,8 @@ export const devicesPanelOpen = signal<boolean>(false)
 export const devices = signal<Device[]>([])
 /** The raw token from the most recent approval — shown ONCE in the UI, then cleared. */
 export const lastIssuedToken = signal<{ device_id: string; token: string } | null>(null)
+/** Non-null while an approve request is in flight — prevents double-mint on rapid clicks. */
+export const approvingDeviceId = signal<string | null>(null)
 
 export async function fetchDevices() {
   try {
@@ -344,6 +346,8 @@ export async function fetchDevices() {
 }
 
 export async function approveDevice(deviceId: string) {
+  if (approvingDeviceId.value === deviceId) return
+  approvingDeviceId.value = deviceId
   try {
     const res = await fetch(`/navigator/devices/${encodeURIComponent(deviceId)}/approve`, { method: 'POST' })
     if (res.ok) {
@@ -353,6 +357,8 @@ export async function approveDevice(deviceId: string) {
     }
   } catch {
     // ignore
+  } finally {
+    approvingDeviceId.value = null
   }
 }
 
