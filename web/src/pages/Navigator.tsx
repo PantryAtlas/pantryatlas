@@ -30,6 +30,7 @@ import {
   postBarcode,
   daysUntilExpiry,
   expiringSoon,
+  setExpiry,
   hasPersistedMode,
   wireOfflineReplay,
   devicesPanelOpen,
@@ -1026,6 +1027,30 @@ function PantryCard({ item }: PantryCardProps) {
             </svg>
             pending sync
           </span>
+        )}
+
+        {/* Expiry date control — set/clear; native date picker */}
+        {item.state !== 'used_up' && (
+          <input
+            type="date"
+            value={item.expires_at ?? ''}
+            data-expiry-input={item.canonical_name}
+            aria-label={`Set expiry date for ${item.canonical_name}`}
+            onChange={(e) =>
+              setExpiry(item.canonical_name, (e.currentTarget as HTMLInputElement).value || null)
+            }
+            style={{
+              minHeight: '36px',
+              padding: '2px 6px',
+              borderRadius: 'var(--md-sys-shape-corner-medium)',
+              border: '1px solid var(--md-sys-color-outline-variant)',
+              background: 'transparent',
+              color: 'var(--md-sys-color-on-surface-variant)',
+              fontFamily: 'var(--font)',
+              fontSize: 'var(--md-sys-typescale-label-small-size)',
+              colorScheme: 'light dark',
+            }}
+          />
         )}
 
         {/* Expiry chip */}
