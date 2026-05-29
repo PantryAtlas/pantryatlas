@@ -762,3 +762,17 @@ def test_from_pantry_demotes_recently_cooked(client):
     after_by_title = {r["recipe"]["title"]: r["score"] for r in after}
     assert title in after_by_title
     assert after_by_title[title] < base_score
+
+    # Also assert the from-pantry route itself reacts to history (its history_fn
+    # wiring is otherwise unasserted, since the strict-decrease check above runs
+    # through /refine to dodge from-pantry's top-20 cutoff + [0,1] clamp). Here a
+    # demoted candidate may legitimately drop out of the top-20, so the true
+    # invariant is "absent (pushed out) OR strictly lower".
+    instant_by_title = {r["recipe"]["title"]: r["score"] for r in instant}
+    after_fp = client.post("/navigator/recipes/from-pantry").json()
+    after_fp_by_title = {r["recipe"]["title"]: r["score"] for r in after_fp}
+    if title in instant_by_title:
+        assert (
+            title not in after_fp_by_title
+            or after_fp_by_title[title] < instant_by_title[title]
+        )
