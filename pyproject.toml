@@ -49,6 +49,7 @@ dependencies = [
     "tokenizers>=0.20",
     "huggingface_hub>=0.26",
     "Pillow>=10.0",
+    "zxing-cpp>=3.0",
 ]
 
 [project.optional-dependencies]

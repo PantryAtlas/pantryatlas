@@ -56,6 +56,7 @@ from pydantic import BaseModel
 from pantryatlas.inference.config import save_provider_config
 from pantryatlas.inference.providers.lan_endpoint import LanEndpointProvider
 from pantryatlas.inference.registry import ProviderRegistry
+from pantryatlas.navigator.openfoodfacts import OffUnavailable, OpenFoodFactsClient
 from pantryatlas.navigator.ranking import RankedRecipe, compute_swaps, rank_recipes
 from pantryatlas.pantry.models import Ingredient, Pantry, Quantity
 from pantryatlas.store.kitchen import KitchenStore
@@ -94,6 +95,8 @@ class AddItemIn(BaseModel):
     """Body for POST /navigator/pantry/items."""
 
     raw_text: str
+    canonical_name: str | None = None  # when set, skip the resolver (e.g. barcode confirm)
+    source: str = "manual"             # provenance: manual | barcode | vision:<id>
 
 
 class ResolveIn(BaseModel):
@@ -265,6 +268,7 @@ def create_app(
     providers_config_path: Path | None = None,
     kitchen: KitchenStore | None = None,
     kitchen_factory: Callable[[], KitchenStore] | None = None,
+    off_client: OpenFoodFactsClient | None = None,
 ) -> FastAPI:
     """Build and return a FastAPI app wired to the given dependencies.
 
@@ -313,6 +317,7 @@ def create_app(
     app.state.providers_config_path = providers_config_path
     app.state.kitchen = kitchen
     app.state.kitchen_factory = kitchen_factory
+    app.state.off_client = off_client
 
     # ------------------------------------------------------------------
     # Static PWA serving (guarded — tolerates missing web/dist)
@@ -381,15 +386,19 @@ def create_app(
 
     @app.post("/navigator/pantry/items", status_code=201)
     def post_pantry_item(body: AddItemIn) -> dict[str, Any]:
-        """Add one ingredient from raw text.  Returns the resolved canonical_name."""
-        ingredient = app.state.resolver(body.raw_text)
-        if ingredient is None:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Cannot resolve '{body.raw_text}' to a canonical ingredient.",
-            )
-        item = _get_kitchen(app).add_item(ingredient)
-        return {"canonical_name": item["canonical_name"], "raw_text": item["raw_text"]}
+        """Add one ingredient. With canonical_name set, store it directly (skip resolver)."""
+        if body.canonical_name:
+            ingredient = Ingredient(canonical_name=body.canonical_name, raw_text=body.raw_text)
+        else:
+            ingredient = app.state.resolver(body.raw_text)
+            if ingredient is None:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Cannot resolve '{body.raw_text}' to a canonical ingredient.",
+                )
+        item = _get_kitchen(app).add_item(ingredient, source=body.source)
+        return {"canonical_name": item["canonical_name"], "raw_text": item["raw_text"],
+                "source": item["source"]}
 
     # ------------------------------------------------------------------
     # Pantry — remove one item
@@ -617,6 +626,67 @@ def create_app(
         }
 
     # ------------------------------------------------------------------
+    # Barcode — decode + cache-first OFF lookup
+    # ------------------------------------------------------------------
+
+    @app.post("/navigator/pantry/barcode")
+    async def post_pantry_barcode(
+        image: UploadFile = File(..., description="Photo of a product barcode (JPEG/PNG, ≤8 MiB)"),  # noqa: B008
+    ) -> dict[str, Any]:
+        """Decode a barcode photo, look it up in OFF (cache-first), return a candidate.
+
+        Read-only: does NOT add to the pantry. The client confirms, then POSTs to
+        /navigator/pantry/items with {raw_text, canonical_name, source:"barcode"}.
+        """
+        from pantryatlas.navigator.barcode import decode_barcode, product_to_ingredient
+
+        content_type = (image.content_type or "").lower()
+        if content_type and content_type not in (
+            "image/jpeg", "image/jpg", "image/png", "application/octet-stream",
+        ):
+            raise HTTPException(status_code=415, detail=f"Unsupported media type '{content_type}'.")
+        raw_bytes = await image.read()
+        if len(raw_bytes) > _MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="Image too large. Maximum is 8 MiB.")
+        if not raw_bytes:
+            raise HTTPException(status_code=400, detail="Empty image upload.")
+
+        code = decode_barcode(raw_bytes)
+        if code is None:
+            raise HTTPException(status_code=422, detail="no barcode detected")
+
+        kitchen = _get_kitchen(app)
+        product = kitchen.get_cached_off(code)
+        if product is None:
+            off = app.state.off_client
+            if off is None:
+                return {"found": False, "code": code, "error": "off_unavailable"}
+            try:
+                product = off.get_product(code)
+            except OffUnavailable:
+                return {"found": False, "code": code, "error": "off_unavailable"}
+            if product is not None:
+                kitchen.cache_off(code, product)
+
+        if product is None:
+            return {"found": False, "code": code}
+
+        ingredient, matched = product_to_ingredient(product, app.state.resolver)
+        return {
+            "found": True,
+            "code": code,
+            "product": {
+                "name": product.get("product_name") or "",
+                "brand": product.get("brands") or "",
+            },
+            "proposed": {
+                "canonical_name": ingredient.canonical_name,
+                "raw_text": ingredient.raw_text,
+                "matched": matched,
+            },
+        }
+
+    # ------------------------------------------------------------------
     # Provider registry REST API
     # ------------------------------------------------------------------
 
@@ -784,6 +854,7 @@ def _build_production_app() -> FastAPI:
         provider_registry=_build_registry(),
         providers_config_path=DEFAULT_CONFIG_PATH,
         kitchen_factory=_make_production_kitchen_factory(),
+        off_client=OpenFoodFactsClient(),
     )
 
 

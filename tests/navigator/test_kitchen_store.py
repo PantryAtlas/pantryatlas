@@ -260,3 +260,21 @@ def test_cook_event_discarded_counts_as_waste(tmp_path):
     )
     tally2 = store.waste_tally(window_days=30)
     assert tally2["discarded"] == 1, "cook-default should not add to waste tally"
+
+
+# ---------------------------------------------------------------------------
+# SP-B Task 2: off_cache round-trip
+# ---------------------------------------------------------------------------
+
+
+def test_off_cache_round_trip(tmp_path):
+    store = KitchenStore(tmp_path / "kitchen.db")
+    assert store.get_cached_off("123") is None
+    store.cache_off("123", {
+        "product_name": "Rice Noodles", "ingredients_tags": ["en:rice-noodles"],
+    })
+    cached = store.get_cached_off("123")
+    assert cached["product_name"] == "Rice Noodles"
+    # overwrite is idempotent (cache-through on re-fetch)
+    store.cache_off("123", {"product_name": "Rice Noodles v2"})
+    assert store.get_cached_off("123")["product_name"] == "Rice Noodles v2"

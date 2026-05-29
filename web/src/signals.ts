@@ -265,6 +265,55 @@ export const photoDetectedItems = signal<{ label: string; checked: boolean }[]>(
 export const photoErrorMsg = signal<string>('')
 
 // ---------------------------------------------------------------------------
+// Barcode scan state
+// ---------------------------------------------------------------------------
+
+export interface BarcodeCandidate {
+  found: boolean
+  code: string
+  product?: { name: string; brand: string }
+  proposed?: { canonical_name: string; raw_text: string; matched: boolean }
+  error?: string
+}
+
+export const barcodeSheetOpen = signal<boolean>(false)
+export const barcodeCandidate = signal<BarcodeCandidate | null>(null)
+export const barcodeState = signal<'idle' | 'scanning' | 'ready' | 'error'>('idle')
+
+/** Upload a barcode photo; populate the candidate for the confirm sheet. */
+export async function postBarcode(file: File) {
+  barcodeState.value = 'scanning'
+  barcodeCandidate.value = null
+  barcodeSheetOpen.value = true
+  try {
+    const form = new FormData()
+    form.append('image', file)
+    const res = await fetch('/navigator/pantry/barcode', { method: 'POST', body: form })
+    if (!res.ok) { barcodeState.value = 'error'; return }
+    barcodeCandidate.value = await res.json()
+    barcodeState.value = 'ready'
+  } catch {
+    barcodeState.value = 'error'
+  }
+}
+
+/** Confirm the (possibly user-edited) canonical and add with barcode provenance. */
+export async function confirmBarcodeAdd(rawText: string, canonicalName: string) {
+  try {
+    const res = await fetch('/navigator/pantry/items', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ raw_text: rawText, canonical_name: canonicalName, source: 'barcode' }),
+    })
+    if (res.ok || res.status === 201) {
+      barcodeSheetOpen.value = false
+      barcodeCandidate.value = null
+      barcodeState.value = 'idle'
+      await fetchPantry()
+    }
+  } catch { /* keep sheet open on failure */ }
+}
+
+// ---------------------------------------------------------------------------
 // Computed helpers
 // ---------------------------------------------------------------------------
 
