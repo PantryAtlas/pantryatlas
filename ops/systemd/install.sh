@@ -28,4 +28,12 @@ for unit in "${UNITS[@]}"; do
     systemctl enable "$unit"
 done
 
+# --- mDNS service advertisement (avahi) ---
+AVAHI_SRC="$(dirname "$UNIT_DIR")/avahi/pantryatlas.service"
+if [ -d /etc/avahi/services ] && [ -f "$AVAHI_SRC" ]; then
+    install -m 644 "$AVAHI_SRC" /etc/avahi/services/pantryatlas.service
+    systemctl reload avahi-daemon 2>/dev/null || true
+    echo "Installed avahi service: PantryAtlas advertises _pantryatlas._tcp"
+fi
+
 echo "INSTALL COMPLETE — run: sudo systemctl start pantryatlas-mem-monitor pantryatlas-embeddings pantryatlas-gemma pantryatlas-navigator"

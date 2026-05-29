@@ -32,6 +32,7 @@ import {
   expiringSoon,
   hasPersistedMode,
   wireOfflineReplay,
+  devicesPanelOpen,
 } from '../signals'
 import { ModeSwitcher } from '../components/ModeSwitcher'
 import { PhotoReviewSheet } from '../components/PhotoReviewSheet'
@@ -41,6 +42,7 @@ import { OfflineBanner } from '../components/OfflineBanner'
 import { AiHelpersPanel } from '../components/AiHelpersPanel'
 import { BrandMark } from '../components/BrandMark'
 import { MealLog } from '../components/MealLog'
+import { DevicesPanel } from '../components/DevicesPanel'
 
 // Module-scope signal so TopBar and Navigator can share show-log state
 const showLog = signal(false)
@@ -236,6 +238,24 @@ export function Navigator() {
             </section>
           )}
 
+          {/* Section E2: Devices approval panel — collapsible (toggled via "Devices" in top bar) */}
+          {devicesPanelOpen.value && (
+            <section aria-label="Trusted devices" style={{ marginTop: '32px' }}>
+              <p
+                style={{
+                  fontFamily: 'var(--font)',
+                  fontSize: 'var(--md-sys-typescale-label-medium-size)',
+                  fontWeight: 'var(--md-sys-typescale-label-medium-weight)',
+                  color: 'var(--md-sys-color-on-surface-variant)',
+                  marginBottom: '12px',
+                }}
+              >
+                Trusted devices
+              </p>
+              <DevicesPanel />
+            </section>
+          )}
+
           {/* Section F: AI helpers settings panel (T-014) */}
           <div style={{ marginTop: '48px' }}>
             <button
@@ -343,6 +363,30 @@ function TopBar() {
         }}
       >
         Log
+      </button>
+
+      {/* Devices toggle button */}
+      <button
+        type="button"
+        onClick={() => { devicesPanelOpen.value = !devicesPanelOpen.value }}
+        aria-label={devicesPanelOpen.value ? 'Hide devices panel' : 'Show devices panel'}
+        style={{
+          background: devicesPanelOpen.value ? 'var(--md-sys-color-primary-container)' : 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+          fontFamily: 'var(--font)',
+          fontSize: 'var(--md-sys-typescale-label-medium-size)',
+          fontWeight: 'var(--md-sys-typescale-label-medium-weight)',
+          color: devicesPanelOpen.value
+            ? 'var(--md-sys-color-on-primary-container)'
+            : 'var(--md-sys-color-on-surface-variant)',
+          padding: '6px 14px',
+          borderRadius: 'var(--md-sys-shape-corner-full)',
+          minHeight: '44px',
+          transition: 'background 0.15s',
+        }}
+      >
+        Devices
       </button>
 
       {/* Mode chip — tap to open mode switcher */}

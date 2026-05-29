@@ -20,7 +20,9 @@ def test_open_creates_tables(tmp_path: Path) -> None:
             "SELECT name FROM sqlite_master WHERE type='table'"
         ).fetchall()
     }
-    assert {"pantry_items", "inventory_events", "cook_events"} <= names
+    assert {
+        "pantry_items", "inventory_events", "cook_events", "off_cache", "devices"
+    } <= names
 
 
 def test_migrates_from_pantry_json_once(tmp_path: Path) -> None:
@@ -278,3 +280,40 @@ def test_off_cache_round_trip(tmp_path):
     # overwrite is idempotent (cache-through on re-fetch)
     store.cache_off("123", {"product_name": "Rice Noodles v2"})
     assert store.get_cached_off("123")["product_name"] == "Rice Noodles v2"
+
+
+# ---------------------------------------------------------------------------
+# SP-C Task 2: devices registry
+# ---------------------------------------------------------------------------
+
+
+def test_device_enroll_approve_verify_flow(tmp_path):
+    store = KitchenStore(tmp_path / "kitchen.db")
+    dev = store.enroll_device("Counter Pi", "sensor", kind="pi-cam", caps=["camera"])
+    assert dev["status"] == "pending"
+    assert dev["device_id"]
+    assert "token_hash" not in dev          # never leaked
+    assert dev["caps"] == ["camera"]
+    # pending → not findable by token
+    assert store.device_by_token_hash("deadbeef") is None
+    # approve stores a hash; paired
+    approved = store.approve_device(dev["device_id"], "hash123")
+    assert approved["status"] == "paired" and approved["paired_at"]
+    # findable by the exact hash, and only when paired
+    found = store.device_by_token_hash("hash123")
+    assert found is not None and found["device_id"] == dev["device_id"]
+    assert found["last_seen"]               # verify bumped last_seen
+    # list never leaks token_hash
+    assert all("token_hash" not in d for d in store.list_devices())
+
+
+def test_device_reject_and_remove(tmp_path):
+    store = KitchenStore(tmp_path / "kitchen.db")
+    dev = store.enroll_device("X", "compute")
+    store.approve_device(dev["device_id"], "h")
+    assert store.reject_device(dev["device_id"])["status"] == "rejected"
+    assert store.device_by_token_hash("h") is None   # rejected token no longer verifies
+    assert store.remove_device(dev["device_id"]) is True
+    assert store.get_device(dev["device_id"]) is None
+    assert store.reject_device("ghost") is None
+    assert store.remove_device("ghost") is False

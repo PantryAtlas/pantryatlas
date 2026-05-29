@@ -48,7 +48,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -69,6 +69,8 @@ if TYPE_CHECKING:
 # recipe surfaced by the API carries this so downstream consumers (and the
 # PWA) can honour the licence without hardcoding it client-side.
 RECIPE_SOURCE_ATTRIBUTION = "RecipeNLG (CC-BY-NC-4.0)"
+
+_DEVICE_ROLES = ("compute", "sensor")
 
 # ---------------------------------------------------------------------------
 # Pydantic wire models
@@ -151,6 +153,15 @@ class CookIn(BaseModel):
     rating: int | None = None
     notes: str | None = None
     consumed: list[ConsumedItemIn] | None = None
+
+
+class DeviceEnrollIn(BaseModel):
+    """Body for POST /navigator/devices/enroll."""
+
+    name: str
+    role: str  # compute | sensor
+    kind: str | None = None
+    caps: list[str] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -747,6 +758,59 @@ def create_app(
         reg.reorder(ordered_names)
         _persist_providers()
         return list_providers()
+
+    # ------------------------------------------------------------------
+    # Device trust fabric
+    # ------------------------------------------------------------------
+
+    @app.post("/navigator/devices/enroll", status_code=201)
+    def enroll_device(body: DeviceEnrollIn) -> dict[str, Any]:
+        if body.role not in _DEVICE_ROLES:
+            raise HTTPException(
+                status_code=422,
+                detail=f"role must be one of {list(_DEVICE_ROLES)}",
+            )
+        device = _get_kitchen(app).enroll_device(body.name, body.role, body.kind, body.caps)
+        return {"device_id": device["device_id"], "status": device["status"]}
+
+    @app.get("/navigator/devices")
+    def list_devices() -> list[dict[str, Any]]:
+        return _get_kitchen(app).list_devices()
+
+    @app.get("/navigator/devices/me")
+    def device_me(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        from pantryatlas.navigator.device_auth import hash_token
+        if not authorization or not authorization.lower().startswith("bearer "):
+            raise HTTPException(status_code=401, detail="missing bearer token")
+        token = authorization.split(" ", 1)[1].strip()
+        device = _get_kitchen(app).device_by_token_hash(hash_token(token))
+        if device is None:
+            raise HTTPException(status_code=401, detail="invalid token")
+        return device
+
+    @app.post("/navigator/devices/{device_id}/approve")
+    def approve_device(device_id: str) -> dict[str, Any]:
+        from pantryatlas.navigator.device_auth import hash_token, mint_token
+        # Re-approving a paired device rotates the token: a fresh token is issued
+        # and the previous one stops verifying.
+        token = mint_token()
+        device = _get_kitchen(app).approve_device(device_id, hash_token(token))
+        if device is None:
+            raise HTTPException(status_code=404, detail=f"No device '{device_id}'.")
+        return {"device_id": device_id, "status": "paired", "token": token}
+
+    @app.post("/navigator/devices/{device_id}/reject")
+    def reject_device(device_id: str) -> dict[str, Any]:
+        device = _get_kitchen(app).reject_device(device_id)
+        if device is None:
+            raise HTTPException(status_code=404, detail=f"No device '{device_id}'.")
+        return {"device_id": device_id, "status": "rejected"}
+
+    @app.delete("/navigator/devices/{device_id}")
+    def delete_device(device_id: str) -> dict[str, str]:
+        if not _get_kitchen(app).remove_device(device_id):
+            raise HTTPException(status_code=404, detail=f"No device '{device_id}'.")
+        return {"deleted": device_id}
 
     return app
 

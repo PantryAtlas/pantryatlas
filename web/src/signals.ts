@@ -314,6 +314,69 @@ export async function confirmBarcodeAdd(rawText: string, canonicalName: string) 
 }
 
 // ---------------------------------------------------------------------------
+// Device trust fabric
+// ---------------------------------------------------------------------------
+
+export interface Device {
+  device_id: string
+  name: string
+  role: string
+  kind?: string | null
+  caps?: string[]
+  status: 'pending' | 'paired' | 'rejected'
+  enrolled_at?: string
+  paired_at?: string | null
+  last_seen?: string | null
+}
+
+export const devicesPanelOpen = signal<boolean>(false)
+export const devices = signal<Device[]>([])
+/** The raw token from the most recent approval — shown ONCE in the UI, then cleared. */
+export const lastIssuedToken = signal<{ device_id: string; token: string } | null>(null)
+/** Non-null while an approve request is in flight — prevents double-mint on rapid clicks. */
+export const approvingDeviceId = signal<string | null>(null)
+
+export async function fetchDevices() {
+  try {
+    const res = await fetch('/navigator/devices')
+    if (res.ok) devices.value = await res.json()
+  } catch {
+    // keep existing
+  }
+}
+
+export async function approveDevice(deviceId: string) {
+  if (approvingDeviceId.value === deviceId) return
+  approvingDeviceId.value = deviceId
+  try {
+    const res = await fetch(`/navigator/devices/${encodeURIComponent(deviceId)}/approve`, { method: 'POST' })
+    if (res.ok) {
+      const d = await res.json()
+      lastIssuedToken.value = { device_id: deviceId, token: d.token }
+      await fetchDevices()
+    }
+  } catch {
+    // ignore
+  } finally {
+    approvingDeviceId.value = null
+  }
+}
+
+export async function rejectDevice(deviceId: string) {
+  try {
+    await fetch(`/navigator/devices/${encodeURIComponent(deviceId)}/reject`, { method: 'POST' })
+    await fetchDevices()
+  } catch { /* ignore */ }
+}
+
+export async function removeDevice(deviceId: string) {
+  try {
+    await fetch(`/navigator/devices/${encodeURIComponent(deviceId)}`, { method: 'DELETE' })
+    await fetchDevices()
+  } catch { /* ignore */ }
+}
+
+// ---------------------------------------------------------------------------
 // Computed helpers
 // ---------------------------------------------------------------------------
 

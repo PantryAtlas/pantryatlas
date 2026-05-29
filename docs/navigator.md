@@ -535,6 +535,128 @@ The navigator splits the expensive substitution embedding out of the critical pa
 
 ---
 
+## Device-trust fabric (SP-C)
+
+The device-trust fabric lets a LAN device (a second Pi, a phone acting as a camera sensor, a Coral board) request to join the kitchen mesh. The operator approves or rejects the request from the PWA. On approval, a bearer token is issued once — only its `sha256` hash is stored; the raw token is shown once in the UI and never retrievable again.
+
+**Trust model:** approval mints a `secrets.token_urlsafe(32)` token (~43 characters), stores only its `sha256` hex digest in the `devices` table, and returns the raw token in the HTTP response exactly once. `GET /navigator/devices/me` authenticates a device by hashing its presented bearer and comparing to the stored hash. Token enforcement on spoke-to-hub traffic and peer-discovery are SP-D. Offline operation and HTTPS are a separate slice.
+
+**mDNS advertisement:** the hub advertises `_pantryatlas._tcp` on port `8090` via an avahi service file at `ops/avahi/pantryatlas.service`. The avahi file is installed by `ops/systemd/install.sh`. Devices on the same LAN can discover the hub with `avahi-browse -r _pantryatlas._tcp`.
+
+---
+
+`POST /navigator/devices/enroll`
+
+A device calls this to request admission. Returns 201 with the new device's ID and `status: "pending"`. The operator then approves or rejects from the Devices panel in the PWA.
+
+`role` must be `"compute"` or `"sensor"`. `kind` and `caps` are optional descriptive fields (not yet enforced).
+
+**Request body:**
+```json
+{
+  "name": "Counter Pi",
+  "role": "sensor",
+  "kind": "pi-cam",
+  "caps": ["camera"]
+}
+```
+
+**Response (201):**
+```json
+{ "device_id": "a3f1b2c4d5e6f7a8", "status": "pending" }
+```
+
+---
+
+`GET /navigator/devices`
+
+Returns all enrolled devices (pending, paired, and rejected), ordered by enrolment time, newest first. **Never leaks `token_hash` or the raw token** — those fields are stripped at the `KitchenStore` layer.
+
+**Response:** array of device objects:
+```json
+[
+  {
+    "device_id": "a3f1b2c4d5e6f7a8",
+    "name": "Counter Pi",
+    "role": "sensor",
+    "kind": "pi-cam",
+    "caps": ["camera"],
+    "status": "pending",
+    "enrolled_at": "2026-05-29T10:00:00+00:00",
+    "paired_at": null,
+    "last_seen": null
+  }
+]
+```
+
+---
+
+`POST /navigator/devices/{device_id}/approve`
+
+Approves a pending (or re-approves a paired) device. Mints a fresh URL-safe bearer token, stores only its `sha256` hash in the `devices` table, and returns the raw token **once** — it is not stored and cannot be retrieved again. Re-approving a paired device rotates the token.
+
+**Response (200):**
+```json
+{ "device_id": "a3f1b2c4d5e6f7a8", "status": "paired", "token": "<raw_token_shown_once>" }
+```
+
+**Error (404):** device not found.
+
+---
+
+`POST /navigator/devices/{device_id}/reject`
+
+Rejects a device. Sets status to `"rejected"` and nulls the stored `token_hash`, so any previously issued token stops verifying immediately.
+
+**Response (200):** `{ "device_id": "…", "status": "rejected" }`
+
+**Error (404):** device not found.
+
+---
+
+`DELETE /navigator/devices/{device_id}`
+
+Permanently removes a device record. The device must re-enroll to rejoin the mesh.
+
+**Response (200):** `{ "deleted": "a3f1b2c4d5e6f7a8" }`
+
+**Error (404):** device not found.
+
+---
+
+`GET /navigator/devices/me`
+
+A paired device calls this with its bearer token to verify itself and update `last_seen`. Hashes the presented token and looks it up in the `devices` table; only `status: "paired"` rows match.
+
+**Request header:** `Authorization: Bearer <raw_token>`
+
+**Response (200):** the device object (same shape as `GET /navigator/devices` items — no `token` or `token_hash` field).
+
+**Error (401):** missing or invalid bearer token, or device is not in `paired` status.
+
+---
+
+### KitchenStore devices table
+
+The `devices` table is part of `~/.pantryatlas/kitchen.db`:
+
+| Column | Type | Notes |
+|---|---|---|
+| `device_id` | `TEXT PRIMARY KEY` | Random 8-byte hex, generated at enrol. |
+| `name` | `TEXT` | Human-readable label set by the enrolling device. |
+| `role` | `TEXT` | `"compute"` or `"sensor"`. |
+| `kind` | `TEXT` | Optional descriptor (e.g. `"pi-cam"`). |
+| `caps_json` | `TEXT` | JSON array of capability strings, or `NULL`. |
+| `status` | `TEXT` | `"pending"` → `"paired"` or `"rejected"`. |
+| `token_hash` | `TEXT` | `sha256` hex digest of the raw token. **Never exposed through any API.** Nulled on reject. |
+| `enrolled_at` | `TEXT` | ISO 8601 timestamp of enrolment. |
+| `paired_at` | `TEXT` | ISO 8601 timestamp of most recent approval, or `NULL`. |
+| `last_seen` | `TEXT` | ISO 8601 timestamp last updated by `GET /devices/me`, or `NULL`. |
+
+`KitchenStore._device_to_dict` strips `token_hash` before returning any device record. `list_devices()`, `get_device()`, and `device_by_token_hash()` all go through this method — the raw hash never reaches the application layer.
+
+---
+
 ## Kitchen store + the cook loop
 
 The `KitchenStore` (`pantryatlas.store.kitchen.KitchenStore`) holds all **mutable user state** in `~/.pantryatlas/kitchen.db`. It is plain SQLite — **no `sqlite-vec`** — so it runs on every Python including the Pi's 3.11 build that lacks `enable_load_extension`. It is kept deliberately separate from the static, embedding-bearing `recipes.db`.
@@ -543,7 +665,7 @@ It is wired into `create_app` with the same lazy-init pattern as `RecipeStore` (
 
 ### Schema
 
-Four tables:
+Five tables:
 
 | Table | Holds |
 |---|---|
@@ -551,6 +673,7 @@ Four tables:
 | `inventory_events` | Append-only ledger: one row per `add` / `consume` / `discard` / `expire` / `observe` / `adjust`, tagged with `source` and an optional `detail_json`. The waste tally and audit trail read from here. |
 | `cook_events` | One row per "I cooked this": `dish_name`, `recipe_id`, `servings`, `rating`, `notes`, `cooked_at`, and the `consumed_json` snapshot. Drives the meal-log timeline. |
 | `off_cache` | Cache of Open Food Facts product JSON keyed by barcode code. One row per scanned barcode, indefinite TTL (no expiry in v1). See `POST /navigator/pantry/barcode` for the full cache-first strategy. |
+| `devices` | One row per enrolled device: identity, status, and the `token_hash` (never leaked). Drives the device-approval panel and bearer-token verification. See *Device-trust fabric* above. |
 
 ### Migration from `pantry.json`
 

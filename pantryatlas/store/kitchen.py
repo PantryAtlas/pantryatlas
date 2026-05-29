@@ -11,6 +11,7 @@ transactions.
 from __future__ import annotations
 
 import json
+import secrets
 import sqlite3
 import threading
 from datetime import UTC, date, datetime, timedelta
@@ -60,6 +61,18 @@ CREATE TABLE IF NOT EXISTS off_cache (
     code         TEXT PRIMARY KEY,
     product_json TEXT NOT NULL,
     fetched_at   TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS devices (
+    device_id    TEXT PRIMARY KEY,
+    name         TEXT NOT NULL,
+    role         TEXT NOT NULL,
+    kind         TEXT,
+    caps_json    TEXT,
+    status       TEXT NOT NULL DEFAULT 'pending',
+    token_hash   TEXT,
+    enrolled_at  TEXT NOT NULL,
+    paired_at    TEXT,
+    last_seen    TEXT
 );
 """
 
@@ -415,6 +428,80 @@ class KitchenStore:
             "SELECT product_json FROM off_cache WHERE code=?", (code,)
         ).fetchone()
         return json.loads(row[0]) if row is not None else None
+
+    @staticmethod
+    def _device_to_dict(row: dict[str, Any]) -> dict[str, Any]:
+        # token_hash is deliberately NOT exposed
+        return {
+            "device_id": row["device_id"], "name": row["name"], "role": row["role"],
+            "kind": row["kind"], "caps": json.loads(row["caps_json"]) if row["caps_json"] else [],
+            "status": row["status"], "enrolled_at": row["enrolled_at"],
+            "paired_at": row["paired_at"], "last_seen": row["last_seen"],
+        }
+
+    def enroll_device(self, name: str, role: str, kind: str | None = None,
+                      caps: list[str] | None = None) -> dict[str, Any]:
+        device_id = secrets.token_hex(8)
+        now = _now_iso()
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO devices (device_id, name, role, kind, caps_json, status, enrolled_at) "
+                "VALUES (?,?,?,?,?, 'pending', ?)",
+                (device_id, name, role, kind, json.dumps(caps) if caps else None, now),
+            )
+            self._conn.commit()
+        return self.get_device(device_id)
+
+    def get_device(self, device_id: str) -> dict[str, Any] | None:
+        row = self._fetchone("SELECT * FROM devices WHERE device_id=?", (device_id,))
+        return self._device_to_dict(row) if row is not None else None
+
+    def list_devices(self) -> list[dict[str, Any]]:
+        rows = self._fetchall("SELECT * FROM devices ORDER BY enrolled_at DESC")
+        return [self._device_to_dict(r) for r in rows]
+
+    def approve_device(self, device_id: str, token_hash: str) -> dict[str, Any] | None:
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE devices SET status='paired', token_hash=?, paired_at=? WHERE device_id=?",
+                (token_hash, _now_iso(), device_id),
+            )
+            if not cur.rowcount:
+                return None
+            self._conn.commit()
+        return self.get_device(device_id)
+
+    def reject_device(self, device_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE devices SET status='rejected', token_hash=NULL WHERE device_id=?",
+                (device_id,),
+            )
+            if not cur.rowcount:
+                return None
+            self._conn.commit()
+        return self.get_device(device_id)
+
+    def remove_device(self, device_id: str) -> bool:
+        with self._lock:
+            cur = self._conn.execute("DELETE FROM devices WHERE device_id=?", (device_id,))
+            self._conn.commit()
+            return bool(cur.rowcount)
+
+    def device_by_token_hash(self, token_hash: str) -> dict[str, Any] | None:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT device_id FROM devices WHERE token_hash=? AND status='paired'",
+                (token_hash,),
+            ).fetchone()
+            if row is None:
+                return None
+            device_id = row[0]
+            self._conn.execute(
+                "UPDATE devices SET last_seen=? WHERE device_id=?", (_now_iso(), device_id)
+            )
+            self._conn.commit()
+        return self.get_device(device_id)
 
     def waste_tally(self, window_days: int = 30) -> dict[str, Any]:
         cutoff = (datetime.now(UTC) - timedelta(days=window_days)).isoformat()
