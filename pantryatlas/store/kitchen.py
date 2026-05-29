@@ -541,10 +541,18 @@ class KitchenStore:
         ).fetchall()
         discarded = sum(1 for r in rows if r[1] == "discard")
         expired = sum(1 for r in rows if r[1] == "expire")
+        counts: dict[str, int] = {}
+        for r in rows:
+            counts[r[0]] = counts.get(r[0], 0) + 1
+        by_item = [
+            {"name": n, "count": c}
+            for n, c in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+        ]
         return {
             "window_days": window_days,
             "discarded": discarded,
             "expired": expired,
             "total": discarded + expired,
             "items": [r[0] for r in rows],
+            "by_item": by_item,
         }

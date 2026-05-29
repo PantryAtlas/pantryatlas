@@ -378,3 +378,23 @@ def test_discard_does_not_double_count_when_already_used_up(tmp_path):
     tally = store.waste_tally(window_days=30)
     assert tally["discarded"] == 1, "a second discard on a used_up item must not double-count"
     assert tally["total"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Star Slice 1 Task 3: additive by_item in waste_tally
+# ---------------------------------------------------------------------------
+
+
+def test_waste_tally_by_item_counts_sorted(tmp_path):
+    store = KitchenStore(tmp_path / "kitchen.db")
+    for n in ("milk", "eggs"):
+        store.add_item(Ing(canonical_name=n, raw_text=n))
+    store.consume_item("milk", "discarded")  # milk x1
+    store.mark_expired("eggs")               # eggs x1
+    store.add_item(Ing(canonical_name="milk", raw_text="milk"))  # re-add milk
+    store.consume_item("milk", "discarded")  # milk x2
+    tally = store.waste_tally(window_days=30)
+    # items keeps its flat shape (backward-compatible)
+    assert sorted(tally["items"]) == ["eggs", "milk", "milk"]
+    # by_item: most-wasted first, then name
+    assert tally["by_item"] == [{"name": "milk", "count": 2}, {"name": "eggs", "count": 1}]
