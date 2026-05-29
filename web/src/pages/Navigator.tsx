@@ -30,6 +30,8 @@ import {
   postBarcode,
   daysUntilExpiry,
   expiringSoon,
+  expired,
+  expireItem,
   setExpiry,
   hasPersistedMode,
   wireOfflineReplay,
@@ -47,6 +49,19 @@ import { DevicesPanel } from '../components/DevicesPanel'
 
 // Module-scope signal so TopBar and Navigator can share show-log state
 const showLog = signal(false)
+
+const expiredBtnStyle = {
+  minHeight: '36px',
+  padding: '4px 12px',
+  borderRadius: 'var(--md-sys-shape-corner-full)',
+  background: 'var(--md-sys-color-surface)',
+  border: '1px solid var(--md-sys-color-outline-variant)',
+  color: 'var(--md-sys-color-on-surface)',
+  fontFamily: 'var(--font)',
+  fontSize: 'var(--md-sys-typescale-label-medium-size)',
+  cursor: 'pointer',
+  whiteSpace: 'nowrap' as const,
+}
 
 // ---------------------------------------------------------------------------
 // Debounce util
@@ -215,6 +230,61 @@ export function Navigator() {
               }}
             >
               Expiring soon: {expiringSoon.value.map((i) => i.canonical_name).join(', ')} — cook these first.
+            </div>
+          )}
+
+          {/* Actionable manual-confirm nudge for items already past their date */}
+          {expired.value.length > 0 && (
+            <div
+              data-expired-nudge="true"
+              style={{
+                padding: '12px 16px',
+                borderRadius: 'var(--md-sys-shape-corner-large)',
+                background: 'var(--md-sys-color-error-container)',
+                color: 'var(--md-sys-color-on-error-container)',
+                fontFamily: 'var(--font)',
+                fontSize: 'var(--md-sys-typescale-body-medium-size)',
+                marginBottom: '12px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+              }}
+            >
+              <span>Past expiry — what happened to these?</span>
+              <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {expired.value.map((i) => (
+                  <li
+                    key={i.canonical_name}
+                    style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}
+                  >
+                    <span style={{ fontWeight: 600 }}>{i.canonical_name}</span>
+                    <button
+                      type="button"
+                      data-expired-action={`${i.canonical_name}:used`}
+                      onClick={() => consumeItem(i.canonical_name, 'used_up')}
+                      style={expiredBtnStyle}
+                    >
+                      Used it in time
+                    </button>
+                    <button
+                      type="button"
+                      data-expired-action={`${i.canonical_name}:tossed`}
+                      onClick={() => consumeItem(i.canonical_name, 'discarded')}
+                      style={expiredBtnStyle}
+                    >
+                      Threw it out
+                    </button>
+                    <button
+                      type="button"
+                      data-expired-action={`${i.canonical_name}:expired`}
+                      onClick={() => expireItem(i.canonical_name)}
+                      style={expiredBtnStyle}
+                    >
+                      Expired / spoiled
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 
