@@ -11,8 +11,6 @@ import json
 import re
 from pathlib import Path
 
-import pandas as pd
-
 _TOKEN_RE = re.compile(r"[a-z']+")
 
 # Generic head-nouns whose preceding modifier usually carries the real food
@@ -28,6 +26,11 @@ _ALIASES: dict[str, str] = {}
 
 class FlavorStore:
     def __init__(self, parquet_path: str | Path) -> None:
+        # Lazy import: keep `import pantryatlas.flavor` (and thus the server
+        # module) cheap — pandas costs ~7s to import. The cost is paid once when
+        # a FlavorStore is actually built (warmed at app startup; see create_app).
+        import pandas as pd
+
         df = pd.read_parquet(parquet_path)
         self._ent_mol: dict[int, frozenset[int]] = {}
         self._id2name: dict[int, str] = {}
