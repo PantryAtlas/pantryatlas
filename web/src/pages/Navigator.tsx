@@ -16,6 +16,9 @@ import {
   refineState,
   recipeKey,
   deleteItem,
+  consumeItem,
+  restoreItem,
+  type PantryItem,
   addItem,
   addInputValue,
   addState,
@@ -57,6 +60,59 @@ function debounceRecipe<T extends (...args: Parameters<T>) => void>(fn: T, ms: n
     clearTimeout(timer)
     timer = setTimeout(() => fn(...args), ms)
   }) as T
+}
+
+// ---------------------------------------------------------------------------
+// PantryRowActions — coarse consume controls or "Still have it" restore
+// ---------------------------------------------------------------------------
+
+function PantryRowActions({ item }: { item: PantryItem }) {
+  if (item.state === 'used_up') {
+    return (
+      <button
+        type="button"
+        data-restore={item.canonical_name}
+        onClick={() => restoreItem(item.canonical_name)}
+        style={{
+          minHeight: '36px', padding: '4px 12px',
+          borderRadius: 'var(--md-sys-shape-corner-full)',
+          background: 'transparent',
+          border: '1px solid var(--md-sys-color-outline-variant)',
+          color: 'var(--md-sys-color-primary)',
+          fontFamily: 'var(--font)',
+          fontSize: 'var(--md-sys-typescale-label-medium-size)',
+          cursor: 'pointer', whiteSpace: 'nowrap',
+        }}
+      >
+        Still have it
+      </button>
+    )
+  }
+  const btn = (label: string, amount: string) => (
+    <button
+      type="button"
+      data-consume={`${item.canonical_name}:${amount}`}
+      onClick={() => consumeItem(item.canonical_name, amount)}
+      style={{
+        minHeight: '36px', padding: '4px 10px',
+        borderRadius: 'var(--md-sys-shape-corner-full)',
+        background: 'transparent', border: 'none',
+        color: 'var(--md-sys-color-on-surface-variant)',
+        fontFamily: 'var(--font)',
+        fontSize: 'var(--md-sys-typescale-label-medium-size)',
+        cursor: 'pointer', whiteSpace: 'nowrap',
+      }}
+    >
+      {label}
+    </button>
+  )
+  return (
+    <span style={{ display: 'inline-flex', gap: '2px' }}>
+      {btn('½ left', 'half')}
+      {btn('used up', 'used_up')}
+      {btn('tossed', 'discarded')}
+    </span>
+  )
 }
 
 const _debouncedFetchRecipes = debounceRecipe(
@@ -634,12 +690,7 @@ function PantrySection() {
 // ---------------------------------------------------------------------------
 
 interface PantryCardProps {
-  item: {
-    canonical_name: string
-    raw_text: string
-    expires_at?: string
-    _pending?: boolean
-  }
+  item: PantryItem
 }
 
 function PantryCard({ item }: PantryCardProps) {
@@ -687,6 +738,7 @@ function PantryCard({ item }: PantryCardProps) {
         alignItems: 'center',
         gap: '14px',
         transition: 'box-shadow 0.18s cubic-bezier(0.2,0,0,1)',
+        opacity: item.state === 'used_up' ? 0.5 : 1,
       }}
       onMouseEnter={(e) => {
         ;(e.currentTarget as HTMLLIElement).style.boxShadow = 'var(--shadow-active)'
@@ -760,8 +812,10 @@ function PantryCard({ item }: PantryCardProps) {
         )}
       </div>
 
-      {/* Trailing: pending-sync chip + expiry chip + delete button */}
+      {/* Trailing: pending-sync chip + expiry chip + consume controls + delete button */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+        {/* Coarse consume controls */}
+        <PantryRowActions item={item} />
         {/* Pending-sync indicator — shown for optimistic offline items */}
         {isPending && (
           <span
