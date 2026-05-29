@@ -118,12 +118,20 @@ async function startBackend() {
       stdio: ['ignore', 'inherit', 'inherit'],
     },
   )
+  let backendError = null
   backend.on('exit', (code) => {
-    if (code && code !== 0 && code !== null) {
-      console.error(`backend exited early with code ${code}`)
+    if (code !== 0 && code !== null) {
+      backendError = `backend exited with code ${code}`
+      console.error(backendError)
     }
   })
   for (let i = 0; i < 60; i++) {
+    // Fail fast if the backend process died (e.g., port already in use).
+    // Without this, the health poll would hit a stale foreign server on the
+    // same port and the test would false-green against the wrong backend.
+    if (backendError) {
+      throw new Error(`backend failed to start: ${backendError}`)
+    }
     try {
       const res = await fetch(`${ORIGIN}/navigator/health`)
       if (res.ok) return
