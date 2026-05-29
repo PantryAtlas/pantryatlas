@@ -335,7 +335,9 @@ class KitchenStore:
                         state_row = self._conn.execute(
                             "SELECT state FROM pantry_items WHERE canonical_name=?", (name,)
                         ).fetchone()
-                        new_state, new_conf = self._next_state(state_row[0], "cook")
+                        new_state, new_conf = self._next_state(
+                            state_row[0], c.get("coarse_amount", "cook")
+                        )
                         self._conn.execute(
                             "UPDATE pantry_items SET state=?, confidence=?, updated_at=? "
                             "WHERE canonical_name=?",

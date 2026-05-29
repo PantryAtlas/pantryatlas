@@ -55,6 +55,7 @@ from pantryatlas.inference.providers.lan_endpoint import LanEndpointProvider
 from pantryatlas.inference.registry import ProviderRegistry
 from pantryatlas.navigator.ranking import RankedRecipe, compute_swaps, rank_recipes
 from pantryatlas.pantry.models import Ingredient, Pantry, Quantity
+from pantryatlas.store.kitchen import KitchenStore
 from pantryatlas.store.recipes import RecipeStore
 
 if TYPE_CHECKING:
@@ -209,6 +210,18 @@ def _get_store(app: FastAPI) -> RecipeStore:
     return store
 
 
+def _get_kitchen(app: FastAPI) -> KitchenStore:
+    """Return the app's KitchenStore, initialising it lazily via factory if needed."""
+    kitchen: KitchenStore | None = getattr(app.state, "kitchen", None)
+    if kitchen is None:
+        factory: Callable[[], KitchenStore] | None = getattr(app.state, "kitchen_factory", None)
+        if factory is None:
+            raise RuntimeError("No KitchenStore and no kitchen_factory configured on app.state")
+        app.state.kitchen = factory()
+        kitchen = app.state.kitchen
+    return kitchen
+
+
 # ---------------------------------------------------------------------------
 # App factory
 # ---------------------------------------------------------------------------
@@ -225,6 +238,8 @@ def create_app(
     vision_client: GemmaClient | None = None,
     provider_registry: ProviderRegistry | None = None,
     providers_config_path: Path | None = None,
+    kitchen: "KitchenStore | None" = None,
+    kitchen_factory: "Callable[[], KitchenStore] | None" = None,
 ) -> FastAPI:
     """Build and return a FastAPI app wired to the given dependencies.
 
@@ -271,6 +286,8 @@ def create_app(
     app.state.vision_client = vision_client
     app.state.provider_registry = provider_registry
     app.state.providers_config_path = providers_config_path
+    app.state.kitchen = kitchen
+    app.state.kitchen_factory = kitchen_factory
 
     # ------------------------------------------------------------------
     # Static PWA serving (guarded — tolerates missing web/dist)
@@ -313,8 +330,7 @@ def create_app(
     @app.get("/navigator/pantry")
     def get_pantry() -> list[dict[str, Any]]:
         """Return the current pantry as a list of ingredient objects."""
-        pantry = _load_pantry(app.state.pantry_path)
-        return _pantry_to_list(pantry)
+        return _get_kitchen(app).list_items()
 
     # ------------------------------------------------------------------
     # Pantry — replace
@@ -323,21 +339,16 @@ def create_app(
     @app.put("/navigator/pantry")
     def put_pantry(items: list[IngredientIn]) -> list[dict[str, Any]]:
         """Replace the whole pantry with the provided list (Pydantic-validated)."""
-        pantry = Pantry()
-        for item in items:
-            qty = None
-            if item.quantity is not None:
-                qty = Quantity(amount=item.quantity.amount, unit=item.quantity.unit)
-            pantry.add(
-                Ingredient(
-                    canonical_name=item.canonical_name,
-                    raw_text=item.raw_text,
-                    quantity=qty,
-                    expires_at=item.expires_at,
-                )
+        ingredients = [
+            Ingredient(
+                canonical_name=it.canonical_name, raw_text=it.raw_text,
+                quantity=Quantity(amount=it.quantity.amount, unit=it.quantity.unit)
+                if it.quantity is not None else None,
+                expires_at=it.expires_at,
             )
-        _save_pantry(pantry, app.state.pantry_path)
-        return _pantry_to_list(pantry)
+            for it in items
+        ]
+        return _get_kitchen(app).replace_all(ingredients)
 
     # ------------------------------------------------------------------
     # Pantry — add one item
@@ -352,13 +363,8 @@ def create_app(
                 status_code=422,
                 detail=f"Cannot resolve '{body.raw_text}' to a canonical ingredient.",
             )
-        pantry = _load_pantry(app.state.pantry_path)
-        pantry.add(ingredient)
-        _save_pantry(pantry, app.state.pantry_path)
-        return {
-            "canonical_name": ingredient.canonical_name,
-            "raw_text": ingredient.raw_text,
-        }
+        item = _get_kitchen(app).add_item(ingredient)
+        return {"canonical_name": item["canonical_name"], "raw_text": item["raw_text"]}
 
     # ------------------------------------------------------------------
     # Pantry — remove one item
@@ -367,9 +373,7 @@ def create_app(
     @app.delete("/navigator/pantry/items/{name}")
     def delete_pantry_item(name: str) -> dict[str, str]:
         """Remove an ingredient by canonical name (no-op if not present)."""
-        pantry = _load_pantry(app.state.pantry_path)
-        pantry.remove(name)
-        _save_pantry(pantry, app.state.pantry_path)
+        _get_kitchen(app).remove_item(name)
         return {"removed": name}
 
     # ------------------------------------------------------------------
@@ -407,7 +411,7 @@ def create_app(
         ``/recipes/from-pantry/refine`` to settle the ordering with real
         substitution scores.
         """
-        pantry = _load_pantry(app.state.pantry_path)
+        pantry = _get_kitchen(app).on_hand()
         canonical_names = [ing.canonical_name for ing in pantry]
 
         candidates = _get_store(app).iter_overlapping(canonical_names)
@@ -440,7 +444,7 @@ def create_app(
         Only the unique missing ingredients across the ≤N supplied recipes are
         embedded, in a single batch.
         """
-        pantry = _load_pantry(app.state.pantry_path)
+        pantry = _get_kitchen(app).on_hand()
         candidates = [
             {"title": r.title, "ingredients": r.ingredients, "instructions": r.instructions}
             for r in recipes
@@ -467,7 +471,7 @@ def create_app(
         fast.  Returns ``{"swaps":[{missing,best_swap,similarity,reason}, ...]}``;
         ``best_swap`` is ``None`` when no pantry item clears the similarity floor.
         """
-        pantry = _load_pantry(app.state.pantry_path)
+        pantry = _get_kitchen(app).on_hand()
         swaps = compute_swaps(body.ingredients, pantry, app.state.embed_fn)
         return {"swaps": swaps}
 

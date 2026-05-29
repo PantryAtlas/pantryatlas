@@ -10,6 +10,7 @@ from pantryatlas.gemma.client import GemmaClient
 from pantryatlas.inference.providers.lan_endpoint import LanEndpointProvider
 from pantryatlas.inference.registry import ProviderRegistry
 from pantryatlas.navigator.server import create_app
+from pantryatlas.store.kitchen import KitchenStore
 
 
 class _InMemoryStore:
@@ -37,6 +38,7 @@ def _make_app(reg: ProviderRegistry, tmp_path: Path) -> TestClient:
         pantry_path=tmp_path / "pantry.json",
         provider_registry=reg,
         providers_config_path=tmp_path / "providers.json",
+        kitchen=KitchenStore(tmp_path / "kitchen.db"),
     )
     return TestClient(app)
 

@@ -27,6 +27,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from pantryatlas.pantry.models import Ingredient
+from pantryatlas.store.kitchen import KitchenStore
 from pantryatlas.store.recipes import Recipe, RecipeStore
 
 # ---------------------------------------------------------------------------
@@ -134,6 +135,7 @@ def client(tmp_store: RecipeStore, pantry_path: Path) -> TestClient:
         resolver=_fake_resolver,
         embed_fn=_fake_embed,
         pantry_path=pantry_path,
+        kitchen=KitchenStore(pantry_path.parent / "kitchen.db"),
     )
     return TestClient(app)
 
@@ -200,6 +202,7 @@ def test_health_recipe_count_matches_store(
         resolver=_fake_resolver,
         embed_fn=_fake_embed,
         pantry_path=pantry_path,
+        kitchen=KitchenStore(pantry_path.parent / "kitchen.db"),
     )
     with TestClient(app) as c:
         resp = c.get("/navigator/health")
