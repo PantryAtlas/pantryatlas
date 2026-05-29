@@ -372,7 +372,13 @@ class KitchenStore:
                         evt_change_type = (
                             "discard" if c.get("coarse_amount") == "discarded" else "consume"
                         )
-                        self._log_event(name, evt_change_type, source, {"cook_event_id": event_id})
+                        # Waste invariant (mirror consume_item / mark_expired): a discard is
+                        # logged only on the transition into used_up. on_hand is a stale
+                        # snapshot, so a canonical name repeated as 'discarded' in one payload
+                        # would otherwise log twice — guard on the freshly-read prior state.
+                        if not (evt_change_type == "discard" and state_row[0] == "used_up"):
+                            self._log_event(name, evt_change_type, source,
+                                            {"cook_event_id": event_id})
                     else:
                         unmatched.append(name)
                 self._conn.commit()
