@@ -51,3 +51,80 @@ def test_add_without_canonical_still_resolves(tmp_path):
     r = client.post("/navigator/pantry/items", json={"raw_text": "garlic"})
     assert r.status_code == 201
     assert client.get("/navigator/pantry").json()[0]["source"] == "manual"
+
+
+# ---------------------------------------------------------------------------
+# Task 5: POST /navigator/pantry/barcode route
+# ---------------------------------------------------------------------------
+import io as _io
+
+import httpx
+import zxingcpp
+from PIL import Image
+
+from pantryatlas.navigator.openfoodfacts import OpenFoodFactsClient
+
+
+def _barcode_png(value="737628064502") -> bytes:
+    img = zxingcpp.write_barcode(zxingcpp.BarcodeFormat.EAN13, value)
+    pil = img if isinstance(img, Image.Image) else Image.fromarray(img)
+    buf = _io.BytesIO()
+    pil.convert("RGB").resize((pil.width * 4, pil.height * 4)).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _client_with_off(tmp_path, handler) -> TestClient:
+    from pantryatlas.navigator.server import create_app
+    app = create_app(
+        store=_FakeStore(), resolver=_fake_resolver, embed_fn=_fake_embed,
+        pantry_path=tmp_path / "pantry.json", kitchen=KitchenStore(tmp_path / "kitchen.db"),
+    )
+    app.state.off_client = OpenFoodFactsClient(transport=httpx.MockTransport(handler))
+    return TestClient(app)
+
+
+def _off_found(req):
+    return httpx.Response(200, json={"status": 1, "product": {
+        "product_name": "Rice Noodles", "brands": "Thai Kitchen",
+        "ingredients_tags": ["en:rice-noodles"], "categories_tags": ["en:pastas", "en:noodles"]}})
+
+
+def test_barcode_route_returns_candidate(tmp_path):
+    client = _client_with_off(tmp_path, _off_found)
+    r = client.post("/navigator/pantry/barcode",
+                    files={"image": ("b.png", _barcode_png(), "image/png")})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["found"] is True
+    assert body["product"]["name"] == "Rice Noodles"
+    assert body["proposed"]["canonical_name"] == "noodles"
+    # route is read-only: nothing added yet
+    assert client.get("/navigator/pantry").json() == []
+
+
+def test_barcode_route_no_barcode_returns_422(tmp_path):
+    client = _client_with_off(tmp_path, _off_found)
+    buf = _io.BytesIO(); Image.new("RGB", (200, 200), "white").save(buf, format="PNG")
+    r = client.post("/navigator/pantry/barcode",
+                    files={"image": ("blank.png", buf.getvalue(), "image/png")})
+    assert r.status_code == 422
+
+
+def test_barcode_route_off_not_found(tmp_path):
+    def off_missing(req): return httpx.Response(200, json={"status": 0})
+    client = _client_with_off(tmp_path, off_missing)
+    r = client.post("/navigator/pantry/barcode",
+                    files={"image": ("b.png", _barcode_png(), "image/png")})
+    assert r.status_code == 200
+    assert r.json()["found"] is False
+    assert r.json()["code"]
+
+
+def test_barcode_route_off_down_is_graceful(tmp_path):
+    def off_down(req): raise httpx.ConnectError("boom")
+    client = _client_with_off(tmp_path, off_down)
+    r = client.post("/navigator/pantry/barcode",
+                    files={"image": ("b.png", _barcode_png(), "image/png")})
+    assert r.status_code == 200
+    assert r.json()["found"] is False
+    assert r.json().get("error") == "off_unavailable"
