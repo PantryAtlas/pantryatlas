@@ -196,12 +196,12 @@ export async function cookRecipe(opts: {
 /** Coarse consume on a pantry item: 'half' | 'used_up' | 'discarded'. */
 export async function consumeItem(canonicalName: string, coarseAmount: string) {
   try {
-    await fetch(`/navigator/pantry/items/${encodeURIComponent(canonicalName)}/consume`, {
+    const res = await fetch(`/navigator/pantry/items/${encodeURIComponent(canonicalName)}/consume`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ coarse_amount: coarseAmount }),
     })
-    await fetchPantry()
+    if (res.ok) await fetchPantry()
   } catch {
     // ignore
   }
@@ -209,10 +209,10 @@ export async function consumeItem(canonicalName: string, coarseAmount: string) {
 
 export async function restoreItem(canonicalName: string) {
   try {
-    await fetch(`/navigator/pantry/items/${encodeURIComponent(canonicalName)}/restore`, {
+    const res = await fetch(`/navigator/pantry/items/${encodeURIComponent(canonicalName)}/restore`, {
       method: 'POST',
     })
-    await fetchPantry()
+    if (res.ok) await fetchPantry()
   } catch {
     // ignore
   }
@@ -271,9 +271,11 @@ export const photoErrorMsg = signal<string>('')
 export const pantryCount = computed(() => pantry.value.length)
 
 export const expiringSoon = computed(() =>
-  pantry.value.filter(
-    (i) => i.state !== 'used_up' && (daysUntilExpiry(i.expires_at) ?? 99) <= 3
-  )
+  pantry.value.filter((i) => {
+    if (i.state === 'used_up') return false
+    const d = daysUntilExpiry(i.expires_at)
+    return d !== null && d >= 0 && d <= 3
+  })
 )
 
 export const modeLabel = computed(() =>

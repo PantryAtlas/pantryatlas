@@ -78,6 +78,7 @@ function PantryRowActions({ item }: { item: PantryItem }) {
         type="button"
         data-restore={item.canonical_name}
         onClick={() => restoreItem(item.canonical_name)}
+        aria-label={`Mark ${item.canonical_name} as still on hand`}
         style={{
           minHeight: '36px', padding: '4px 12px',
           borderRadius: 'var(--md-sys-shape-corner-full)',
@@ -98,6 +99,7 @@ function PantryRowActions({ item }: { item: PantryItem }) {
       type="button"
       data-consume={`${item.canonical_name}:${amount}`}
       onClick={() => consumeItem(item.canonical_name, amount)}
+      aria-label={`Mark ${item.canonical_name} as ${label}`}
       style={{
         minHeight: '36px', padding: '4px 10px',
         borderRadius: 'var(--md-sys-shape-corner-full)',
