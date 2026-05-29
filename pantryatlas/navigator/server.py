@@ -232,11 +232,12 @@ def create_app(
             Must NOT trigger ONNX model loading in tests; pass a fake.
         embed_fn: Callable mapping list[str] → np.ndarray (N, D).
             Must NOT trigger ONNX model loading in tests; pass a fake.
-        pantry_path: Path stored on ``app.state.pantry_path`` for legacy
-            compatibility and one-time migration (``KitchenStore`` handles
-            migration from this path on first open).  Mutable user state
-            (pantry items, cook log) is persisted to ``kitchen.db`` via
-            ``KitchenStore``; this path is no longer read directly by routes.
+        pantry_path: Stored on ``app.state.pantry_path`` for calling-code API
+            stability only — no route or factory reads it.  Mutable user state
+            (pantry items, cook log, devices) is persisted to ``kitchen.db`` via
+            ``KitchenStore``; the production kitchen factory captures the
+            pantry.json migration path directly at construction time, not via
+            this state value.
         web_dist: Path to the built PWA dist directory.
             When None, defaults to ``<repo>/web/dist`` if it exists; otherwise
             the static mount is skipped gracefully.
