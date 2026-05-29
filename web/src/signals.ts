@@ -179,13 +179,20 @@ export async function fetchMeals() {
   }
 }
 
-/** Mark a recipe cooked: logs it + soft-decrements its ingredients, then refreshes. */
+/** Build the PATCH body for a reflection; blank note -> null. */
+export function buildReflectPayload(rating: number | null, notes: string) {
+  const trimmed = notes.trim()
+  return { rating, notes: trimmed.length ? trimmed : null }
+}
+
+/** Mark a recipe cooked: logs it + soft-decrements its ingredients, then refreshes.
+ *  Returns the created cook event (only `id` is guaranteed from the POST), or null. */
 export async function cookRecipe(opts: {
   recipe_id?: string
   dish_name: string
   servings?: number
   consumed?: { canonical_name: string; coarse_amount: string }[]
-}): Promise<boolean> {
+}): Promise<CookEvent | null> {
   try {
     const res = await fetch('/navigator/cook', {
       method: 'POST',
@@ -193,9 +200,30 @@ export async function cookRecipe(opts: {
       body: JSON.stringify(opts),
     })
     if (res.ok || res.status === 201) {
+      const ev = (await res.json()) as CookEvent
       await fetchPantry()
       await fetchMeals()
       await refreshWasteIfOpen()
+      return ev
+    }
+  } catch {
+    // ignore
+  }
+  return null
+}
+
+/** Attach a rating/note to a logged cook event. */
+export async function reflectMeal(
+  id: number, rating: number | null, notes: string | null,
+): Promise<boolean> {
+  try {
+    const res = await fetch(`/navigator/meals/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rating, notes }),
+    })
+    if (res.ok) {
+      await fetchMeals()
       return true
     }
   } catch {
