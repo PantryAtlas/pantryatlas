@@ -27,6 +27,7 @@ import {
   photoSheetOpen,
   photoFile,
   photoSheetState,
+  postBarcode,
   daysUntilExpiry,
   expiringSoon,
   hasPersistedMode,
@@ -34,6 +35,7 @@ import {
 } from '../signals'
 import { ModeSwitcher } from '../components/ModeSwitcher'
 import { PhotoReviewSheet } from '../components/PhotoReviewSheet'
+import { BarcodeReviewSheet } from '../components/BarcodeReviewSheet'
 import { RecipeCard } from '../components/RecipeCard'
 import { OfflineBanner } from '../components/OfflineBanner'
 import { AiHelpersPanel } from '../components/AiHelpersPanel'
@@ -263,6 +265,7 @@ export function Navigator() {
       {/* Overlay sheets — rendered outside the column */}
       <ModeSwitcher />
       <PhotoReviewSheet />
+      <BarcodeReviewSheet />
     </Fragment>
   )
 }
@@ -378,6 +381,7 @@ function TopBar() {
 
 function AddIngredientRow() {
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const barcodeInputRef = useRef<HTMLInputElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const [isShaking, setIsShaking] = useState(false)
 
@@ -468,6 +472,18 @@ function AddIngredientRow() {
 
   function handleCameraClick() {
     fileInputRef.current?.click()
+  }
+
+  function handleBarcodeClick() {
+    barcodeInputRef.current?.click()
+  }
+
+  function handleBarcodeFileChange(e: Event) {
+    const file = (e.target as HTMLInputElement).files?.[0]
+    if (!file) return
+    void postBarcode(file)
+    // Reset so same file can be reselected
+    ;(e.target as HTMLInputElement).value = ''
   }
 
   function handleFileChange(e: Event) {
@@ -621,13 +637,58 @@ function AddIngredientRow() {
           </svg>
         </button>
 
-        {/* Hidden file input */}
+        {/* Hidden file input — shelf photo */}
         <input
           ref={fileInputRef}
           type="file"
           accept="image/*"
           capture="environment"
           onChange={handleFileChange}
+          aria-hidden="true"
+          tabIndex={-1}
+          style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
+        />
+
+        {/* Barcode icon button */}
+        <button
+          type="button"
+          onClick={handleBarcodeClick}
+          aria-label="Scan a product barcode"
+          style={{
+            width: '44px',
+            height: '44px',
+            borderRadius: 'var(--md-sys-shape-corner-full)',
+            background: 'var(--md-sys-color-secondary-container)',
+            border: 'none',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginRight: '6px',
+            flexShrink: 0,
+            transition: 'background 0.15s',
+          }}
+        >
+          {/* Barcode icon — Material-style line glyph */}
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path d="M2 4h1v16H2V4zm3 0h2v16H5V4zm3 0h1v16H8V4zm3 0h2v16h-2V4zm3 0h1v16h-1V4zm3 0h2v16h-2V4zm3 0h1v16h-1V4z"
+              fill="var(--md-sys-color-on-secondary-container)" />
+          </svg>
+        </button>
+
+        {/* Hidden file input — barcode scan */}
+        <input
+          ref={barcodeInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handleBarcodeFileChange}
           aria-hidden="true"
           tabIndex={-1}
           style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
