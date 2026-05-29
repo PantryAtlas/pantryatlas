@@ -44,7 +44,7 @@ from __future__ import annotations
 import logging
 import os
 from collections.abc import Callable
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -564,7 +564,7 @@ def create_app(
             if not candidates:
                 return []
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         history_fn = build_history_adjuster(
             _get_kitchen(app).list_meals(limit=500), now
         )
@@ -620,7 +620,7 @@ def create_app(
         if not candidates:
             return []
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         history_fn = build_history_adjuster(
             _get_kitchen(app).list_meals(limit=500), now
         )

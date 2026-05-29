@@ -1,11 +1,11 @@
 # tests/navigator/test_history.py
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from pantryatlas.navigator.history import build_history_adjuster, normalize_title
 
-NOW = datetime(2026, 5, 29, 12, 0, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 5, 29, 12, 0, 0, tzinfo=UTC)
 
 
 def _evt(title, *, days_ago=0.0, rating=None):
