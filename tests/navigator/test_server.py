@@ -698,3 +698,67 @@ def test_from_pantry_no_filters_unchanged(client):
     _seed_pantry(client, "tomato", "onion", "garlic")
     a = client.post("/navigator/recipes/from-pantry").json()
     assert isinstance(a, list)
+
+
+# ---------------------------------------------------------------------------
+# Star Slice 4: PATCH /navigator/meals/{id} reflection + history re-rank
+# ---------------------------------------------------------------------------
+
+
+def test_patch_meal_updates_rating_and_notes(client):
+    created = client.post("/navigator/cook", json={"dish_name": "Soup"}).json()
+    r = client.patch(f"/navigator/meals/{created['id']}",
+                     json={"rating": 5, "notes": "yum"})
+    assert r.status_code == 200
+    assert r.json()["rating"] == 5 and r.json()["notes"] == "yum"
+    meals = client.get("/navigator/meals").json()
+    assert meals[0]["rating"] == 5
+
+
+def test_patch_meal_unknown_id_404(client):
+    assert client.patch("/navigator/meals/999999", json={"rating": 3}).status_code == 404
+
+
+def test_patch_meal_bad_rating_422(client):
+    created = client.post("/navigator/cook", json={"dish_name": "X"}).json()
+    assert client.patch(f"/navigator/meals/{created['id']}",
+                        json={"rating": 9}).status_code == 422
+
+
+def _refine_payload(ranked):
+    """Re-shape from-pantry results into RecipeIn bodies for /refine."""
+    return [
+        {
+            "title": r["recipe"]["title"],
+            "ingredients": r["recipe"].get("ingredients", []),
+            "instructions": r["recipe"].get("instructions", ""),
+        }
+        for r in ranked
+    ]
+
+
+def test_from_pantry_demotes_recently_cooked(client):
+    # Cook a candidate dish (no consumed -> pantry unchanged, so the cook history
+    # is the ONLY delta) and confirm its ranking score strictly drops. We compare
+    # through /refine, which returns ALL supplied candidates (k=len, no top-20
+    # cutoff), so a demoted-but-still-present candidate stays observable, and we
+    # pick a target whose baseline score is strictly inside (0,1) so the -0.05
+    # penalty isn't masked by the [0,1] clamp.
+    _seed_pantry(client, "garlic", "tomato", "basil", "flour", "butter")
+    instant = client.post("/navigator/recipes/from-pantry").json()
+    assert len(instant) >= 1
+    bodies = _refine_payload(instant)
+
+    base = client.post("/navigator/recipes/from-pantry/refine", json=bodies).json()
+    target = next((r for r in base if 0.0 < r["score"] < 1.0), None)
+    assert target is not None, "need a candidate with score strictly in (0,1)"
+    title = target["recipe"]["title"]
+    base_score = target["score"]
+
+    cooked = client.post("/navigator/cook", json={"dish_name": title})
+    assert cooked.status_code == 201
+
+    after = client.post("/navigator/recipes/from-pantry/refine", json=bodies).json()
+    after_by_title = {r["recipe"]["title"]: r["score"] for r in after}
+    assert title in after_by_title
+    assert after_by_title[title] < base_score
