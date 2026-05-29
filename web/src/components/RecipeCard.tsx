@@ -2,6 +2,7 @@ import { h, Fragment } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 import { CoverageRing } from './CoverageRing'
 import { fetchSwaps, recipeSwaps, recipeKey, cookRecipe, type SwapSuggestion } from '../signals'
+import { shouldShowPairingBadge } from '../lib/flavor'
 
 /**
  * RecipeCard — collapsible recipe card with inline expansion.
@@ -30,6 +31,7 @@ export interface RankedRecipe {
   expiration_urgency: number
   substitution_penalty: number
   cultural_fit: number
+  flavor?: number
 }
 
 interface RecipeCardProps {
@@ -372,6 +374,26 @@ export function RecipeCard({ ranked, animDelay = 0 }: RecipeCardProps) {
               >
                 {chipLabel}
               </span>
+              {shouldShowPairingBadge(ranked.flavor) && (
+                <span
+                  data-pairing-badge="true"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    marginLeft: '6px',
+                    padding: '3px 12px',
+                    borderRadius: 'var(--md-sys-shape-corner-full)',
+                    background: 'var(--md-sys-color-tertiary-container)',
+                    color: 'var(--md-sys-color-on-tertiary-container)',
+                    fontFamily: 'var(--font)',
+                    fontSize: 'var(--md-sys-typescale-label-medium-size)',
+                    fontWeight: 'var(--md-sys-typescale-label-medium-weight)',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  great pairing
+                </span>
+              )}
             </div>
 
             {/* Source attribution — RecipeNLG, always visible on collapsed card */}
