@@ -5,6 +5,7 @@
 import { signal, computed } from '@preact/signals'
 import type { RankedRecipe } from './components/RecipeCard'
 import { enqueueMutation, replayQueue } from './lib/offline-queue'
+import { buildFilterQuery } from './lib/filters'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -500,6 +501,14 @@ export const recipes = signal<RankedRecipe[]>([])
 export const recipeLoadState = signal<RecipeLoadState>('idle')
 export const refineState = signal<RefineState>('idle')
 
+// ---------------------------------------------------------------------------
+// Filter signals — cuisine / diet / time (used by filter bar + fetchRecipes)
+// ---------------------------------------------------------------------------
+
+export const filterCuisine = signal<string | null>(null)
+export const filterExcludes = signal<Set<string>>(new Set())
+export const filterMaxTime = signal<number | null>(null)
+
 /** Stable identity for a ranked recipe — used for keys and the swaps cache. */
 export function recipeKey(r: RankedRecipe): string {
   return r.recipe.title + '|' + r.recipe.ingredients.join(',')
@@ -519,7 +528,8 @@ export async function fetchRecipes(pantryItems: PantryItem[], currentMode: Mode)
   refineState.value = 'idle'
   recipeLoadState.value = 'loading'
   try {
-    const res = await fetch('/navigator/recipes/from-pantry', {
+    const q = buildFilterQuery(filterCuisine.value, filterExcludes.value, filterMaxTime.value)
+    const res = await fetch(`/navigator/recipes/from-pantry${q}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -558,7 +568,8 @@ async function refineRecipes(instant: RankedRecipe[], currentMode: Mode) {
   _refineAbort = controller
   refineState.value = 'refining'
   try {
-    const res = await fetch('/navigator/recipes/from-pantry/refine', {
+    const q = buildFilterQuery(filterCuisine.value, filterExcludes.value, filterMaxTime.value)
+    const res = await fetch(`/navigator/recipes/from-pantry/refine${q}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(instant.map((r) => r.recipe)),

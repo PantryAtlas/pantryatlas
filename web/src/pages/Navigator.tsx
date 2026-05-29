@@ -41,7 +41,11 @@ import {
   hasPersistedMode,
   wireOfflineReplay,
   devicesPanelOpen,
+  filterCuisine,
+  filterExcludes,
+  filterMaxTime,
 } from '../signals'
+import { CUISINE_OPTIONS, EXCLUDE_OPTIONS, TIME_OPTIONS, hasActiveFilters } from '../lib/filters'
 import { ModeSwitcher } from '../components/ModeSwitcher'
 import { PhotoReviewSheet } from '../components/PhotoReviewSheet'
 import { BarcodeReviewSheet } from '../components/BarcodeReviewSheet'
@@ -166,11 +170,17 @@ export function Navigator() {
     }
   }, [])
 
-  // Live-recompute recipes whenever pantry or mode changes (debounced 600ms).
-  // useSignalEffect auto-tracks the signals read inside (pantry.value, mode.value).
+  // Live-recompute recipes whenever pantry, mode, or filters change (debounced 600ms).
+  // useSignalEffect auto-tracks the signals read inside (all .value accesses register deps).
+  // Filter signals are read synchronously here so changing them re-runs this effect;
+  // fetchRecipes/refineRecipes then read them again when building the query string.
   useSignalEffect(() => {
     const items = pantry.value
     const m = mode.value
+    // Read filter signals to register reactivity — fetchRecipes reads them to build the query
+    void filterCuisine.value
+    void filterExcludes.value
+    void filterMaxTime.value
     _debouncedFetchRecipes(items, m)
   })
 
@@ -1400,6 +1410,9 @@ function RecipesSection() {
         </p>
       )}
 
+      {/* Filter bar — above results list, below section label */}
+      <FilterBar />
+
       {/* Results */}
       {loadState !== 'loading' && ranked.length > 0 && (
         <ul
@@ -1422,11 +1435,237 @@ function RecipesSection() {
         </ul>
       )}
 
-      {/* Empty state — shown after first load returns zero results, or on idle */}
+      {/* Empty state — branch on whether active filters caused the empty result */}
       {loadState !== 'loading' && ranked.length === 0 && (
-        <RecipeEmptyState />
+        hasActiveFilters(filterCuisine.value, filterExcludes.value, filterMaxTime.value)
+          ? <RecipeFilterEmptyState />
+          : <RecipeEmptyState />
       )}
     </section>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Filter bar — cuisine single-select, diet toggles, time chips
+// ---------------------------------------------------------------------------
+
+// Shared chip button style factory (mirrors WasteDashboard window chips)
+function chipStyle(active: boolean): Record<string, string> {
+  return {
+    minHeight: '36px',
+    padding: '4px 12px',
+    borderRadius: 'var(--md-sys-shape-corner-full)',
+    border: '1px solid var(--md-sys-color-outline-variant)',
+    background: active ? 'var(--md-sys-color-primary-container)' : 'transparent',
+    color: active
+      ? 'var(--md-sys-color-on-primary-container)'
+      : 'var(--md-sys-color-on-surface-variant)',
+    cursor: 'pointer',
+    fontFamily: 'var(--font)',
+    fontSize: 'var(--md-sys-typescale-label-medium-size)',
+    whiteSpace: 'nowrap',
+  }
+}
+
+function FilterBar() {
+  const cuisine = filterCuisine.value
+  const excludes = filterExcludes.value
+  const maxTime = filterMaxTime.value
+
+  function toggleCuisine(c: string) {
+    // Tapping the active cuisine clears it
+    filterCuisine.value = cuisine === c ? null : c
+  }
+
+  function toggleExclude(ex: string) {
+    // Always assign a new Set so the signal fires
+    const next = new Set(filterExcludes.value)
+    if (next.has(ex)) {
+      next.delete(ex)
+    } else {
+      next.add(ex)
+    }
+    filterExcludes.value = next
+  }
+
+  function setMaxTime(t: number | null) {
+    // Tapping active time chip clears it (back to Any)
+    filterMaxTime.value = maxTime === t ? null : t
+  }
+
+  const dietLabels: Record<string, string> = {
+    meat: 'No meat',
+    dairy: 'No dairy',
+    gluten: 'No gluten',
+  }
+
+  return (
+    <div
+      data-filter-bar="true"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px',
+        marginBottom: '16px',
+      }}
+    >
+      {/* Cuisine row */}
+      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <span
+          style={{
+            fontFamily: 'var(--font)',
+            fontSize: 'var(--md-sys-typescale-label-small-size)',
+            color: 'var(--md-sys-color-on-surface-variant)',
+            marginRight: '2px',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Cuisine
+        </span>
+        {CUISINE_OPTIONS.map((c) => (
+          <button
+            key={c}
+            type="button"
+            data-filter-cuisine={c}
+            aria-pressed={cuisine === c}
+            onClick={() => toggleCuisine(c)}
+            style={chipStyle(cuisine === c) as any}
+          >
+            {c.charAt(0).toUpperCase() + c.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      {/* Diet row */}
+      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <span
+          style={{
+            fontFamily: 'var(--font)',
+            fontSize: 'var(--md-sys-typescale-label-small-size)',
+            color: 'var(--md-sys-color-on-surface-variant)',
+            marginRight: '2px',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Diet
+        </span>
+        {EXCLUDE_OPTIONS.map((ex) => (
+          <button
+            key={ex}
+            type="button"
+            data-filter-exclude={ex}
+            aria-pressed={excludes.has(ex)}
+            onClick={() => toggleExclude(ex)}
+            style={chipStyle(excludes.has(ex)) as any}
+          >
+            {dietLabels[ex]}
+          </button>
+        ))}
+      </div>
+      {/* Diet disclaimer — detection-framed, never a guarantee */}
+      <p
+        style={{
+          fontFamily: 'var(--font)',
+          fontSize: 'var(--md-sys-typescale-label-small-size)',
+          color: 'var(--md-sys-color-on-surface-variant)',
+          margin: '0 0 0 2px',
+          opacity: 0.8,
+        }}
+      >
+        Hides recipes where we detect these — double-check ingredients
+      </p>
+
+      {/* Time row */}
+      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <span
+          style={{
+            fontFamily: 'var(--font)',
+            fontSize: 'var(--md-sys-typescale-label-small-size)',
+            color: 'var(--md-sys-color-on-surface-variant)',
+            marginRight: '2px',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Time
+        </span>
+        {TIME_OPTIONS.map((t) => (
+          <button
+            key={t}
+            type="button"
+            data-filter-time={String(t)}
+            aria-pressed={maxTime === t}
+            onClick={() => setMaxTime(t)}
+            style={chipStyle(maxTime === t) as any}
+          >
+            {`≤${t} min`}
+          </button>
+        ))}
+        <button
+          type="button"
+          data-filter-time="any"
+          aria-pressed={maxTime === null}
+          onClick={() => { filterMaxTime.value = null }}
+          style={chipStyle(maxTime === null) as any}
+        >
+          Any
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Recipe filter empty state — shown when filters cause zero results
+// ---------------------------------------------------------------------------
+
+function RecipeFilterEmptyState() {
+  function clearFilters() {
+    filterCuisine.value = null
+    filterExcludes.value = new Set()
+    filterMaxTime.value = null
+  }
+
+  return (
+    <div
+      data-filter-empty-state="true"
+      style={{
+        textAlign: 'center',
+        padding: '32px 24px',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '16px',
+      }}
+    >
+      <p
+        style={{
+          fontFamily: 'var(--font)',
+          fontSize: 'var(--md-sys-typescale-body-large-size)',
+          color: 'var(--md-sys-color-on-surface-variant)',
+        }}
+      >
+        No recipes match these filters.
+      </p>
+      <button
+        type="button"
+        data-clear-filters="true"
+        onClick={clearFilters}
+        style={{
+          minHeight: '40px',
+          padding: '8px 20px',
+          borderRadius: 'var(--md-sys-shape-corner-full)',
+          background: 'var(--md-sys-color-primary-container)',
+          color: 'var(--md-sys-color-on-primary-container)',
+          border: 'none',
+          cursor: 'pointer',
+          fontFamily: 'var(--font)',
+          fontSize: 'var(--md-sys-typescale-label-medium-size)',
+          fontWeight: 'var(--md-sys-typescale-label-medium-weight)',
+        }}
+      >
+        Clear filters
+      </button>
+    </div>
   )
 }
 

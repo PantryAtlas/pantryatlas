@@ -58,6 +58,7 @@ from pantryatlas.flavor import FlavorStore
 from pantryatlas.inference.config import save_provider_config
 from pantryatlas.inference.providers.lan_endpoint import LanEndpointProvider
 from pantryatlas.inference.registry import ProviderRegistry
+from pantryatlas.navigator.facets import VALID_EXCLUDES, passes_filters
 from pantryatlas.navigator.openfoodfacts import OffUnavailable, OpenFoodFactsClient
 from pantryatlas.navigator.ranking import RankedRecipe, compute_swaps, rank_recipes
 from pantryatlas.pantry.models import Ingredient, Quantity
@@ -501,7 +502,11 @@ def create_app(
     # ------------------------------------------------------------------
 
     @app.post("/navigator/recipes/from-pantry")
-    def post_recipes_from_pantry(cuisine: str | None = None) -> list[dict[str, Any]]:
+    def post_recipes_from_pantry(
+        cuisine: str | None = None,
+        exclude: str = "",
+        max_time_min: int | None = None,
+    ) -> list[dict[str, Any]]:
         """Instant pantry → recipes: coverage-ranked, NO embedding (fast mode).
 
         Pre-filter strategy: text-overlap against recipes_meta.ingredients_json.
@@ -512,6 +517,13 @@ def create_app(
         thousands of candidates.  The client then calls
         ``/recipes/from-pantry/refine`` to settle the ordering with real
         substitution scores.
+
+        Optional pre-filters (applied before ranking):
+        - ``cuisine``: strict cuisine filter (unknown-classified recipes hidden).
+        - ``exclude``: comma-separated diet tokens (``meat``, ``dairy``, ``gluten``).
+          Unknown tokens are silently ignored.
+        - ``max_time_min``: hide recipes whose estimated time exceeds this value;
+          recipes with no estimable time are kept.
         """
         pantry = _get_kitchen(app).on_hand()
         canonical_names = [ing.canonical_name for ing in pantry]
@@ -522,11 +534,20 @@ def create_app(
             # Fall back: return empty list rather than 500
             return []
 
+        exclude_set = {e.strip() for e in exclude.split(",") if e.strip()} & VALID_EXCLUDES
+        if cuisine or exclude_set or max_time_min is not None:
+            candidates = [
+                c for c in candidates
+                if passes_filters(c, cuisine=cuisine, exclude=exclude_set,
+                                  max_time_min=max_time_min)
+            ]
+            if not candidates:
+                return []
+
         flavor_store = _get_flavor(app)
         ranked: list[RankedRecipe] = rank_recipes(
             pantry,
             candidates,
-            cuisine=cuisine,
             compute_substitution=False,
             flavor_fn=flavor_store.flavor_score,
         )
@@ -535,7 +556,10 @@ def create_app(
 
     @app.post("/navigator/recipes/from-pantry/refine")
     def post_recipes_refine(
-        recipes: list[RecipeIn], cuisine: str | None = None
+        recipes: list[RecipeIn],
+        cuisine: str | None = None,
+        exclude: str = "",
+        max_time_min: int | None = None,
     ) -> list[dict[str, Any]]:
         """Refine the instant results with real (embedding-based) substitution.
 
@@ -547,6 +571,11 @@ def create_app(
 
         Only the unique missing ingredients across the ≤N supplied recipes are
         embedded, in a single batch.
+
+        Optional pre-filters (same semantics as from-pantry):
+        - ``cuisine``: strict cuisine filter.
+        - ``exclude``: comma-separated diet tokens; unknown tokens ignored.
+        - ``max_time_min``: hide recipes whose estimated time exceeds this value.
         """
         pantry = _get_kitchen(app).on_hand()
         candidates = [
@@ -556,12 +585,21 @@ def create_app(
         if not candidates:
             return []
 
+        exclude_set = {e.strip() for e in exclude.split(",") if e.strip()} & VALID_EXCLUDES
+        if cuisine or exclude_set or max_time_min is not None:
+            candidates = [
+                c for c in candidates
+                if passes_filters(c, cuisine=cuisine, exclude=exclude_set,
+                                  max_time_min=max_time_min)
+            ]
+        if not candidates:
+            return []
+
         ranked = rank_recipes(
             pantry,
             candidates,
             app.state.embed_fn,
             k=len(candidates),
-            cuisine=cuisine,
             compute_substitution=True,
             flavor_fn=_get_flavor(app).flavor_score,
         )

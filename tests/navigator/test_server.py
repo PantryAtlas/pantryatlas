@@ -658,3 +658,43 @@ def test_from_pantry_includes_flavor_field(client):
     if data:  # fake store may return few; assert the field shape when present
         assert "flavor" in data[0]
         assert isinstance(data[0]["flavor"], (int, float))
+
+
+# ---------------------------------------------------------------------------
+# Star Slice 2: cuisine / diet / time filter params on from-pantry + refine
+# ---------------------------------------------------------------------------
+
+
+def _seed_pantry(client, *names):
+    for n in names:
+        client.post("/navigator/pantry/items", json={"raw_text": n, "canonical_name": n})
+
+
+def test_from_pantry_cuisine_filter(client):
+    _seed_pantry(client, "tortilla", "salsa", "cheese", "beef")
+    res = client.post("/navigator/recipes/from-pantry", params={"cuisine": "mexican"})
+    assert res.status_code == 200
+    from pantryatlas.navigator.facets import classify_cuisine
+    for r in res.json():
+        assert classify_cuisine(r["recipe"]["title"], r["recipe"]["ingredients"]) == "mexican"
+
+
+def test_from_pantry_exclude_filter(client):
+    _seed_pantry(client, "flour", "sugar", "egg", "butter")
+    res = client.post("/navigator/recipes/from-pantry", params={"exclude": "gluten"})
+    assert res.status_code == 200
+    from pantryatlas.navigator.facets import detect_excludes
+    for r in res.json():
+        assert "gluten" not in detect_excludes(r["recipe"]["ingredients"])
+
+
+def test_from_pantry_unknown_exclude_ignored(client):
+    _seed_pantry(client, "tomato", "onion")
+    res = client.post("/navigator/recipes/from-pantry", params={"exclude": "bogus"})
+    assert res.status_code == 200  # unknown token ignored, not an error
+
+
+def test_from_pantry_no_filters_unchanged(client):
+    _seed_pantry(client, "tomato", "onion", "garlic")
+    a = client.post("/navigator/recipes/from-pantry").json()
+    assert isinstance(a, list)
