@@ -125,6 +125,28 @@ class ProviderIn(BaseModel):
     multimodal: bool = False
 
 
+class ConsumeIn(BaseModel):
+    """Body for POST /navigator/pantry/items/{name}/consume."""
+
+    coarse_amount: str = "used_up"  # half | used_up | discarded
+
+
+class ConsumedItemIn(BaseModel):
+    canonical_name: str
+    coarse_amount: str = "cook"
+
+
+class CookIn(BaseModel):
+    """Body for POST /navigator/cook."""
+
+    dish_name: str
+    recipe_id: str | None = None
+    servings: float | None = None
+    rating: int | None = None
+    notes: str | None = None
+    consumed: list[ConsumedItemIn] | None = None
+
+
 # ---------------------------------------------------------------------------
 # Pantry JSON serialisation
 # ---------------------------------------------------------------------------
@@ -375,6 +397,53 @@ def create_app(
         """Remove an ingredient by canonical name (no-op if not present)."""
         _get_kitchen(app).remove_item(name)
         return {"removed": name}
+
+    # ------------------------------------------------------------------
+    # Pantry — coarse consume / restore
+    # ------------------------------------------------------------------
+
+    @app.post("/navigator/pantry/items/{name}/consume")
+    def consume_pantry_item(name: str, body: ConsumeIn) -> dict[str, Any]:
+        item = _get_kitchen(app).consume_item(name, body.coarse_amount)
+        if item is None:
+            raise HTTPException(status_code=404, detail=f"No pantry item '{name}'.")
+        return item
+
+    @app.post("/navigator/pantry/items/{name}/restore")
+    def restore_pantry_item(name: str) -> dict[str, Any]:
+        item = _get_kitchen(app).restore_item(name)
+        if item is None:
+            raise HTTPException(status_code=404, detail=f"No pantry item '{name}'.")
+        return item
+
+    # ------------------------------------------------------------------
+    # Cook events
+    # ------------------------------------------------------------------
+
+    @app.post("/navigator/cook", status_code=201)
+    def post_cook(body: CookIn) -> dict[str, Any]:
+        kitchen = _get_kitchen(app)
+        consumed = [{"canonical_name": c.canonical_name, "coarse_amount": c.coarse_amount}
+                    for c in (body.consumed or [])]
+        if not consumed and body.recipe_id is not None:
+            recipe = _get_store(app).get(body.recipe_id)
+            if recipe is not None and recipe.ingredients_json:
+                for ing in recipe.ingredients_json:
+                    resolved = app.state.resolver(ing)
+                    name = resolved.canonical_name if resolved is not None else ing
+                    consumed.append({"canonical_name": name, "coarse_amount": "cook"})
+        return kitchen.add_cook_event(
+            dish_name=body.dish_name, recipe_id=body.recipe_id, servings=body.servings,
+            rating=body.rating, notes=body.notes, consumed=consumed,
+        )
+
+    @app.get("/navigator/meals")
+    def get_meals(limit: int = 50) -> list[dict[str, Any]]:
+        return _get_kitchen(app).list_meals(limit=limit)
+
+    @app.get("/navigator/waste")
+    def get_waste(window_days: int = 30) -> dict[str, Any]:
+        return _get_kitchen(app).waste_tally(window_days=window_days)
 
     # ------------------------------------------------------------------
     # Pantry — resolve without persisting
