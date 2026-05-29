@@ -617,6 +617,39 @@ and after the kitchen wiring lines (`app.state.kitchen = kitchen` / `app.state.k
         "flavor": r.flavor,
 ```
 
+(g) **Warm the FlavorStore at startup** so the first request isn't stalled by the
+~9s pandas+parquet load (it's lazy otherwise). In `create_app`'s `_lifespan`, add a
+best-effort warm-up BEFORE `yield`. First ensure a module logger exists near the top
+of `server.py` (add if missing):
+```python
+import logging
+
+_server_log = logging.getLogger(__name__)
+```
+Then update `_lifespan` (it currently only does shutdown):
+```python
+    @asynccontextmanager
+    async def _lifespan(application: FastAPI):  # noqa: RUF029
+        # Startup: warm the FlavorStore once (pandas + parquet ~9s) so the first
+        # from-pantry request isn't stalled. Best-effort — never block boot.
+        if (
+            getattr(application.state, "flavor", None) is not None
+            or getattr(application.state, "flavor_factory", None) is not None
+        ):
+            try:
+                _get_flavor(application)
+            except Exception:
+                _server_log.warning("FlavorStore warm-up failed; will load lazily", exc_info=True)
+        yield
+        # Shutdown: close the OFF HTTP connection pool to avoid resource leaks.
+        client = getattr(application.state, "off_client", None)
+        if client is not None and hasattr(client, "close"):
+            client.close()
+```
+(The non-context-manager `client` fixture does not trigger lifespan, so most
+server tests are unaffected; the context-managed lifespan test will warm and stay
+green, just ~9s slower.)
+
 - [ ] **Step 4: Run to verify it passes**
 
 Run: `cd /home/craigm26/pantryatlas && /usr/bin/python3 -m pytest tests/navigator/test_server.py -k "flavor or from_pantry" -v`
