@@ -1,0 +1,28 @@
+[Unit]
+# PantryAtlas DEV / staging node (see docs/superpowers/specs/2026-05-28-pinas-dev-node-design.md)
+# Lean: navigator + in-process ONNX embeddings only. No local Gemma — vision routes to a
+# LAN provider if/when one is configured in ~/.pantryatlas/providers.json (Phase 2), else 503.
+Description=PantryAtlas Navigator (DEV/staging) — lean, no local Gemma
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pantrydev
+Group=pantrydev
+WorkingDirectory=/home/pantrydev/pantryatlas
+ExecStart=/home/pantrydev/pantryatlas/.venv/bin/uvicorn pantryatlas.navigator.server:app --host 0.0.0.0 --port 8090
+Restart=on-failure
+RestartSec=5
+
+# --- Hardening (belt-and-suspenders on top of the dedicated pantrydev user) ---
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/pantrydev
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target
