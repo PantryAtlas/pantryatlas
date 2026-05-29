@@ -54,6 +54,34 @@ def test_migrates_from_pantry_json_once(tmp_path: Path) -> None:
     assert (tmp_path / "pantry.json.imported").exists()
 
 
+def test_migration_skips_malformed_json(tmp_path: Path) -> None:
+    # Case 1: list with one good item and one malformed item (missing canonical_name).
+    pj = tmp_path / "pantry.json"
+    pj.write_text(
+        json.dumps(
+            [
+                {"canonical_name": "garlic", "raw_text": "garlic"},
+                {"raw_text": "missing canonical_name field"},  # malformed — no canonical_name
+            ]
+        ),
+        encoding="utf-8",
+    )
+    store = KitchenStore(tmp_path / "kitchen.db", pantry_json_path=pj)
+    items = [i["canonical_name"] for i in store.list_items()]
+    assert items == ["garlic"], "Good item should be imported"
+    assert not pj.exists(), "pantry.json should be renamed"
+    assert (tmp_path / "pantry.json.imported").exists()
+
+    # Case 2: top-level JSON is an object → store opens empty, json renamed, no crash.
+    db2 = tmp_path / "kitchen2.db"
+    pj2 = tmp_path / "pantry2.json"
+    pj2.write_text(json.dumps({"not": "a list"}), encoding="utf-8")
+    store2 = KitchenStore(db2, pantry_json_path=pj2)
+    assert store2.list_items() == [], "Store should be empty for non-list JSON"
+    assert not pj2.exists(), "pantry2.json should be renamed"
+    assert (tmp_path / "pantry2.json.imported").exists()
+
+
 def test_migration_is_idempotent(tmp_path: Path) -> None:
     pj = tmp_path / "pantry.json"
     pj.write_text(json.dumps([{"canonical_name": "salt", "raw_text": "salt"}]), encoding="utf-8")

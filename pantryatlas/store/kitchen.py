@@ -3,13 +3,16 @@
 Plain SQLite (no sqlite-vec), so it runs on every Python including this Pi's
 3.11 build that lacks ``enable_load_extension``.  Kept separate from the static
 ``recipes.db``.  Single-writer model: ``check_same_thread=False`` lets FastAPI's
-thread pool share one connection; writes are serialised by the GIL + short txns.
+thread pool share one connection; writes are serialised by ``self._lock``
+(a ``threading.Lock``) so concurrent FastAPI worker threads cannot interleave
+transactions.
 """
 
 from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -70,6 +73,7 @@ class KitchenStore:
     def __init__(self, db_path: str | Path, pantry_json_path: str | Path | None = None) -> None:
         self._path = str(db_path)
         self._conn = self._open()
+        self._lock = threading.Lock()
         if pantry_json_path is not None:
             self._migrate_from_json(Path(pantry_json_path))
 
@@ -107,24 +111,32 @@ class KitchenStore:
             raw = json.loads(json_path.read_text(encoding="utf-8"))
         except (ValueError, OSError):
             return  # corrupt/unreadable → start empty, never fatal
+        # Guard against structurally-malformed but valid JSON (e.g. a dict).
+        if not isinstance(raw, list):
+            json_path.rename(json_path.with_suffix(json_path.suffix + ".imported"))
+            return
         now = _now_iso()
-        for item in raw:
-            q = item.get("quantity") or {}
-            self._conn.execute(
-                """INSERT OR IGNORE INTO pantry_items
-                   (canonical_name, raw_text, quantity_amount, quantity_unit,
-                    expires_at, state, confidence, last_observed_at, source,
-                    added_at, updated_at)
-                   VALUES (?,?,?,?,?, 'present', 1.0, ?, 'manual', ?, ?)""",
-                (item["canonical_name"], item["raw_text"], q.get("amount"),
-                 q.get("unit"), item.get("expires_at"), now, now, now),
-            )
-            self._conn.execute(
-                "INSERT INTO inventory_events (ts, canonical_name, change_type, source) "
-                "VALUES (?,?, 'add', 'migration')",
-                (now, item["canonical_name"]),
-            )
-        self._conn.commit()
+        with self._lock:
+            for item in raw:
+                try:
+                    q = item.get("quantity") or {}
+                    self._conn.execute(
+                        """INSERT OR IGNORE INTO pantry_items
+                           (canonical_name, raw_text, quantity_amount, quantity_unit,
+                            expires_at, state, confidence, last_observed_at, source,
+                            added_at, updated_at)
+                           VALUES (?,?,?,?,?, 'present', 1.0, ?, 'manual', ?, ?)""",
+                        (item["canonical_name"], item["raw_text"], q.get("amount"),
+                         q.get("unit"), item.get("expires_at"), now, now, now),
+                    )
+                    self._conn.execute(
+                        "INSERT INTO inventory_events (ts, canonical_name, change_type, source) "
+                        "VALUES (?,?, 'add', 'migration')",
+                        (now, item["canonical_name"]),
+                    )
+                except (KeyError, TypeError):
+                    continue  # malformed row → skip, don't abort the whole migration
+            self._conn.commit()
         json_path.rename(json_path.with_suffix(json_path.suffix + ".imported"))
 
     @staticmethod
@@ -159,8 +171,8 @@ class KitchenStore:
              json.dumps(detail) if detail else None, source),
         )
 
-    def add_item(self, ingredient: Ingredient, source: str = "manual") -> dict[str, Any]:
-        now = _now_iso()
+    def _upsert_item(self, ingredient: Ingredient, now: str, source: str) -> None:
+        """Execute the pantry_items upsert SQL without committing or logging."""
         q = ingredient.quantity
         exp = ingredient.expires_at.isoformat() if ingredient.expires_at else None
         self._conn.execute(
@@ -180,9 +192,14 @@ class KitchenStore:
              q.amount if q else None, q.unit if q else None, exp,
              now, source, now, now),
         )
-        self._log_event(ingredient.canonical_name, "add", source)
-        self._conn.commit()
-        return self.get_item(ingredient.canonical_name)
+
+    def add_item(self, ingredient: Ingredient, source: str = "manual") -> dict[str, Any]:
+        with self._lock:
+            now = _now_iso()
+            self._upsert_item(ingredient, now, source)
+            self._log_event(ingredient.canonical_name, "add", source)
+            self._conn.commit()
+            return self.get_item(ingredient.canonical_name)
 
     def get_item(self, canonical_name: str) -> dict[str, Any] | None:
         row = self._fetchone(
@@ -191,24 +208,34 @@ class KitchenStore:
         return self._row_to_dict(row) if row is not None else None
 
     def remove_item(self, canonical_name: str) -> None:
-        cur = self._conn.execute(
-            "DELETE FROM pantry_items WHERE canonical_name=?", (canonical_name,)
-        )
-        if cur.rowcount:
-            self._log_event(canonical_name, "adjust", "manual", {"removed": True})
-        self._conn.commit()
+        with self._lock:
+            cur = self._conn.execute(
+                "DELETE FROM pantry_items WHERE canonical_name=?", (canonical_name,)
+            )
+            if cur.rowcount:
+                self._log_event(canonical_name, "adjust", "manual", {"removed": True})
+            self._conn.commit()
 
     def replace_all(
         self, ingredients: list[Ingredient], source: str = "manual"
     ) -> list[dict[str, Any]]:
         existing = {i["canonical_name"] for i in self.list_items()}
         incoming = {ing.canonical_name for ing in ingredients}
-        for gone in existing - incoming:
-            self._conn.execute("DELETE FROM pantry_items WHERE canonical_name=?", (gone,))
-            self._log_event(gone, "adjust", source, {"removed": True})
-        for ing in ingredients:
-            self.add_item(ing, source=source)  # commits per item; fine for a replace
-        self._conn.commit()
+        now = _now_iso()
+        with self._lock:
+            try:
+                for gone in existing - incoming:
+                    self._conn.execute(
+                        "DELETE FROM pantry_items WHERE canonical_name=?", (gone,)
+                    )
+                    self._log_event(gone, "adjust", source, {"removed": True})
+                for ing in ingredients:
+                    self._upsert_item(ing, now, source)
+                    self._log_event(ing.canonical_name, "add", source)
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
         return self.list_items()
 
     def on_hand(self) -> Pantry:
@@ -243,79 +270,84 @@ class KitchenStore:
 
     def consume_item(self, canonical_name: str, coarse_amount: str,
                      source: str = "manual") -> dict[str, Any] | None:
-        row = self._conn.execute(
-            "SELECT state FROM pantry_items WHERE canonical_name=?", (canonical_name,)
-        ).fetchone()
-        if row is None:
-            return None
-        new_state, new_conf = self._next_state(row[0], coarse_amount)
-        self._conn.execute(
-            "UPDATE pantry_items SET state=?, confidence=?, updated_at=? WHERE canonical_name=?",
-            (new_state, new_conf, _now_iso(), canonical_name),
-        )
-        change_type = "discard" if coarse_amount == "discarded" else "consume"
-        self._log_event(canonical_name, change_type, source,
-                        {"coarse_amount": coarse_amount, "prev_state": row[0]})
-        self._conn.commit()
-        return self.get_item(canonical_name)
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT state FROM pantry_items WHERE canonical_name=?", (canonical_name,)
+            ).fetchone()
+            if row is None:
+                return None
+            new_state, new_conf = self._next_state(row[0], coarse_amount)
+            self._conn.execute(
+                "UPDATE pantry_items "
+                "SET state=?, confidence=?, updated_at=? WHERE canonical_name=?",
+                (new_state, new_conf, _now_iso(), canonical_name),
+            )
+            change_type = "discard" if coarse_amount == "discarded" else "consume"
+            self._log_event(canonical_name, change_type, source,
+                            {"coarse_amount": coarse_amount, "prev_state": row[0]})
+            self._conn.commit()
+            return self.get_item(canonical_name)
 
     def restore_item(self, canonical_name: str, source: str = "manual") -> dict[str, Any] | None:
-        cur = self._conn.execute(
-            "UPDATE pantry_items "
-            "SET state='present', confidence=1.0, last_observed_at=?, updated_at=? "
-            "WHERE canonical_name=?",
-            (_now_iso(), _now_iso(), canonical_name),
-        )
-        if not cur.rowcount:
-            return None
-        self._log_event(canonical_name, "observe", source)
-        self._conn.commit()
-        return self.get_item(canonical_name)
+        with self._lock:
+            now = _now_iso()
+            cur = self._conn.execute(
+                "UPDATE pantry_items "
+                "SET state='present', confidence=1.0, last_observed_at=?, updated_at=? "
+                "WHERE canonical_name=?",
+                (now, now, canonical_name),
+            )
+            if not cur.rowcount:
+                return None
+            self._log_event(canonical_name, "observe", source)
+            self._conn.commit()
+            return self.get_item(canonical_name)
 
     def add_cook_event(self, *, dish_name: str, consumed: list[dict[str, Any]],
                        recipe_id: str | None = None, servings: float | None = None,
                        photo_path: str | None = None, rating: int | None = None,
                        notes: str | None = None, source: str = "tap-to-cook") -> dict[str, Any]:
         """Atomically record a cook event and soft-decrement consumed on-hand items."""
-        on_hand = {
-            r[0]
-            for r in self._conn.execute(
-                f"SELECT canonical_name FROM pantry_items "
-                f"WHERE state IN ({','.join('?' * len(_ON_HAND_STATES))})",
-                _ON_HAND_STATES,
-            ).fetchall()
-        }
-        matched, unmatched = [], []
-        try:
-            cur = self._conn.execute(
-                """INSERT INTO cook_events
-                   (recipe_id, dish_name, servings, cooked_at, photo_path, rating, notes,
-                    consumed_json, source)
-                   VALUES (?,?,?,?,?,?,?,?,?)""",
-                (recipe_id, dish_name, servings, _now_iso(), photo_path, rating, notes,
-                 json.dumps(consumed), source),
-            )
-            event_id = cur.lastrowid
-            for c in consumed:
-                name = c["canonical_name"]
-                if name in on_hand:
-                    matched.append(name)
-                    state_row = self._conn.execute(
-                        "SELECT state FROM pantry_items WHERE canonical_name=?", (name,)
-                    ).fetchone()
-                    new_state, new_conf = self._next_state(state_row[0], "cook")
-                    self._conn.execute(
-                        "UPDATE pantry_items SET state=?, confidence=?, updated_at=? "
-                        "WHERE canonical_name=?",
-                        (new_state, new_conf, _now_iso(), name),
-                    )
-                    self._log_event(name, "consume", source, {"cook_event_id": event_id})
-                else:
-                    unmatched.append(name)
-            self._conn.commit()
-        except Exception:
-            self._conn.rollback()
-            raise
+        with self._lock:
+            on_hand = {
+                r[0]
+                for r in self._conn.execute(
+                    f"SELECT canonical_name FROM pantry_items "
+                    f"WHERE state IN ({','.join('?' * len(_ON_HAND_STATES))})",
+                    _ON_HAND_STATES,
+                ).fetchall()
+            }
+            matched, unmatched = [], []
+            try:
+                cur = self._conn.execute(
+                    """INSERT INTO cook_events
+                       (recipe_id, dish_name, servings, cooked_at, photo_path, rating, notes,
+                        consumed_json, source)
+                       VALUES (?,?,?,?,?,?,?,?,?)""",
+                    (recipe_id, dish_name, servings, _now_iso(), photo_path, rating, notes,
+                     json.dumps(consumed), source),
+                )
+                event_id = cur.lastrowid
+                for c in consumed:
+                    name = c["canonical_name"]
+                    if name in on_hand:
+                        matched.append(name)
+                        state_row = self._conn.execute(
+                            "SELECT state FROM pantry_items WHERE canonical_name=?", (name,)
+                        ).fetchone()
+                        new_state, new_conf = self._next_state(state_row[0], "cook")
+                        self._conn.execute(
+                            "UPDATE pantry_items SET state=?, confidence=?, updated_at=? "
+                            "WHERE canonical_name=?",
+                            (new_state, new_conf, _now_iso(), name),
+                        )
+                        self._log_event(name, "consume", source, {"cook_event_id": event_id})
+                    else:
+                        unmatched.append(name)
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
         return {"id": event_id, "dish_name": dish_name, "matched": matched, "unmatched": unmatched}
 
     @staticmethod
@@ -335,16 +367,17 @@ class KitchenStore:
         return [self._cook_row_to_dict(r) for r in rows]
 
     def mark_expired(self, canonical_name: str, source: str = "manual") -> dict[str, Any] | None:
-        cur = self._conn.execute(
-            "UPDATE pantry_items SET state='used_up', confidence=0.0, updated_at=? "
-            "WHERE canonical_name=?",
-            (_now_iso(), canonical_name),
-        )
-        if not cur.rowcount:
-            return None
-        self._log_event(canonical_name, "expire", source)
-        self._conn.commit()
-        return self.get_item(canonical_name)
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE pantry_items SET state='used_up', confidence=0.0, updated_at=? "
+                "WHERE canonical_name=?",
+                (_now_iso(), canonical_name),
+            )
+            if not cur.rowcount:
+                return None
+            self._log_event(canonical_name, "expire", source)
+            self._conn.commit()
+            return self.get_item(canonical_name)
 
     def waste_tally(self, window_days: int = 30) -> dict[str, Any]:
         cutoff = (datetime.now(UTC) - timedelta(days=window_days)).isoformat()
