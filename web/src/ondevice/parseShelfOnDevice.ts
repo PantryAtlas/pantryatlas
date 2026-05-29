@@ -1,18 +1,24 @@
 // On-device shelf-vision spike — runtime (browser). Pure helpers live in ./helpers.
+//
+// API note: the `image-text-to-text` pipeline task does NOT exist in this version of
+// @huggingface/transformers, and `image-to-text` is caption-only (drops the prompt).
+// SmolVLM (an Idefics3-class Vision2Seq model) is driven via the raw AutoProcessor +
+// AutoModelForVision2Seq + apply_chat_template flow below — verified working in Node.
+// The transformers module is cast to `any` because its .d.ts under-declares these methods.
 import { signal } from '@preact/signals'
 import { photoSheetState, photoDetectedItems, photoErrorMsg } from '../signals'
 import { pickDevice, parseModelOutput, type Backend } from './helpers'
 
 export const MODEL_ID = 'HuggingFaceTB/SmolVLM-256M-Instruct'
 const SHELF_PROMPT =
-  'List the individual food items visible in this photo. ' +
-  'Respond with one item per line, just the item name — no numbering, no sentences.'
+  'List the food items visible in this photo, separated by commas. Just the item names.'
 
 export interface OnDeviceTelemetry {
   backend: Backend
   model: string
   loadMs: number
   inferMs: number
+  rawText: string
 }
 export const onDeviceTelemetry = signal<OnDeviceTelemetry | null>(null)
 
@@ -35,33 +41,27 @@ export function isOnDeviceEnabled(): boolean {
   return false
 }
 
-let _genPromise: Promise<(messages: unknown, opts: unknown) => Promise<unknown>> | null = null
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Loaded = { processor: any; model: any }
+let _loadPromise: Promise<Loaded> | null = null
 let _backend: Backend = 'wasm'
 
-function getGenerator() {
-  if (!_genPromise) {
-    _genPromise = (async () => {
-      const { pipeline } = await import('@huggingface/transformers')
+/** Lazily load SmolVLM (processor + model) once; cached across calls. */
+function getModel(): Promise<Loaded> {
+  if (!_loadPromise) {
+    _loadPromise = (async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const tf: any = await import('@huggingface/transformers')
       _backend = pickDevice((globalThis.navigator as { gpu?: unknown } | undefined)?.gpu)
-      return pipeline('image-text-to-text' as Parameters<typeof pipeline>[0], MODEL_ID, {
-        device: _backend,
+      const processor = await tf.AutoProcessor.from_pretrained(MODEL_ID)
+      const model = await tf.AutoModelForVision2Seq.from_pretrained(MODEL_ID, {
         dtype: { embed_tokens: 'fp16', vision_encoder: 'fp16', decoder_model_merged: 'q4' },
-      }) as unknown as (messages: unknown, opts: unknown) => Promise<unknown>
+        device: _backend,
+      })
+      return { processor, model }
     })()
   }
-  return _genPromise
-}
-
-/** Defensive: pipeline returns [{ generated_text: string | Array<{role,content}> }]. */
-function extractText(out: unknown): string {
-  const first = Array.isArray(out) ? out[0] : out
-  const gt = (first as { generated_text?: unknown })?.generated_text
-  if (typeof gt === 'string') return gt
-  if (Array.isArray(gt)) {
-    const last = gt[gt.length - 1] as { content?: unknown }
-    if (typeof last?.content === 'string') return last.content
-  }
-  return ''
+  return _loadPromise
 }
 
 /** Drop-in replacement for postToVision: parse the shelf photo on-device. */
@@ -70,21 +70,32 @@ export async function parseShelfOnDevice(file: File): Promise<void> {
   onDeviceTelemetry.value = null
   const blobUrl = URL.createObjectURL(file)
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tf: any = await import('@huggingface/transformers')
     const t0 = performance.now()
-    const gen = await getGenerator()
+    const { processor, model } = await getModel()
     const loadMs = Math.round(performance.now() - t0)
+
+    const image = await tf.RawImage.read(blobUrl)
     const messages = [
-      { role: 'user', content: [
-        { type: 'image', image: blobUrl },
-        { type: 'text', text: SHELF_PROMPT },
-      ] },
+      { role: 'user', content: [{ type: 'image' }, { type: 'text', text: SHELF_PROMPT }] },
     ]
+    const text = processor.apply_chat_template(messages, { add_generation_prompt: true })
+    const inputs = await processor(text, [image])
+
     const t1 = performance.now()
-    const out = await gen(messages, { max_new_tokens: 256, do_sample: false })
+    const generatedIds = await model.generate({ ...inputs, max_new_tokens: 256, do_sample: false })
     const inferMs = Math.round(performance.now() - t1)
-    const items = parseModelOutput(extractText(out))
+
+    // Decode only the newly generated tokens (slice off the prompt).
+    const promptLen = inputs.input_ids.dims.at(-1)
+    const trimmed = generatedIds.slice(null, [promptLen, null])
+    const decoded: string[] = processor.batch_decode(trimmed, { skip_special_tokens: true })
+    const rawText = (decoded[0] ?? '').trim()
+
+    const items = parseModelOutput(rawText)
     photoDetectedItems.value = items.map((label) => ({ label, checked: true }))
-    onDeviceTelemetry.value = { backend: _backend, model: MODEL_ID, loadMs, inferMs }
+    onDeviceTelemetry.value = { backend: _backend, model: MODEL_ID, loadMs, inferMs, rawText }
     photoSheetState.value = 'parsed'
   } catch (err) {
     photoErrorMsg.value =

@@ -26,4 +26,11 @@ describe('parseModelOutput', () => {
     const many = Array.from({ length: 30 }, (_, i) => `item${i}`).join('\n')
     expect(parseModelOutput(many).length).toBe(20)
   })
+  it('parses prose: splits on commas/"and" and strips leading articles', () => {
+    const raw = 'a teal car, a blue door, and a garage door'
+    expect(parseModelOutput(raw)).toEqual(['teal car', 'blue door', 'garage door'])
+  })
+  it('strips trailing sentence punctuation', () => {
+    expect(parseModelOutput('Milk.\nEggs!')).toEqual(['Milk', 'Eggs'])
+  })
 })

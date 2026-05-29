@@ -271,6 +271,22 @@ export function PhotoReviewSheet() {
                   On-device · {telemetry.backend} · load {telemetry.loadMs}ms · infer {telemetry.inferMs}ms · {telemetry.model}
                 </p>
               )}
+              {telemetry?.rawText && (
+                <p
+                  style={{
+                    fontFamily: 'var(--font)',
+                    fontSize: 'var(--md-sys-typescale-label-small-size, 11px)',
+                    color: 'var(--md-sys-color-on-surface-variant)',
+                    background: 'var(--md-sys-color-surface-container)',
+                    borderRadius: '8px',
+                    padding: '8px 10px',
+                    margin: '0 0 12px',
+                    whiteSpace: 'pre-wrap',
+                  }}
+                >
+                  model said: “{telemetry.rawText}”
+                </p>
+              )}
               <p
                 style={{
                   fontFamily: 'var(--font)',
